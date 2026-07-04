@@ -7,5 +7,6 @@
 0002-ui-colors-hud.patch            # color mixer -> HUD palette on frame/toolbar/omnibox (VERIFIED git-apply @150.0.7871.46)
 0003-ui-font-mono-hud.patch            # resource_bundle.cc -> Share Tech Mono / Monaco UI font (VERIFIED)
 0004-toolbar-neon-border.patch      # toolbar_view.cc -> neon border + glow (VERIFIED git-apply @150.0.7871.46)
-0005-omnibox-hud.patch              # location_bar/omnibox views -> HUD field styling (VERIFIED git-apply @150.0.7871.46)
-0006-branding-strings.patch         # chrome_strings.grd -> "zbrowser" (VERIFIED git-apply @150.0.7871.46)
+0005-omnibox-hud.patch              # location_bar_view.cc -> HUD field styling (VERIFIED git-apply @150.0.7871.46)
+0006-branding-strings.patch         # chrome/app/theme/chromium/BRANDING -> "zbrowser" product strings (VERIFIED git-apply @150.0.7871.46)
+0007-devtools-hud-theme.patch       # devtools front_end (3 files) -> 8 HUD schemes in the Theme dropdown (VERIFIED git-apply @150.0.7871.46)

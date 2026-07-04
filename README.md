@@ -48,11 +48,12 @@ way; Chromium can.
 |---|---|
 | **Base** | Plain Chromium snapshot (pinned rev), downloaded by `scripts/fetch-base.sh` |
 | **Rebrand** | `scripts/rebrand-macos.sh` patches the base bundle's Dock name to `zbrowser` + cyberpunk `.icns`, deletes `CFBundleIconName`, and re-signs ad-hoc so macOS honors it |
-| **Theme** | `theme/` — a Chrome theme extension mapping the HUD palette onto frame / toolbar / tabs (colors only) |
+| **Theme** | `theme/` — a Chrome theme extension mapping the HUD palette onto frame / toolbar / tabs (colors only). Present but **not loaded by the launcher** — the fork's native color mixer (patch 0002) and the internal-HUD skin own the chrome palette, and a static theme applies last and would override them |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension: the full HUD (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
+| **Internal HUD** | `extensions/hud-internal` — MV3 content script on `chrome://*/*` that skins Chrome's internal pages with the cyberpunk HUD and adds a floating **8-scheme** picker (cyberpunk · midnight · matrix · ember · arctic · crimson · toxic · vapor), persisted via `chrome.storage` and bridged to a native host (`native/hud_host.py`). Needs `--extensions-on-chrome-urls` |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 extension, loaded as a submodule (reuse, not copy) |
-| **Launcher** | `bin/zbrowser` — starts the base against `~/.zbrowser/profile` with all three extensions |
-| **Fork** | `fork/` — optional source build that restyles the native chrome (tab shapes, fonts, borders) for the full HUD |
+| **Launcher** | `bin/zbrowser` — starts the base against `~/.zbrowser/profile` with `newtab` + `zpwrchrome` + `hud-internal` loaded and `--extensions-on-chrome-urls` set (any dir missing a `manifest.json` is skipped, so a missing submodule degrades gracefully) |
+| **Fork** | `fork/` — optional source build that restyles the native chrome (tab shapes, fonts, borders, DevTools) for the full HUD |
 
 A Chrome theme extension changes **colors only** — it cannot reshape tabs, fonts,
 or toolbar (those are native C++). The runtime rebrand accepts that limit; the
@@ -111,13 +112,15 @@ fork/build.sh          ~/zbrowser-chromium/src  # the long compile
 fork/package.sh        ~/zbrowser-chromium/src/out/zbrowser
 ```
 
-The HUD patch series is **authored** against the pinned tag (`150.0.7871.46`) and
-verified apply-clean: sharp 2px tabs (`tab_style_views.cc`), the cyberpunk
-palette on frame/toolbar/tabs/omnibox (`chrome_color_mixer.cc`), a neon cyan
-under-toolbar line (`toolbar_view.cc`), a sharp omnibox field
-(`location_bar_view.cc`), and `zbrowser` product strings (`BRANDING`). The UI
-font patch (Orbitron / Share Tech Mono) is pending the checked-out tree.
-`fork/build.sh` is the compile gate. See [`fork/README.md`](fork/README.md) and
+All **7** HUD patches are **authored** against the pinned tag (`150.0.7871.46`)
+and verified apply-clean: sharp 2px tabs (`tab_style_views.cc`), the cyberpunk
+palette on frame/toolbar/tabs/omnibox (`chrome_color_mixer.cc`), the Share Tech
+Mono / Monaco UI font (`resource_bundle.cc`), a neon cyan under-toolbar line
+(`toolbar_view.cc`), a sharp omnibox field (`location_bar_view.cc`), `zbrowser`
+product strings (`BRANDING`), and the 8 HUD schemes in the DevTools Theme
+dropdown (`design_system_tokens.css` + `main-meta.ts` + `ThemeSupport.ts`).
+Apply-clean proves the diff context matches; `fork/build.sh` is the compile gate.
+See [`fork/README.md`](fork/README.md) and
 [`fork/patches/README.md`](fork/patches/README.md).
 
 ## `[0x06] NOTES`

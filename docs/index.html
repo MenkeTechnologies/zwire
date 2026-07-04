@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zbrowser — Chromium, rebranded (cyberpunk · zpwrchrome preloaded)</title>
-  <meta name="description" content="zbrowser is a Chromium/Blink browser, rebranded: the zpwrchrome power-tool, a cyberpunk chrome theme, and a cyberpunk new-tab page preloaded on a Chrome-for-Testing base. Runtime rebrand — no source fork.">
+  <meta name="description" content="zbrowser is a Chromium/Blink browser, rebranded: the zpwrchrome power-tool, a cyberpunk new-tab page, and an 8-scheme HUD skin preloaded on a plain Chromium snapshot. Runtime rebrand needs no compile; an optional source fork restyles the native chrome and DevTools.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -135,9 +135,10 @@
     <section>
       <h2><span class="hex">0x00</span> &nbsp;What it is</h2>
       <p>zbrowser is a <b>Chromium/Blink browser, rebranded</b>. On every launch it preloads the
-        <a href="https://github.com/MenkeTechnologies/zpwrchrome">zpwrchrome</a> power-tool, a cyberpunk chrome
-        theme, and a cyberpunk new-tab page — running against a dedicated profile so it never touches your
-        system Chrome. No source fork, nothing to compile.</p>
+        <a href="https://github.com/MenkeTechnologies/zpwrchrome">zpwrchrome</a> power-tool, a cyberpunk
+        new-tab page, and an internal-HUD skin with an 8-scheme picker — running against a dedicated profile
+        so it never touches your system Chrome. Two paths: a <b>runtime rebrand</b> (default, nothing to
+        compile) and an optional <b>source fork</b> that restyles the native chrome and DevTools.</p>
     </section>
 
     <section>
@@ -145,21 +146,24 @@
       <p>zpwrchrome is a Manifest V3 extension needing <code>userScripts</code>,
         <code>declarativeNetRequestWithHostAccess</code>, <code>nativeMessaging</code> and a service-worker
         background. That runs only on a genuine Chromium engine — not WebKit (Tauri/Safari) or Servo.</p>
-      <p>The base is <a href="https://googlechromelabs.github.io/chrome-for-testing/">Chrome for Testing</a>,
-        chosen for one reason: the <code>--load-extension</code> switch that preloads zpwrchrome
+      <p>The base is a <a href="https://commondatastorage.googleapis.com/chromium-browser-snapshots/index.html">plain
+        Chromium snapshot</a> — unbranded, no Google logo, no "for automated testing" banner (that stripe is
+        exclusive to Chrome for Testing). It is chosen for one reason: the <code>--load-extension</code> switch
+        that preloads zpwrchrome
         <a href="https://groups.google.com/a/chromium.org/g/chromium-extensions/c/1-g8EFx2BBY/m/S0ET5wPjCAAJ">was
-        removed from branded Chrome in v137</a> but is kept in Chromium and CfT.</p>
+        removed from branded Chrome in v137</a> but is kept in Chromium.</p>
     </section>
 
     <section>
       <h2><span class="hex">0x02</span> &nbsp;Architecture</h2>
       <div class="grid-cards">
-        <div class="card"><h3>Base</h3><p>Chrome for Testing, pinned stable, fetched by <code>fetch-base.sh</code>.</p></div>
+        <div class="card"><h3>Base</h3><p>Plain Chromium snapshot, pinned rev, fetched by <code>fetch-base.sh</code>.</p></div>
         <div class="card"><h3>Rebrand</h3><p>The base bundle's Dock name &amp; icon patched in place to zbrowser.</p></div>
-        <div class="card"><h3>Theme</h3><p>A Chrome theme extension mapping the HUD palette onto frame, toolbar and tabs.</p></div>
         <div class="card"><h3>New tab</h3><p>A <code>newtab</code> override: neon clock, omnibox, quick-launch tiles.</p></div>
+        <div class="card"><h3>Internal HUD</h3><p>Skins <code>chrome://</code> pages and adds a floating 8-scheme picker, bridged to a native host.</p></div>
         <div class="card"><h3>Power-tool</h3><p>zpwrchrome loaded as a submodule — reused, never copied.</p></div>
-        <div class="card"><h3>Launcher</h3><p><code>bin/zbrowser</code> starts it all against <code>~/.zbrowser/profile</code>.</p></div>
+        <div class="card"><h3>Launcher</h3><p><code>bin/zbrowser</code> starts newtab + zpwrchrome + internal-HUD against <code>~/.zbrowser/profile</code>.</p></div>
+        <div class="card"><h3>Fork</h3><p>Optional source build — a 7-patch series restyles native tabs, fonts, toolbar and DevTools.</p></div>
       </div>
     </section>
 
@@ -176,17 +180,25 @@ zbrowser                    # launch</code></pre>
       <h2><span class="hex">0x04</span> &nbsp;State</h2>
       <table>
         <tr><th>Path</th><th>Purpose</th></tr>
-        <tr><td><code>~/.zbrowser/base/</code></td><td>the Chrome for Testing binary</td></tr>
+        <tr><td><code>~/.zbrowser/base/</code></td><td>the Chromium binary</td></tr>
         <tr><td><code>base.path</code> / <code>base.version</code></td><td>resolved binary + pinned version</td></tr>
         <tr><td><code>~/.zbrowser/profile/</code></td><td>dedicated user-data-dir — bookmarks, history, sessions</td></tr>
       </table>
     </section>
 
     <section>
-      <h2><span class="hex">0x05</span> &nbsp;Why not fork Chromium source</h2>
+      <h2><span class="hex">0x05</span> &nbsp;Runtime rebrand vs. source fork</h2>
       <div class="note">A solo-maintained Chromium <b>source</b> fork means re-merging security patches against a
-        codebase that changes daily — the trap that keeps Brave and ungoogled-chromium team-sized. The runtime
-        rebrand delivers "Chrome with my branding and extensions" and upgrades by swapping one binary.</div>
+        codebase that changes daily — the trap that keeps Brave and ungoogled-chromium team-sized. So the
+        <b>default</b> path is the runtime rebrand: HUD new-tab + internal-HUD skin + your extensions on a
+        prebuilt Chromium snapshot, upgraded by swapping one binary, nothing to compile.</div>
+      <p style="margin-top:16px">A theme extension changes <b>colors only</b> — it can't reshape tabs, fonts,
+        or the toolbar (native C++). For the whole chrome in the HUD, the optional <code>fork/</code> path
+        compiles a patched Chromium: a 7-patch series (sharp tabs, cyberpunk palette, mono UI font, neon
+        toolbar, sharp omnibox, <code>zbrowser</code> strings, and 8 HUD schemes in the DevTools Theme
+        dropdown) authored against the pinned tag and verified apply-clean. It costs a ~100&nbsp;GB checkout,
+        a 1–4&nbsp;hr first build, and ongoing rebase maintenance — see
+        <a href="https://github.com/MenkeTechnologies/zbrowser/tree/main/fork">fork/</a>.</p>
     </section>
   </main>
 

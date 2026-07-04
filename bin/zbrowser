@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # zbrowser — Chromium, rebranded, with the zpwrchrome power-tool + cyberpunk
-# theme + cyberpunk new-tab preloaded. Runtime rebrand (Tier A): a stable
-# Chrome for Testing base binary launched against a dedicated profile with a
-# fixed extension set. No source fork, nothing to compile.
+# new-tab + the internal-HUD skin preloaded. Runtime rebrand: a plain Chromium
+# snapshot binary launched against a dedicated profile with a fixed extension
+# set. Nothing to compile (the optional whole-chrome HUD lives in fork/).
 #
 #   zbrowser [chromium-args...] [url]
 #
