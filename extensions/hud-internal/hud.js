@@ -81,22 +81,29 @@
     '  color-scheme: dark;',
     '}',
     'html, body, :host { background-color: var(--bg-primary) !important; color: var(--text) !important; }',
+    /* CRITICAL: some WebUI text uses -webkit-text-fill-color which overrides',
+     * `color` entirely — reset it so our colors actually paint (was the cause',
+     * of "light color per devtools but black on screen" invisible text). */
+    ':not([class*="icon"]):not(cr-icon):not(iron-icon) { -webkit-text-fill-color: currentColor !important; }',
     /* strykelang background grid — always on, subtle neon lattice on the page bg */
     'html, body { background-image:' +
       ' linear-gradient(var(--border) 1px, transparent 1px),' +
       ' linear-gradient(90deg, var(--border) 1px, transparent 1px) !important;' +
       ' background-size: 26px 26px !important; background-position:-1px -1px !important; }',
-    /* top-level app roots transparent so the body grid shows through */
-    'extensions-manager, settings-ui, history-app, downloads-manager, bookmarks-app,' +
-    ' cr-view-manager, .view-container, #container, #main, [role="main"],' +
-    ' .cr-centered-card-container, #content, cr-drawer { background: transparent !important; }',
     /* neon on real hyperlinks only — NOT nav/menu items (they own their tokens,',
      * else selected nav goes cyan-text-on-cyan and vanishes) */
     'a[href]:not(.cr-nav-menu-item):not([role="menuitem"]):not([role="tab"]) { color: var(--cyan) !important; }',
-    /* nav/menu items always readable (regardless of scheme): light text, and',
-     * the selected item gets dark text on a cyan pill so it never goes dark-on-dark */
-    '.cr-nav-menu-item, [role="menuitem"], cr-menu-selector a { color: var(--text) !important; }',
-    '.cr-nav-menu-item.selected, [role="menuitem"][selected], .cr-nav-menu-item[selected] { background: var(--cyan) !important; color: var(--bg-primary) !important; }',
+    /* nav/menu items: ALWAYS light text (never dark-on-dark). Selected item is',
+     * marked by a cyan glow + left bar, not by inverting text, so it can never',
+     * vanish regardless of which selector the WebUI uses for "selected". */
+    '.cr-nav-menu-item, [role="menuitem"], cr-menu-selector a, extensions-sidebar a {' +
+    ' color: var(--text) !important; -webkit-text-fill-color: var(--text) !important;' +
+    ' opacity: 1 !important; visibility: visible !important; filter: none !important;' +
+    ' mix-blend-mode: normal !important; text-shadow: none !important; }',
+    '.cr-nav-menu-item.selected, [role="menuitem"][selected], .cr-nav-menu-item[selected],' +
+    ' .cr-nav-menu-item[aria-selected="true"], .iron-selected, .selected {' +
+    ' color: var(--cyan) !important; background: var(--bg-hover) !important;' +
+    ' box-shadow: inset 3px 0 0 var(--cyan) !important; }',
     /* mono font on text elements (explicit list avoids clobbering icon fonts) */
     'body, div, span, p, a, h1, h2, h3, h4, h5, h6, ul, ol, li, td, th, dt, dd, label,' +
     ' button, input, textarea, select, code, pre, b, strong, em, small, cr-button, cr-input,' +
@@ -259,11 +266,9 @@
       '.zbhud-modes{display:flex;gap:6px;margin-top:10px;}',
       '.zbhud-mode{flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:2px;color:var(--text-dim);padding:5px 0;font:inherit;font-size:11px;letter-spacing:1px;cursor:pointer;}',
       '.zbhud-mode.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 8px var(--accent-glow);}',
-      '#zbhud-crt{position:fixed;inset:0;z-index:-1;pointer-events:none;' +
-        'background:repeating-linear-gradient(0deg,rgba(0,0,0,0.38) 0,rgba(0,0,0,0.38) 1px,rgba(0,0,0,0) 2px,rgba(0,0,0,0) 4px),' +
-        'radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,0.45) 100%);' +
-        'animation:zbhud-flicker 5s infinite;}',
-      '#zbhud-crt::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(120,255,255,0.04),rgba(255,42,109,0.04));}',
+      '#zbhud-crt{position:fixed;inset:0;z-index:2147483000;pointer-events:none;' +
+        'background:repeating-linear-gradient(0deg,rgba(0,0,0,0.16) 0,rgba(0,0,0,0.16) 1px,rgba(0,0,0,0) 2px,rgba(0,0,0,0) 3px);' +
+        'animation:zbhud-flicker 6s infinite;}',
       '@keyframes zbhud-flicker{0%,100%{opacity:1}48%{opacity:.92}50%{opacity:.82}52%{opacity:.95}}'
     ].join('\n');
     var st = document.createElement('style'); st.id = 'zbhud-picker-style'; st.textContent = css;
