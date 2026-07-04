@@ -14,46 +14,49 @@
 
 ### `[CHROMIUM — REBRANDED — CYBERPUNK]`
 
-> *"Chrome, with my own branding and my own extensions."*
+> *"Chrome, with my own branding, my own extensions, my own look."*
 
-zbrowser is a **Chromium/Blink browser, rebranded** — the `zpwrchrome` power-tool,
-a cyberpunk chrome theme, and a cyberpunk new-tab page preloaded on every launch,
-running against a dedicated profile so it never touches your system Chrome.
+zbrowser is a **Chromium/Blink browser, rebranded**, in the strykelang cyberpunk
+HUD. It preloads the `zpwrchrome` power-tool, a HUD chrome theme, and a HUD
+new-tab page against a dedicated profile so it never touches your system Chrome.
+Two build paths:
+
+- **Runtime rebrand** (default, no compile): HUD **colors** + HUD **new-tab** +
+  your extensions on a prebuilt Chromium base. Tab shapes stay stock.
+- **Source fork** (`fork/`, compiles Chromium): the **whole chrome** in the HUD —
+  tab shapes, UI fonts, neon toolbar. See [`fork/README.md`](fork/README.md).
 
 ## `[0x00] WHY A REAL BLINK BASE`
 
 `zpwrchrome` is a Manifest V3 extension that needs `userScripts`,
 `declarativeNetRequestWithHostAccess`, `nativeMessaging`, `webRequest`, and a
 service-worker background (`minimum_chrome_version: 127`). None of that runs on
-WebKit (Tauri/Safari) or Servo — **only a real Chromium engine loads it.** So
-zbrowser is built on Chromium, not a from-scratch shell.
+WebKit (Tauri/Safari) or Servo — **only a real Chromium engine loads it.**
 
-The base is **[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/)**
-(CfT), a genuine Chromium build. This matters for one specific reason: the
-`--load-extension` command-line switch — the mechanism that preloads
-`zpwrchrome` — [was removed from *branded* Chrome in version 137][psa] but is
-**kept in Chromium and CfT**. Stock Google Chrome can no longer be scripted this
-way; CfT can.
+The base is a **plain [Chromium snapshot](https://commondatastorage.googleapis.com/chromium-browser-snapshots/index.html)**
+— unbranded Chromium, **no Google logo, no "for automated testing" banner**
+(that stripe is exclusive to Chrome for Testing). Unbranded Chromium also retains
+the `--load-extension` switch that preloads `zpwrchrome` — [removed from *branded*
+Chrome in version 137][psa]. Stock Google Chrome can no longer be scripted this
+way; Chromium can.
 
 [psa]: https://groups.google.com/a/chromium.org/g/chromium-extensions/c/1-g8EFx2BBY/m/S0ET5wPjCAAJ
 
 ## `[0x01] ARCHITECTURE`
 
-Runtime rebrand — no source fork, nothing to compile:
-
 | Layer | What it is |
 |---|---|
-| **Base** | Chrome for Testing (pinned stable), downloaded by `scripts/fetch-base.sh` |
-| **Rebrand** | `scripts/rebrand-macos.sh` patches the base bundle's Dock name to `zbrowser` + cyberpunk `.icns` |
-| **Theme** | `theme/` — a Chrome theme extension mapping the HUD palette onto frame / toolbar / tabs |
-| **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension: neon clock, omnibox, quick-launch tiles |
+| **Base** | Plain Chromium snapshot (pinned rev), downloaded by `scripts/fetch-base.sh` |
+| **Rebrand** | `scripts/rebrand-macos.sh` patches the base bundle's Dock name to `zbrowser` + cyberpunk `.icns`, deletes `CFBundleIconName`, and re-signs ad-hoc so macOS honors it |
+| **Theme** | `theme/` — a Chrome theme extension mapping the HUD palette onto frame / toolbar / tabs (colors only) |
+| **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension: the full HUD (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 extension, loaded as a submodule (reuse, not copy) |
 | **Launcher** | `bin/zbrowser` — starts the base against `~/.zbrowser/profile` with all three extensions |
+| **Fork** | `fork/` — optional source build that restyles the native chrome (tab shapes, fonts, borders) for the full HUD |
 
-Why not fork Chromium source? A solo-maintained Chromium **source** fork means
-re-merging security patches against a codebase that changes daily — the trap that
-keeps Brave and ungoogled-chromium team-sized. The runtime rebrand delivers
-"Chrome with my branding and extensions" and upgrades by swapping one binary.
+A Chrome theme extension changes **colors only** — it cannot reshape tabs, fonts,
+or toolbar (those are native C++). The runtime rebrand accepts that limit; the
+`fork/` path removes it by compiling a patched Chromium.
 
 ## `[0x02] INSTALL`
 
@@ -64,14 +67,14 @@ scripts/install.sh          # fetch base + link `zbrowser` on PATH + rebrand (ma
 zbrowser                    # launch
 ```
 
-`install.sh` downloads the CfT base into `~/.zbrowser/base`, symlinks
+`install.sh` downloads the Chromium base into `~/.zbrowser/base`, symlinks
 `bin/zbrowser` into `~/.local/bin`, and on macOS rebrands the base bundle's Dock
 name and icon in place. Re-run after a base upgrade.
 
 ## `[0x03] USAGE`
 
 ```sh
-zbrowser                         # open with the cyberpunk new tab
+zbrowser                         # open with the HUD new tab
 zbrowser https://github.com      # open a url
 zbrowser --incognito             # any Chromium flag is passed through
 ```
@@ -80,8 +83,8 @@ State lives under `$ZBROWSER_STATE` (default `~/.zbrowser`):
 
 | Path | Purpose |
 |---|---|
-| `base/` | the Chrome for Testing binary |
-| `base.path` / `base.version` | resolved binary + pinned version |
+| `base/` | the Chromium binary |
+| `base.path` / `base.version` | resolved binary + pinned revision |
 | `profile/` | the dedicated user-data-dir (bookmarks, history, sessions) |
 
 Override the base with `ZBROWSER_BASE=/path/to/chromium zbrowser`.
@@ -89,12 +92,27 @@ Override the base with `ZBROWSER_BASE=/path/to/chromium zbrowser`.
 ## `[0x04] UPDATING THE BASE`
 
 ```sh
-scripts/fetch-base.sh                 # latest stable CfT
-scripts/fetch-base.sh 150.0.7871.46   # pin an exact version
-scripts/rebrand-macos.sh              # re-apply the rebrand after the swap
+scripts/fetch-base.sh              # latest Chromium snapshot
+scripts/fetch-base.sh 1656770      # pin an exact revision
+scripts/rebrand-macos.sh           # re-apply the rebrand after the swap
 ```
 
-## `[0x05] NOTES`
+## `[0x05] FULL-HUD FORK`
+
+The runtime rebrand can't restyle the native chrome. To put the whole browser —
+tab shapes, UI fonts, neon toolbar — in the HUD, `fork/` compiles a patched
+Chromium (~100 GB checkout, 1–4 hr first build, ongoing rebase maintenance):
+
+```sh
+fork/fetch.sh                                   # depot_tools + pinned Chromium
+fork/apply-patches.sh  ~/zbrowser-chromium/src  # HUD patch series
+fork/build.sh          ~/zbrowser-chromium/src  # the long compile
+fork/package.sh        ~/zbrowser-chromium/src/out/zbrowser
+```
+
+See [`fork/README.md`](fork/README.md) and [`fork/patches/README.md`](fork/patches/README.md).
+
+## `[0x06] NOTES`
 
 - **Native messaging:** `zpwrchrome`'s `pass` and segmented-download features
   need its native host installed — see the
@@ -106,6 +124,6 @@ scripts/rebrand-macos.sh              # re-apply the rebrand after the swap
   Linux (x86_64). The in-place Dock rebrand is macOS-only; on Linux the launcher
   name is the brand.
 
-## `[0x06] LICENSE`
+## `[0x07] LICENSE`
 
 MIT — see [LICENSE](LICENSE).

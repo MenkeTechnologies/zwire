@@ -1,0 +1,11 @@
+# zbrowser HUD patch series — applied in order by fork/apply-patches.sh.
+#
+# Phase 1 patches (authored against the checked-out pinned tree, compile-tested).
+# Each entry is a path relative to fork/patches/. Uncomment as each is authored.
+#
+# 0001-tab-shape-hud.patch          # tab_style_views.cc GetPath -> sharp/chamfered tabs
+# 0002-ui-colors-hud.patch          # color mixer -> HUD palette on frame/toolbar/omnibox
+# 0003-ui-font-orbitron.patch       # typography -> Orbitron / Share Tech Mono in chrome
+# 0004-toolbar-neon-border.patch    # toolbar_view.cc -> neon border + glow
+# 0005-omnibox-hud.patch            # location_bar/omnibox views -> HUD field styling
+# 0006-branding-strings.patch       # chrome_strings.grd -> "zbrowser"

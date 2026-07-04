@@ -7,31 +7,33 @@
   <link rel="stylesheet" href="newtab.css">
 </head>
 <body>
-  <div class="grid"></div>
-  <div class="scanlines"></div>
+  <div class="app">
+    <div class="crt-scanline"></div>
+    <div class="crt-scanline-v"></div>
 
-  <main class="hud">
-    <header class="brand">
-      <span class="brand-mark">ZB</span>
-      <span class="brand-word">ZBROWSER</span>
-      <span class="brand-tag">// CHROMIUM · REBRANDED</span>
-    </header>
+    <main class="hud">
+      <header class="brand">
+        <span class="brand-mark">ZB</span>
+        <span class="brand-word">ZBROWSER</span>
+        <span class="brand-tag">// CHROMIUM · REBRANDED</span>
+      </header>
 
-    <section class="clock">
-      <div id="time" class="time">--:--:--</div>
-      <div id="date" class="date">----</div>
-    </section>
+      <section class="clock">
+        <div id="time" class="time">--:--:--</div>
+        <div id="date" class="date">----</div>
+      </section>
 
-    <form id="search" class="omni" autocomplete="off">
-      <span class="omni-prompt">&gt;_</span>
-      <input id="q" class="omni-input" type="text" placeholder="search or enter url" autofocus>
-      <button class="omni-go" type="submit">GO</button>
-    </form>
+      <form id="search" class="omni" autocomplete="off">
+        <span class="omni-prompt">&gt;_</span>
+        <input id="q" class="omni-input" type="text" placeholder="search or enter url" autofocus>
+        <button class="omni-go" type="submit">GO</button>
+      </form>
 
-    <section id="tiles" class="tiles" aria-label="quick launch"></section>
+      <section id="tiles" class="tiles" aria-label="quick launch"></section>
 
-    <footer id="status" class="status">[ SYSTEM READY ]</footer>
-  </main>
+      <footer id="status" class="status">[ SYSTEM READY ]</footer>
+    </main>
+  </div>
 
   <script src="newtab.js"></script>
 </body>

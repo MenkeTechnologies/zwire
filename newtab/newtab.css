@@ -1,175 +1,183 @@
+/* zbrowser new tab — the strykelang HUD design system, self-contained (CSP-safe:
+   fonts vendored locally, no CDN). Palette + effects mirror docs/hud-static.css. */
+
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-display: swap;
+  src: url('fonts/ShareTechMono-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Orbitron';
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/Orbitron.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Orbitron';
+  font-weight: 900;
+  font-display: swap;
+  src: url('fonts/Orbitron.woff2') format('woff2');
+}
+
+html { color-scheme: dark; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+::selection { background: rgba(5, 217, 232, 0.3); color: #fff; }
+
 :root {
   --bg-primary: #05050a;
   --bg-secondary: #0a0a14;
   --bg-card: #0d0d1a;
   --bg-hover: #12122a;
+  --accent: #ff2a6d;
+  --accent-light: #ff6b9d;
+  --accent-glow: rgba(255, 42, 109, 0.4);
+  --cyan: #05d9e8;
+  --cyan-glow: rgba(5, 217, 232, 0.4);
+  --cyan-dim: rgba(5, 217, 232, 0.15);
+  --magenta: #d300c5;
+  --magenta-glow: rgba(211, 0, 197, 0.3);
+  --green: #39ff14;
+  --yellow: #f9f002;
+  --red: #ff073a;
+  --text: #e0f0ff;
+  --text-dim: #7a8ba8;
+  --text-muted: #3d4f6a;
   --border: #1a1a3e;
   --border-glow: #2a1a4e;
-  --cyan: #05d9e8;
-  --accent: #ff2a6d;
-  --magenta: #d300c5;
-  --green: #39ff14;
-  --text: #e0f0ff;
-  --text-muted: #94a3b8;
-  --text-dim: #7a8ba8;
+  --cyber-grid-line: rgba(5, 217, 232, 0.042);
+  --cyber-grid-cross: rgba(5, 217, 232, 0.034);
 }
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  min-height: 100vh;
-  background: var(--bg-primary);
-  color: var(--text);
-  font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* neon grid backdrop */
-.grid {
-  position: fixed;
-  inset: 0;
+  font-family: 'Share Tech Mono', 'SF Mono', 'Fira Code', monospace;
+  background-color: var(--bg-primary);
   background-image:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 44px 44px;
-  opacity: 0.35;
-  mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, #000 40%, transparent 100%);
-  pointer-events: none;
-}
-.scanlines {
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    to bottom, rgba(5, 217, 232, 0.03) 0 1px, transparent 1px 3px);
-  pointer-events: none;
+    radial-gradient(ellipse at 20% 50%, rgba(5, 217, 232, 0.045) 0%, transparent 52%),
+    radial-gradient(ellipse at 80% 20%, rgba(211, 0, 197, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 82%, rgba(255, 42, 109, 0.035) 0%, transparent 48%),
+    linear-gradient(var(--cyber-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cyber-grid-cross) 1px, transparent 1px);
+  background-size: auto, auto, auto, 52px 52px, 52px 52px;
+  background-attachment: fixed;
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.55;
 }
 
-.hud {
-  position: relative;
-  z-index: 1;
-  width: min(720px, 90vw);
-  text-align: center;
+/* --- CRT overlays (scanline grid + vignette + sweeping beams) --- */
+.app { position: relative; min-height: 100vh; display: flex; flex-direction: column;
+       align-items: center; justify-content: center; padding: 48px 24px; }
+.app::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px,
+    rgba(5, 217, 232, 0.015) 2px, rgba(5, 217, 232, 0.015) 4px);
+}
+.app::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9998;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
+}
+.crt-scanline {
+  position: fixed; left: 0; right: 0; height: 2px; pointer-events: none; z-index: 9997;
+  background: linear-gradient(90deg, transparent 0%, rgba(5, 217, 232, 0.03) 20%,
+    rgba(5, 217, 232, 0.08) 50%, rgba(5, 217, 232, 0.03) 80%, transparent 100%);
+  box-shadow: 0 0 15px 5px rgba(5, 217, 232, 0.04);
+  animation: hscan 12s linear infinite;
+}
+.crt-scanline-v {
+  position: fixed; top: 0; bottom: 0; width: 2px; pointer-events: none; z-index: 9997;
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 42, 109, 0.03) 20%,
+    rgba(255, 42, 109, 0.06) 50%, rgba(255, 42, 109, 0.03) 80%, transparent 100%);
+  box-shadow: 0 0 15px 5px rgba(255, 42, 109, 0.03);
+  animation: vscan 18s linear infinite;
+}
+@keyframes hscan { 0% { top: -2px; opacity: 0; } 5%,95% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+@keyframes vscan { 0% { left: -2px; opacity: 0; } 5%,95% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(5, 5, 10, 0.5); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan) 0%, var(--magenta) 100%);
+  border-radius: 4px; box-shadow: 0 0 8px var(--cyan-glow), inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
-.brand {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 40px;
-  letter-spacing: 3px;
-}
+.hud { position: relative; z-index: 1; width: min(760px, 92vw); text-align: center; }
+
+/* --- brand (Orbitron shimmer, mirrors .docs-title-block h1) --- */
+.brand { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 40px; }
 .brand-mark {
-  font-weight: 800;
-  font-size: 22px;
-  color: var(--bg-primary);
-  background: var(--cyan);
-  padding: 2px 8px;
-  border-radius: 4px;
-  box-shadow: 0 0 18px rgba(5, 217, 232, 0.55);
+  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 20px; letter-spacing: 1px;
+  color: var(--bg-primary); background: var(--cyan); padding: 3px 10px; border-radius: 2px;
+  box-shadow: 0 0 18px var(--cyan-glow);
 }
-.brand-word { font-weight: 700; font-size: 20px; color: var(--cyan); }
-.brand-tag { font-size: 12px; color: var(--text-dim); }
+.brand-word {
+  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 22px;
+  letter-spacing: 4px; text-transform: uppercase;
+  background: linear-gradient(90deg, var(--cyan), #fff, var(--accent), var(--cyan));
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 8px var(--cyan-glow));
+  animation: logo-shimmer 6s linear infinite;
+}
+@keyframes logo-shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
+.brand-tag { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); }
 
-.clock { margin-bottom: 36px; }
+/* --- clock --- */
+.clock { margin-bottom: 34px; }
 .time {
-  font-size: 72px;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--text);
-  text-shadow: 0 0 24px rgba(5, 217, 232, 0.35);
-  font-variant-numeric: tabular-nums;
+  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 76px; line-height: 1;
+  letter-spacing: 4px; color: var(--text); font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 24px var(--cyan-glow), 0 0 4px var(--cyan-glow);
 }
-.date {
-  margin-top: 10px;
-  font-size: 15px;
-  letter-spacing: 4px;
-  color: var(--accent);
-  text-transform: uppercase;
-}
+.date { margin-top: 12px; font-size: 14px; letter-spacing: 5px; color: var(--accent);
+        text-transform: uppercase; }
 
+/* --- omnibox (doc-card border + cyan glow, sharp 2px radius) --- */
 .omni {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 16px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  display: flex; align-items: center; gap: 12px;
+  background-color: var(--bg-card);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 30%, transparent 50%);
+  border: 1px solid var(--cyan); border-radius: 2px; padding: 14px 18px;
+  box-shadow: 0 0 30px var(--cyan-glow);
+  backdrop-filter: blur(12px) saturate(1.4); -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  animation: neon-border-glow 2.5s ease-in-out infinite;
 }
-.omni:focus-within {
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 1px var(--cyan), 0 0 24px rgba(5, 217, 232, 0.25);
+@keyframes neon-border-glow {
+  0%,100% { box-shadow: 0 0 20px var(--cyan-glow), 0 0 4px var(--cyan-glow); border-color: var(--cyan); }
+  50%     { box-shadow: 0 0 40px var(--cyan-glow), 0 0 12px var(--magenta-glow); border-color: var(--accent); }
 }
-.omni-prompt { color: var(--green); font-weight: 700; }
+.omni-prompt { color: var(--green); font-weight: 700; font-size: 18px; }
 .omni-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 16px;
+  flex: 1; background: transparent; border: none; outline: none; color: var(--text);
+  font-family: 'Share Tech Mono', monospace; font-size: 17px; letter-spacing: 0.5px;
 }
-.omni-input::placeholder { color: var(--text-dim); }
+.omni-input::placeholder { color: var(--text-muted); }
 .omni-go {
-  background: var(--accent);
-  color: var(--bg-primary);
-  border: none;
-  border-radius: 5px;
-  font: inherit;
-  font-weight: 700;
-  letter-spacing: 1px;
-  padding: 6px 14px;
-  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace; font-size: 11px; font-weight: 600;
+  letter-spacing: 1.2px; text-transform: uppercase; cursor: pointer;
+  padding: 8px 16px; border-radius: 2px; border: 1px solid var(--cyan);
+  background: transparent; color: var(--cyan); box-shadow: 0 0 8px var(--cyan-dim);
+  transition: all 0.2s;
 }
-.omni-go:hover { background: var(--magenta); }
+.omni-go:hover { background: rgba(5, 217, 232, 0.08); box-shadow: 0 0 15px var(--cyan-glow); transform: translateY(-1px); }
+.omni-go:active { transform: translateY(1px) scale(0.98); }
 
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 12px;
-  margin-top: 32px;
-}
+/* --- quick-launch tiles (doc-card style) --- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px; margin-top: 34px; }
 .tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 12px;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 18px 8px; text-decoration: none;
+  background-color: var(--bg-card);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 50%);
+  border: 1px solid var(--border); border-radius: 2px; color: var(--text-dim);
+  font-size: 12px; letter-spacing: 0.5px; transition: all 0.2s;
 }
-.tile:hover {
-  border-color: var(--cyan);
-  color: var(--text);
-  background: var(--bg-hover);
-}
+.tile:hover { border-color: var(--cyan); color: var(--text); box-shadow: 0 0 18px var(--cyan-dim); transform: translateY(-2px); }
 .tile-glyph {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-glow);
-  color: var(--cyan);
-  font-weight: 700;
-  font-size: 16px;
+  width: 42px; height: 42px; display: grid; place-items: center; border-radius: 2px;
+  background: var(--bg-secondary); border: 1px solid var(--border-glow);
+  font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 15px; color: var(--cyan);
 }
 
 .status {
-  margin-top: 36px;
-  font-size: 12px;
-  letter-spacing: 3px;
-  color: var(--text-dim);
+  margin-top: 36px; font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; letter-spacing: 4px; color: var(--text-muted);
 }

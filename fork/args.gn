@@ -1,0 +1,25 @@
+# GN build args for the zbrowser Chromium fork.
+#
+# Unbranded (Chromium, not Google Chrome), release, optimized for a reasonable
+# build time on a workstation. Copied into out/<dir>/args.gn by build.sh.
+#
+# Tune target_cpu per host (arm64 for Apple Silicon, x64 for Intel/Linux).
+
+# --- product ---
+is_chrome_branded = false          # no Google branding; ships as unbranded Chromium
+is_official_build = true           # full optimization (release quality)
+
+# --- build speed / size ---
+is_debug = false
+is_component_build = false
+symbol_level = 0                   # no debug symbols -> much faster link, smaller
+blink_symbol_level = 0
+chrome_pgo_phase = 0               # skip profile-guided optimization (large time sink)
+enable_nacl = false                # drop legacy Native Client
+use_thin_lto = false               # ThinLTO is slow; disable for iteration builds
+
+# --- platform (SET THIS to your host) ---
+target_cpu = "arm64"               # arm64 | x64
+
+# --- dev conveniences ---
+dcheck_always_on = false
