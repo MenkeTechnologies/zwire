@@ -1,3 +1,6 @@
 [submodule "extensions/zpwrchrome"]
 	path = extensions/zpwrchrome
 	url = https://github.com/MenkeTechnologies/zpwrchrome.git
+[submodule "extensions/hud-internal/lib/zgui-core"]
+	path = extensions/hud-internal/lib/zgui-core
+	url = https://github.com/MenkeTechnologies/zgui-core.git

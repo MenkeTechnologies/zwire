@@ -110,11 +110,18 @@
     bar.querySelector('[data-close]').addEventListener('click', close);
   }
 
+  function ensureStyle() {
+    // Inject the bar CSS (position:fixed) SYNCHRONOUSLY so the bar is out of
+    // normal flow before we focus it — otherwise focusing an in-flow bar
+    // scrolls the page down to it (the "Cmd+F scrolls down" bug).
+    if (!styleEl) { styleEl = document.createElement('style'); (document.head || document.documentElement).appendChild(styleEl); styleEl.textContent = HAXOR_CSS; }
+  }
   function open() {
     if (!bar) buildBar();
-    schemeVars(injectStyle);
+    ensureStyle();                       // sync: fixed positioning before focus
     bar.classList.add('on');
     input.focus(); input.select();
+    schemeVars(injectStyle);             // async: scheme colors + ::highlight
     if (input.value) run(input.value);
   }
   function close() {
@@ -204,6 +211,8 @@
   function count() {
     if (countEl) countEl.textContent = (matches.length ? (cur + 1) : 0) + '/' + matches.length;
   }
+
+  window.__zbFindOpen = open;                    // vim mode ('/') calls this
 
   document.addEventListener('keydown', function (e) {
     var isFind = (e.key === 'f' || e.key === 'F') && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;

@@ -3,46 +3,23 @@
 <head>
 <meta charset="utf-8">
 <title>zbrowser · Settings</title>
-<link rel="stylesheet" href="hud-static.css">
-<link rel="stylesheet" href="store.css">
+<link rel="stylesheet" href="../lib/zgui-core/webui/all.css">
 <link rel="stylesheet" href="ext-page.css">
 </head>
 <body>
-<div class="app">
-  <div class="crt-scanline"></div>
-  <div class="crt-scanline-v"></div>
-  <header class="tutorial-header">
-    <div class="tutorial-header-inner">
-      <div class="tutorial-toolbar xt-topbar">
-        <div class="xt-logo"><span class="zb">ZB</span> <span class="ti">// SETTINGS</span></div>
-      </div>
-    </div>
-  </header>
-  <main class="tutorial-main">
-    <div class="info-wrap">
-      <section class="set-sec">
-        <div class="set-h">// APPEARANCE · COLOR SCHEME</div>
-        <div class="set-schemes" id="schemes"></div>
-        <div class="set-modes" id="modes"></div>
-      </section>
-      <section class="set-sec">
-        <div class="set-h">// SYSTEM</div>
-        <div class="set-links">
-          <a class="xt-btn" href="version.html">SYSTEM INFO</a>
-          <a class="xt-btn" href="extensions.html">EXTENSIONS</a>
-        </div>
-      </section>
-      <section class="set-sec">
-        <div class="set-h">// ABOUT</div>
-        <div class="set-about">zbrowser — Chromium, rebranded, in the strykelang cyberpunk HUD.
-        8 color schemes drive the whole product: chrome, internal pages, new tab, and DevTools.</div>
-      </section>
-    </div>
-  </main>
-  <div class="footer-docs">[ SYSTEM READY ]</div>
-</div>
-<script src="../schemes.js"></script>
-<script src="hud-pages.js"></script>
+<div id="app"></div>
+<script src="../lib/zgui-core/webui/util.js"></script>
+<script src="../lib/zgui-core/webui/fzf.js"></script>
+<script src="../lib/zgui-core/webui/search-box.js"></script>
+<script src="../lib/zgui-core/webui/colorscheme.js"></script>
+<script src="../lib/zgui-core/webui/crt.js"></script>
+<script src="../lib/zgui-core/webui/toast.js"></script>
+<script src="../lib/zgui-core/webui/command-palette.js"></script>
+<script src="../lib/zgui-core/webui/widgets.js"></script>
+<script src="../lib/zgui-core/webui/card.js"></script>
+<script src="../lib/zgui-core/webui/product-card.js"></script>
+<script src="../lib/zgui-core/webui/field.js"></script>
+<script src="zg-boot.js"></script>
 <script src="settings.js"></script>
 </body>
 </html>

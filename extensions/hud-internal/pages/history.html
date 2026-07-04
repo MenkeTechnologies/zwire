@@ -3,29 +3,25 @@
 <head>
 <meta charset="utf-8">
 <title>zbrowser · History</title>
-<link rel="stylesheet" href="hud-static.css">
-<link rel="stylesheet" href="store.css">
+<link rel="stylesheet" href="../lib/zgui-core/webui/all.css">
 <link rel="stylesheet" href="ext-page.css">
 </head>
 <body>
-<div class="app">
-  <div class="crt-scanline"></div>
-  <div class="crt-scanline-v"></div>
-  <header class="tutorial-header">
-    <div class="tutorial-header-inner">
-      <div class="tutorial-toolbar xt-topbar">
-        <div class="xt-logo"><span class="zb">ZB</span> <span class="ti">// HISTORY</span></div>
-        <input id="search" class="xt-search" placeholder="&gt;_ filter history">
-      </div>
-    </div>
-  </header>
-  <main class="tutorial-main">
-    <div class="info-wrap"><div class="info-list" id="list"><div class="info-row">[ loading… ]</div></div></div>
-  </main>
-  <div class="footer-docs">[ SYSTEM READY ] · <span id="count">0</span> entries</div>
-</div>
-<script src="../schemes.js"></script>
-<script src="hud-pages.js"></script>
+<div id="app"></div>
+<script src="../lib/zgui-core/webui/util.js"></script>
+<script src="../lib/zgui-core/webui/fzf.js"></script>
+<script src="../lib/zgui-core/webui/search-box.js"></script>
+<script src="../lib/zgui-core/webui/colorscheme.js"></script>
+<script src="../lib/zgui-core/webui/crt.js"></script>
+<script src="../lib/zgui-core/webui/toast.js"></script>
+<script src="../lib/zgui-core/webui/command-palette.js"></script>
+<script src="../lib/zgui-core/webui/widgets.js"></script>
+<script src="../lib/zgui-core/webui/card.js"></script>
+<script src="../lib/zgui-core/webui/product-card.js"></script>
+<script src="../lib/zgui-core/webui/field.js"></script><script src="../lib/zgui-core/webui/table.js"></script>
+<script src="../lib/zgui-core/webui/data-table.js"></script>
+<script src="zg-boot.js"></script>
+<script src="zg-list.js"></script>
 <script src="history.js"></script>
 </body>
 </html>

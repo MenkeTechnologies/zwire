@@ -8,7 +8,6 @@
     ['chrome://extensions', 'pages/extensions.html'],
     ['chrome://settings', 'pages/settings.html'],
     ['chrome://history', 'pages/history.html'],
-    ['chrome://downloads', 'pages/downloads.html'],
     ['chrome://bookmarks', 'pages/bookmarks.html'],
     ['chrome://version', 'pages/version.html']
   ];

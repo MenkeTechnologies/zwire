@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "zbrowser HUD Internal",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Cyberpunk HUD internal pages + 8-scheme picker for zbrowser.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr2PuA3ZZcP0X/k7dISHkTd6ICgQnAH1aU+q+wuxnHrl4xMopfwRYz5iKESz/p40d/bTq8gEKb2sRizFdB2VDi+/z9V+fMfNZQRIdiZVjmufjR81/POfpVlEZExmMzmjI16m/DnlHwQEpSwZ9wHPfH/n6YtNbHKcxqW58h9J7nykdEPg9LsCCMs3BOU5kxSJN1jqgFM/rJSIbeG9uN0g+3PypmDI+YnpN6J63OMFKEAbQFZDqMJN44lDvvQ72uOjZ8CnfalniujeUSdZ4FHFazn17n5HuPgMnlBmaPSbK/cScL4CgbWimIYuQPygpPnNF0Sx4vDjdWougUZagShrChwIDAQAB",
   "permissions": ["storage", "nativeMessaging", "management", "tabs", "webNavigation", "history", "downloads", "bookmarks", "developerPrivate", "settingsPrivate"],
@@ -14,7 +14,7 @@
     {
       "matches": [
         "chrome://extensions/*", "chrome://settings/*", "chrome://history/*",
-        "chrome://downloads/*", "chrome://bookmarks/*", "chrome://version/*"
+        "chrome://bookmarks/*", "chrome://version/*"
       ],
       "js": ["redirect.js"],
       "run_at": "document_start"
@@ -23,7 +23,7 @@
       "matches": ["chrome://*/*"],
       "exclude_matches": [
         "chrome://extensions/*", "chrome://settings/*", "chrome://history/*",
-        "chrome://downloads/*", "chrome://bookmarks/*", "chrome://version/*",
+        "chrome://bookmarks/*", "chrome://version/*",
         "chrome://newtab/*", "chrome://new-tab-page/*", "chrome://new-tab-page-third-party/*"
       ],
       "js": ["schemes.js", "theme.js"],
@@ -36,6 +36,16 @@
       ],
       "js": ["schemes.js", "pages/fzf.js", "zfind.js"],
       "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["http://*/*", "https://*/*", "file:///*", "chrome://*/*"],
+      "exclude_matches": [
+        "chrome://newtab/*", "chrome://new-tab-page/*", "chrome://new-tab-page-third-party/*"
+      ],
+      "js": ["schemes.js", "lib/zgui-core/webui/util.js", "lib/zgui-core/webui/fzf.js",
+        "lib/zgui-core/webui/command-palette.js", "zpalette.js", "zvim.js"],
+      "run_at": "document_start",
       "all_frames": false
     }
   ]

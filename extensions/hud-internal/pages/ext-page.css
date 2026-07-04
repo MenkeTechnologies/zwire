@@ -1,4 +1,12 @@
-/* Extension-page additions on top of the real HUD CSS (hud-static.css + store.css). */
+/* Extension-page content. The card grid + cards come from zgui-core
+   (product-card.css / ZGui.productCard); this only adds the app-specific bits
+   product-card.css doesn't define. Tokens from zgui-core base.css + colorscheme.js. */
+.card-chip { color:var(--text-dim); font-size:11px; }
+.footer-docs { color:var(--text-dim); font-size:12px; letter-spacing:1px; opacity:.8; margin-top:8px; }
+.set-h { color:var(--accent); letter-spacing:2px; margin-bottom:10px; text-shadow:0 0 8px var(--accent-glow); }
+.xt-switch-lbl { color:var(--cyan); font-size:12px; letter-spacing:1px; }
+.xt-dicon { width:48px; height:48px; object-fit:contain; }
+
 
 /* shared nav bar */
 .xt-nav { display:flex; gap:4px; flex-wrap:wrap; }
