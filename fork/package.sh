@@ -30,7 +30,7 @@ case "$os" in
     mkdir -p "$BASE_DIR"
     # Install under the bundle's own name (zbrowser.app) — no "fork-" prefix, so
     # Finder / Dock / ⌘-Tab all read "zbrowser". base.version records the fork.
-    rm -rf "$BASE_DIR"/fork-*.app "$BASE_DIR/$APP_NAME"
+    rm -rf "${BASE_DIR:?}"/fork-*.app "${BASE_DIR:?}/$APP_NAME"
     cp -R "$APP" "$BASE_DIR/$APP_NAME"
     BIN="$BASE_DIR/$APP_NAME/Contents/MacOS/$EXE"
     ;;

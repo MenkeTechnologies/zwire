@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        # The zpwrchrome submodule is not needed for any check below.
+        with:
+          submodules: false
+
+      - name: shellcheck (all repo shell scripts)
+        # shellcheck is preinstalled on the ubuntu-latest runner image.
+        run: |
+          shellcheck --version
+          shellcheck -S warning \
+            bin/zbrowser \
+            scripts/*.sh \
+            fork/*.sh
+
+      - name: validate JSON
+        # Every tracked *.json outside the zpwrchrome submodule (absent in CI)
+        # and runtime state — discovered, never hardcoded.
+        run: |
+          git ls-files '*.json' ':!:extensions/zpwrchrome/**' | while read -r f; do
+            python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f"
+            echo "ok: $f"
+          done
+
+      - name: patch series ↔ disk consistency
+        run: scripts/check-patch-series.sh
