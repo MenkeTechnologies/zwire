@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>zbrowser · color scheme</title>
+<style>
+  :root { --accent:#ff2a6d; --cyan:#05d9e8; --bg-primary:#05050a; --bg-secondary:#0a0a14;
+    --bg-card:#0d0d1a; --text:#e0f0ff; --text-dim:#7a8ba8; --border:#1a1a3e; --accent-glow:rgba(255,42,109,.5); }
+  * { box-sizing:border-box; }
+  body { margin:0; width:280px; padding:14px; background:var(--bg-primary); color:var(--text);
+    font-family:"Share Tech Mono","Monaco",monospace; }
+  .h { color:var(--accent); font-size:12px; letter-spacing:2px; margin:0 0 12px;
+    text-shadow:0 0 8px var(--accent-glow); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .card { display:flex; align-items:center; gap:9px; background:var(--bg-secondary);
+    border:1px solid var(--border); border-radius:3px; padding:9px 10px; cursor:pointer;
+    color:var(--text-dim); font:inherit; text-align:left; }
+  .card:hover { border-color:var(--cyan); box-shadow:0 0 10px rgba(5,217,232,.25); }
+  .card.active { border-color:var(--accent); color:var(--text); box-shadow:0 0 12px var(--accent-glow); }
+  .dot { width:18px; height:18px; border-radius:50%; flex:0 0 auto; box-shadow:0 0 7px var(--accent-glow); }
+  .lbl { display:flex; flex-direction:column; line-height:1.25; }
+  .lbl b { font-size:12px; } .lbl span { font-size:10px; opacity:.7; }
+  .foot { margin-top:12px; font-size:10px; color:var(--text-dim); opacity:.7; letter-spacing:1px; }
+</style>
+</head>
+<body>
+  <div class="h">// COLOR SCHEME</div>
+  <div class="grid" id="grid"></div>
+  <div class="foot">drives chrome + all internal pages</div>
+<script src="../schemes.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

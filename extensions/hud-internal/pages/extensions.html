@@ -17,11 +17,24 @@
         <div class="xt-logo"><span class="zb">ZB</span> <span class="ti">// EXTENSIONS</span></div>
         <input id="search" class="xt-search" placeholder="&gt;_ filter extensions">
       </div>
+      <div class="xt-devbar">
+        <label class="xt-switch"><span>DEVELOPER MODE</span>
+          <span class="xt-toggle" id="devmode" data-act="devmode"></span></label>
+        <span class="xt-devbtns" id="devbtns" hidden>
+          <button class="xt-btn" data-act="load">▸ LOAD UNPACKED</button>
+          <button class="xt-btn" data-act="pack">▸ PACK</button>
+          <button class="xt-btn" data-act="updateall">▸ UPDATE</button>
+        </span>
+        <span class="grow"></span>
+        <button class="xt-btn ghost" data-act="shortcuts">⌘ KEYBOARD SHORTCUTS</button>
+        <a class="xt-btn ghost" id="webstore" target="_blank" rel="noopener">◈ CHROME WEB STORE ↗</a>
+      </div>
     </div>
   </header>
   <main class="tutorial-main">
     <div class="product-grid" id="grid"><div class="footer-docs">[ loading extensions... ]</div></div>
-    <div class="footer-docs" id="foot">[ SYSTEM READY ] · <span id="count">0</span> extensions</div>
+    <div class="footer-docs" id="foot">[ SYSTEM READY ] · <span id="count">0</span> extensions ·
+      <span id="discover"></span></div>
   </main>
 </div>
 <script src="../schemes.js"></script>

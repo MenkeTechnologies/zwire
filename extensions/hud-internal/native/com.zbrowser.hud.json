@@ -4,6 +4,7 @@
   "path": "/Users/tommy/RustRoverProjects/MenkeTechnologiesMeta/zbrowser/extensions/hud-internal/native/hud_host.py",
   "type": "stdio",
   "allowed_origins": [
+    "chrome-extension://omcgnnjfmbmpdlofklbpddkhnfibfhgg/",
     "chrome-extension://kmcgggpkhpodihojcnddbaehiacglnec/",
     "chrome-extension://macielhofknmmaifmoijonmbecmnnndh/"
   ]

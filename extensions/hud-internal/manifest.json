@@ -3,7 +3,8 @@
   "name": "zbrowser HUD Internal",
   "version": "0.1.0",
   "description": "Cyberpunk HUD internal pages + 8-scheme picker for zbrowser.",
-  "permissions": ["storage", "nativeMessaging", "management", "tabs", "webNavigation", "history", "downloads", "bookmarks"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr2PuA3ZZcP0X/k7dISHkTd6ICgQnAH1aU+q+wuxnHrl4xMopfwRYz5iKESz/p40d/bTq8gEKb2sRizFdB2VDi+/z9V+fMfNZQRIdiZVjmufjR81/POfpVlEZExmMzmjI16m/DnlHwQEpSwZ9wHPfH/n6YtNbHKcxqW58h9J7nykdEPg9LsCCMs3BOU5kxSJN1jqgFM/rJSIbeG9uN0g+3PypmDI+YnpN6J63OMFKEAbQFZDqMJN44lDvvQ72uOjZ8CnfalniujeUSdZ4FHFazn17n5HuPgMnlBmaPSbK/cScL4CgbWimIYuQPygpPnNF0Sx4vDjdWougUZagShrChwIDAQAB",
+  "permissions": ["storage", "nativeMessaging", "management", "tabs", "webNavigation", "history", "downloads", "bookmarks", "developerPrivate", "settingsPrivate"],
   "background": { "service_worker": "background.js" },
   "web_accessible_resources": [{
     "resources": ["pages/*", "schemes.js"],
@@ -27,6 +28,15 @@
       ],
       "js": ["schemes.js", "theme.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*", "file:///*", "chrome://*/*"],
+      "exclude_matches": [
+        "chrome://newtab/*", "chrome://new-tab-page/*", "chrome://new-tab-page-third-party/*"
+      ],
+      "js": ["schemes.js", "pages/fzf.js", "zfind.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ]
 }
