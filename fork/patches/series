@@ -3,7 +3,7 @@
 # Phase 1 patches (authored against the checked-out pinned tree, compile-tested).
 # Each entry is a path relative to fork/patches/. Uncomment as each is authored.
 #
-# 0001-tab-shape-hud.patch          # tab_style_views.cc GetPath -> sharp/chamfered tabs
+0001-tab-shape-hud.patch            # tab_style_views.cc GetPath -> sharp ~2px HUD tabs (VERIFIED git-apply @150.0.7871.46)
 # 0002-ui-colors-hud.patch          # color mixer -> HUD palette on frame/toolbar/omnibox
 # 0003-ui-font-orbitron.patch       # typography -> Orbitron / Share Tech Mono in chrome
 # 0004-toolbar-neon-border.patch    # toolbar_view.cc -> neon border + glow
