@@ -1,0 +1,17 @@
+diff --git a/chrome/browser/ui/views/tabs/tab_style_views.cc b/chrome/browser/ui/views/tabs/tab_style_views.cc
+index 44a60df681..30286417f7 100644
+--- a/chrome/browser/ui/views/tabs/tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/tab_style_views.cc
+@@ -213,8 +213,10 @@ SkPath TabStyleViewsImpl::GetPath(TabStyle::PathType path_type,
+ 
+   // Calculate the corner radii. Note that corner radius is based on original
+   // tab width (in DIP), not our new, scaled-and-aligned bounds.
+-  float content_corner_radius =
+-      GetTopCornerRadiusForWidth(tab()->width()) * scale;
++  // zbrowser HUD: force sharp ~2px tab corners (mirrors the HUD 2px radius)
++  // instead of Chrome's width-derived squarcle rounding, giving the cyberpunk
++  // near-rectangular tab shape.
++  float content_corner_radius = 2.0f * scale;
+   float extension_corner_radius = tab_style()->GetBottomCornerRadius() * scale;
+ 
+   const float separator_overlap = (tab_style()->GetSeparatorMargins().width() +
