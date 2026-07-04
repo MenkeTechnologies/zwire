@@ -2,14 +2,25 @@
   "manifest_version": 3,
   "name": "zbrowser HUD Internal",
   "version": "0.1.0",
-  "description": "Cyberpunk HUD skin + 8-scheme picker for chrome:// internal pages.",
-  "permissions": ["storage", "nativeMessaging"],
+  "description": "Cyberpunk HUD internal pages + skin + 8-scheme picker for zbrowser.",
+  "permissions": ["storage", "nativeMessaging", "management", "tabs", "webNavigation"],
   "background": { "service_worker": "background.js" },
-  "content_scripts": [{
-    "matches": ["chrome://*/*"],
-    "exclude_matches": ["chrome://newtab/*", "chrome://new-tab-page/*", "chrome://newtab-footer/*"],
-    "js": ["schemes.js", "hud.js"],
-    "run_at": "document_start",
-    "all_frames": true
-  }]
+  "web_accessible_resources": [{
+    "resources": ["pages/*", "schemes.js"],
+    "matches": ["<all_urls>"]
+  }],
+  "content_scripts": [
+    {
+      "matches": ["chrome://extensions/*"],
+      "js": ["redirect-extensions.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["chrome://*/*"],
+      "exclude_matches": ["chrome://newtab/*", "chrome://new-tab-page/*", "chrome://newtab-footer/*", "chrome://extensions/*"],
+      "js": ["schemes.js", "hud.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
 }

@@ -1,0 +1,1151 @@
+/* MenkeTechnologies app store — storefront styles.
+   Loads after hud-static.css + tutorial.css and reuses their CSS variables
+   (var(--bg), --text, --accent, --cyan, --border, --green, …). Adds only the
+   commerce surfaces: product grid, price tags, buy buttons, cart, checkout,
+   product detail. No new colors — everything resolves from the active scheme.
+*/
+
+/* ===================================================================
+   Hero
+   =================================================================== */
+.store-hero {
+  margin: 0 0 1.5rem;
+  padding: 1.4rem 1.5rem 1.6rem;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  background:
+    linear-gradient(to right,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      transparent 45%),
+    var(--bg-secondary);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.store-hero::before {
+  content: "";
+  position: absolute;
+  top: -1px; right: -1px;
+  width: 16px; height: 16px;
+  border-top: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+  opacity: 0.7;
+}
+.store-hero h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: clamp(18px, 4vw, 26px);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+  line-height: 1.2;
+}
+.store-hero h2 .hash { color: var(--accent); margin-right: 0.5rem; opacity: 0.85; }
+.store-hero p {
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 46rem;
+}
+.store-hero .hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.4rem;
+  margin-top: 1rem;
+}
+.store-hero .hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.store-hero .hero-stat .num {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--cyan);
+  text-shadow: 0 0 10px var(--cyan-glow);
+}
+.store-hero .hero-stat .lbl {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ===================================================================
+   Filter / category bar
+   =================================================================== */
+.store-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1.2rem;
+}
+.store-search {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.5rem 0.7rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.store-search:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan-dim);
+}
+.store-search::placeholder { color: var(--text-muted); }
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.filter-chip {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.4rem 0.65rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.filter-chip:hover { border-color: var(--cyan); color: var(--cyan); }
+.filter-chip.active {
+  border-color: var(--cyan);
+  border-left: 3px solid var(--cyan);
+  color: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan-dim);
+}
+
+/* ===================================================================
+   Product grid + cards
+   =================================================================== */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: 0.9rem;
+  margin: 0 0 2rem;
+}
+.product-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  background-image: linear-gradient(180deg,
+    rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 30%, transparent 50%);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  animation: fadeSlideIn 0.5s ease both;
+}
+.product-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 2px; height: 100%;
+  background: var(--cyan);
+  opacity: 0.45;
+  transition: opacity 150ms ease;
+  z-index: 1;
+}
+.product-card:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 22px var(--cyan-glow);
+  transform: translateY(-2px);
+}
+.product-card:hover::before { opacity: 1; }
+
+.product-thumb {
+  height: 7.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(ellipse at 30% 30%, var(--cyan-dim), transparent 60%),
+    radial-gradient(ellipse at 75% 80%, var(--accent-glow), transparent 55%),
+    var(--bg-secondary);
+  position: relative;
+  overflow: hidden;
+}
+.product-thumb .glyph {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 38px;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, var(--cyan), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 12px var(--cyan-glow));
+  text-transform: uppercase;
+}
+.product-thumb .badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--bg-primary);
+  background: var(--green);
+  padding: 3px 6px;
+  border-radius: 2px;
+  box-shadow: 0 0 10px var(--green-bg);
+}
+.product-thumb .badge.first {
+  background: var(--accent);
+  color: #fff;
+}
+
+.product-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.85rem 0.95rem 0.5rem;
+  flex: 1;
+}
+.product-card .p-cat {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent-light);
+}
+.product-card .p-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+  line-height: 1.25;
+}
+.product-card .p-tag {
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  flex: 1;
+}
+/* fzf fuzzy-match highlight (mark.fzf-hl), same treatment as audio haxor. */
+.fzf-hl {
+  background: color-mix(in srgb, var(--cyan) 15%, transparent);
+  color: var(--cyan);
+  border-bottom: 1px solid var(--cyan);
+  padding: 0;
+  border-radius: 0;
+}
+.p-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+.p-pill {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--cyan);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1px 5px;
+}
+
+.product-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.6rem 0.95rem 0.85rem;
+  border-top: 1px dashed var(--border);
+  margin-top: auto;
+}
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+.price .amt {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--green);
+  text-shadow: 0 0 8px var(--green-bg);
+}
+.price .amt.free { color: var(--cyan); text-shadow: 0 0 8px var(--cyan-glow); }
+.price .was {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.price .per { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text-muted); }
+
+/* Buy buttons reuse the .btn base from hud-static.css */
+.btn-buy {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.btn-buy:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: 0 0 15px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.btn-buy:active { transform: translateY(1px) scale(0.98); }
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem 1rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.empty-state::before { content: "// "; color: var(--accent); }
+
+/* ===================================================================
+   Cart button in toolbar
+   =================================================================== */
+.cart-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 2px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+}
+.cart-count:empty,
+.cart-count[data-n="0"] { display: none; }
+
+/* ===================================================================
+   Modal (cart + checkout)
+   =================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4rem 1rem 2rem;
+  overflow-y: auto;
+}
+.modal-overlay[hidden] { display: none; }
+.modal {
+  width: 100%;
+  max-width: 34rem;
+  background: var(--bg-card);
+  border: 1px solid var(--cyan);
+  border-radius: 2px;
+  box-shadow: 0 0 40px var(--cyan-glow);
+  position: relative;
+  animation: fadeSlideIn 0.3s ease both;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin: 0;
+}
+.modal-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 2px;
+  width: 26px; height: 26px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.modal-close:hover { border-color: var(--accent); color: var(--accent); }
+.modal-body { padding: 1rem; }
+
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px dashed var(--border);
+}
+.cart-item:last-of-type { border-bottom: none; }
+.cart-item .ci-glyph {
+  flex: 0 0 auto;
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 14px;
+  color: var(--cyan);
+  background: var(--bg-secondary);
+}
+.cart-item .ci-info { flex: 1; min-width: 0; }
+.cart-item .ci-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.cart-item .ci-lic {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.cart-item .ci-price {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--green);
+}
+.cart-item .ci-rm {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+.cart-item .ci-rm:hover { color: var(--red); }
+
+.cart-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.cart-total .lbl {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.cart-total .amt {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--green);
+  text-shadow: 0 0 10px var(--green-bg);
+}
+.cart-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.cart-actions .btn { flex: 1; justify-content: center; }
+.cart-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Checkout form */
+.field { margin-bottom: 0.8rem; }
+.field label {
+  display: block;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.3rem;
+}
+.field input,
+.field select {
+  width: 100%;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0.5rem 0.65rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan-dim);
+}
+.field-row { display: flex; gap: 0.6rem; }
+.field-row .field { flex: 1; }
+.checkout-ok {
+  text-align: center;
+  padding: 1.5rem 1rem;
+}
+.checkout-ok .big {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--green);
+  text-shadow: 0 0 12px var(--green-bg);
+  margin-bottom: 0.5rem;
+}
+.checkout-ok p {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+/* ===================================================================
+   Product detail page (product.html)
+   =================================================================== */
+.detail-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  margin: 0 0 1.5rem;
+}
+@media (max-width: 720px) { .detail-top { grid-template-columns: 1fr; } }
+.detail-hero {
+  height: 14rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 30% 30%, var(--cyan-dim), transparent 60%),
+    radial-gradient(ellipse at 75% 80%, var(--accent-glow), transparent 55%),
+    var(--bg-secondary);
+}
+.detail-hero .glyph {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 72px;
+  background: linear-gradient(135deg, var(--cyan), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 18px var(--cyan-glow));
+  text-transform: uppercase;
+}
+.detail-buy { display: flex; flex-direction: column; gap: 0.7rem; }
+.detail-buy h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.15;
+}
+.detail-buy .p-cat { font-family: 'Orbitron', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent-light); }
+.detail-buy .p-tag { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+.detail-buy .detail-price .amt { font-size: 30px; }
+.detail-buy .buy-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.license-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.3rem 0;
+}
+.license-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.license-opt:hover { border-color: var(--cyan); }
+.license-opt.active {
+  border-color: var(--cyan);
+  border-left: 3px solid var(--cyan);
+  box-shadow: 0 0 10px var(--cyan-dim);
+}
+.license-opt .lo-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.license-opt .lo-desc { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text-muted); }
+.license-opt .lo-price { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14px; color: var(--green); }
+
+.feature-list { list-style: none; margin: 0.4rem 0; padding: 0; }
+.feature-list li {
+  position: relative;
+  padding-left: 1.3rem;
+  margin: 0.4rem 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.feature-list li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: var(--cyan);
+}
+
+/* ===================================================================
+   Checkout page (checkout.html) — Shopify-style two-column layout
+   =================================================================== */
+.checkout-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 2rem;
+  align-items: start;
+  margin: 0.5rem 0 2rem;
+}
+@media (max-width: 860px) {
+  .checkout-wrap { grid-template-columns: 1fr; }
+  .checkout-summary { order: -1; }
+}
+
+.checkout-col { min-width: 0; }
+.checkout-block { margin: 0 0 1.6rem; }
+.checkout-block h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin: 0 0 0.7rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.checkout-block h3 .h-link {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: none;
+  color: var(--accent-light);
+}
+.checkout-note {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: -0.3rem 0 0.7rem;
+}
+
+/* Express checkout wallet buttons (keep brand colors — recognizability) */
+.express-label {
+  text-align: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 0.6rem;
+}
+.wallet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+}
+@media (max-width: 520px) { .wallet-grid { grid-template-columns: repeat(2, 1fr); } }
+.wallet-btn {
+  height: 44px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+.wallet-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+.wallet-btn:active { transform: translateY(1px) scale(0.98); }
+.wallet-btn.shop   { background: #5a31f4; color: #fff; box-shadow: 0 0 14px rgba(90,49,244,0.5); }
+.wallet-btn.paypal { background: #ffc439; color: #003087; box-shadow: 0 0 14px rgba(255,196,57,0.4); font-style: italic; }
+.wallet-btn.gpay   { background: #000; color: #fff; border: 1px solid #5f6368; }
+.wallet-btn.venmo  { background: #3d95ce; color: #fff; box-shadow: 0 0 14px rgba(61,149,206,0.45); font-style: italic; }
+.wallet-btn .gp-g  { color: #4285f4; }
+.wallet-btn .gp-a  { color: #ea4335; }
+.wallet-btn .gp-y  { color: #fbbc04; }
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 1.2rem 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--text-muted);
+}
+.or-divider::before, .or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.check-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.check-checkbox input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+/* Payment method accordion */
+.pay-methods {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pay-method {
+  border-bottom: 1px solid var(--border);
+}
+.pay-method:last-child { border-bottom: none; }
+.pay-method-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--bg-secondary);
+}
+.pay-method.active > .pay-method-head {
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-secondary));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.pay-method-head .radio {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  flex: 0 0 auto;
+  position: relative;
+}
+.pay-method.active .pay-method-head .radio {
+  border-color: var(--accent);
+}
+.pay-method.active .pay-method-head .radio::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.pay-method-head .pm-label { flex: 1; }
+.pay-method-head .pm-art {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.card-chip {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #fff;
+  padding: 2px 5px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.card-chip.visa { background: #1a1f71; }
+.card-chip.mc   { background: #eb001b; }
+.card-chip.amex { background: #2e77bb; }
+.card-chip.more { background: var(--bg-hover); color: var(--accent-light); border: 1px solid var(--border); }
+.pay-method-head .brand-logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+}
+.brand-logo.shop { color: #5a31f4; }
+.brand-logo.paypal { color: #003087; font-style: italic; }
+[data-theme="dark"] .brand-logo.paypal, :root .brand-logo.paypal { color: #b3c7ff; }
+
+.pay-method-body {
+  padding: 0.9rem 1rem 1rem;
+  background: var(--bg);
+  display: none;
+}
+.pay-method.active > .pay-method-body { display: block; }
+.pay-method-body .field-row { gap: 0.6rem; }
+
+/* Right column — order summary */
+.checkout-summary {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  padding: 1.2rem 1.25rem;
+  position: sticky;
+  top: 1rem;
+}
+.sum-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+.sum-item .si-thumb {
+  position: relative;
+  width: 48px; height: 48px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--cyan);
+  background:
+    radial-gradient(ellipse at 30% 30%, var(--cyan-dim), transparent 65%),
+    var(--bg-card);
+}
+.sum-item .si-qty {
+  position: absolute;
+  top: -7px; right: -7px;
+  min-width: 18px; height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--text-muted);
+  color: var(--bg-primary);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sum-item .si-info { flex: 1; min-width: 0; }
+.sum-item .si-name {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.3;
+}
+.sum-item .si-lic { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text-muted); }
+.sum-item .si-price { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); }
+
+.discount-row {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.9rem 0;
+}
+.discount-row input {
+  flex: 1;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+}
+.discount-row input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-dim); }
+.discount-row .btn { border-radius: 6px; }
+
+.sum-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+}
+.sum-line.total {
+  border-top: 1px solid var(--border);
+  margin-top: 0.5rem;
+  padding-top: 0.8rem;
+}
+.sum-line.total .t-lbl {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.sum-line.total .t-amt {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--green);
+  text-shadow: 0 0 10px var(--green-bg);
+}
+.sum-line.total .t-amt .cur { font-size: 11px; color: var(--text-muted); margin-right: 0.3rem; text-shadow: none; }
+
+.pay-now-btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 1.1rem;
+  height: 48px;
+  font-size: 13px;
+}
+.discount-applied {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--green);
+  margin: -0.4rem 0 0.6rem;
+}
+.discount-applied.bad { color: var(--red); }
+
+.hidden { display: none !important; }
+
+/* Detail page: pills get a bit of breathing room above pricing */
+.detail-buy .p-meta { margin: 0.2rem 0 0.4rem; }
+.detail-overview {
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+/* Per-major-version licensing note on the product detail page */
+.version-note {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0.1rem 0 0.2rem;
+  max-width: 24rem;
+}
+
+/* ---- Screenshots: grid card thumb, detail hero, gallery, lightbox ---- */
+.product-thumb.has-shot { padding: 0; }
+.thumb-shot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+.product-card:hover .thumb-shot { filter: brightness(1.08); }
+
+.detail-hero.has-shot {
+  height: auto;
+  align-self: start;
+  padding: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--bg-secondary);
+}
+.detail-hero.has-shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: transform 0.3s ease;
+}
+.detail-hero.has-shot:hover img { transform: scale(1.03); }
+
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.9rem;
+}
+.shot-thumb {
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-secondary);
+  padding: 0;
+  cursor: zoom-in;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.shot-thumb:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 16px var(--cyan-glow);
+}
+.shot-thumb img {
+  width: 100%;
+  height: 8.5rem;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+.shot-cap {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  border-top: 1px solid var(--border);
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+}
+.lightbox[hidden] { display: none; }
+.lb-stage {
+  margin: 0;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+}
+.lb-img {
+  max-width: 90vw;
+  max-height: 80vh;
+  object-fit: contain;
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 40px var(--cyan-glow);
+}
+.lb-cap {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--text);
+  text-align: center;
+}
+.lb-close, .lb-nav {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.lb-close:hover, .lb-nav:hover { border-color: var(--cyan); color: var(--cyan); }
+.lb-close { top: 1.2rem; right: 1.5rem; width: 2.4rem; height: 2.4rem; }
+.lb-nav { top: 50%; transform: translateY(-50%); width: 3rem; height: 4rem; }
+.lb-prev { left: 1.5rem; }
+.lb-next { right: 1.5rem; }
+.lb-nav[hidden] { display: none; }
+
+/* ---- Documentation cards (block catalog PDF, manuals) ---- */
+.doc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+}
+.doc-card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.doc-card:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 14px var(--cyan-dim);
+}
+.doc-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: var(--accent);
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.doc-body { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.doc-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  color: var(--cyan);
+}
+.doc-desc {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
