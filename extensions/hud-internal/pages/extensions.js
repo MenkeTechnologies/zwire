@@ -7,6 +7,11 @@
   var searchEl = document.getElementById('search');
   var all = [];
 
+  function hostLabel(hosts) {
+    if (hosts.some(function (h) { return h === '<all_urls>' || /^[a-z*]+:\/\/\*\/\*$/.test(h); })) return 'ALL SITES';
+    return hosts.length + ' site' + (hosts.length === 1 ? '' : 's');
+  }
+
   function iconUrl(ext) {
     if (ext.icons && ext.icons.length) {
       return ext.icons.sort(function (a, b) { return b.size - a.size; })[0].url;
@@ -36,7 +41,17 @@
           '<span class="p-cat">' + (ext.enabled ? 'ENABLED' : 'DISABLED') + '</span>' +
           '<span class="p-name">' + esc(ext.name) + ' <span class="card-chip">v' + esc(ext.version) + '</span></span>' +
           '<span class="p-tag">' + esc(ext.description || '') + '</span>' +
-          '<div class="xt-id">ID: ' + esc(ext.id) + '</div>' +
+          '<div class="xt-meta">' +
+            (ext.permissions && ext.permissions.length ? '<span class="xt-chip">PERMS · ' + ext.permissions.length + '</span>' : '') +
+            (ext.hostPermissions && ext.hostPermissions.length ? '<span class="xt-chip" title="' + esc(ext.hostPermissions.join(' ')) + '">SITE ACCESS · ' + hostLabel(ext.hostPermissions) + '</span>' : '') +
+            (ext.optionsUrl ? '<span class="xt-chip">OPTIONS</span>' : '') +
+            (ext.homepageUrl ? '<a class="xt-chip link" href="' + esc(ext.homepageUrl) + '">HOMEPAGE ↗</a>' : '') +
+            (ext.updateUrl ? '<span class="xt-chip">' + (ext.updateUrl.indexOf('google') !== -1 ? 'WEB STORE' : 'SELF-HOSTED') + '</span>' : '') +
+            (ext.offlineEnabled ? '<span class="xt-chip">OFFLINE</span>' : '') +
+            (!ext.enabled && ext.disabledReason ? '<span class="xt-chip warn">' + esc(String(ext.disabledReason).toUpperCase()) + '</span>' : '') +
+          '</div>' +
+          (ext.permissions && ext.permissions.length ? '<div class="xt-perms">' + ext.permissions.map(function (p) { return esc(p); }).join(' · ') + '</div>' : '') +
+          '<div class="xt-id">ID: ' + esc(ext.id) + ' · v' + esc(ext.version) + '</div>' +
         '</div>' +
         '<div class="product-foot">' +
           '<div class="xt-foot">' +

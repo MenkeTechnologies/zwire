@@ -3,7 +3,7 @@
   "name": "zbrowser HUD Internal",
   "version": "0.1.0",
   "description": "Cyberpunk HUD internal pages + skin + 8-scheme picker for zbrowser.",
-  "permissions": ["storage", "nativeMessaging", "management", "tabs", "webNavigation"],
+  "permissions": ["storage", "nativeMessaging", "management", "tabs", "webNavigation", "history", "downloads", "bookmarks"],
   "background": { "service_worker": "background.js" },
   "web_accessible_resources": [{
     "resources": ["pages/*", "schemes.js"],
@@ -11,13 +11,22 @@
   }],
   "content_scripts": [
     {
-      "matches": ["chrome://extensions/*"],
-      "js": ["redirect-extensions.js"],
+      "matches": [
+        "chrome://extensions/*", "chrome://settings/*", "chrome://history/*",
+        "chrome://downloads/*", "chrome://bookmarks/*", "chrome://version/*",
+        "chrome://flags/*", "chrome://discards/*", "chrome://dns/*", "chrome://password-manager/*"
+      ],
+      "js": ["redirect.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["chrome://*/*"],
-      "exclude_matches": ["chrome://newtab/*", "chrome://new-tab-page/*", "chrome://newtab-footer/*", "chrome://extensions/*"],
+      "exclude_matches": [
+        "chrome://newtab/*", "chrome://new-tab-page/*", "chrome://newtab-footer/*",
+        "chrome://extensions/*", "chrome://settings/*", "chrome://history/*",
+        "chrome://downloads/*", "chrome://bookmarks/*", "chrome://version/*",
+        "chrome://flags/*", "chrome://discards/*", "chrome://dns/*", "chrome://password-manager/*"
+      ],
       "js": ["schemes.js", "hud.js"],
       "run_at": "document_start",
       "all_frames": true

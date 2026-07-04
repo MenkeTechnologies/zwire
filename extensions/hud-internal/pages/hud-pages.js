@@ -58,9 +58,35 @@
     window.__zbRenderPicker(applied || 'cyberpunk');
   }
 
+  window.__zbSetScheme = setScheme;
+  window.__zbApplied = function () { return applied; };
+
+  // Shared nav bar so the (untypeable) extension URLs don't matter — click to
+  // move between our HUD pages. (chrome://extensions|settings|version still work
+  // when typed — they redirect here.)
+  var PAGES = [['EXTENSIONS', 'extensions.html'], ['SETTINGS', 'settings.html'],
+    ['HISTORY', 'history.html'], ['DOWNLOADS', 'downloads.html'], ['BOOKMARKS', 'bookmarks.html'],
+    ['SYSTEM', 'version.html'], ['NEW TAB', null]];
+  function buildNav() {
+    var bar = document.querySelector('.xt-topbar');
+    if (!bar || bar.querySelector('.xt-nav')) return;
+    var nav = document.createElement('nav'); nav.className = 'xt-nav';
+    var cur = location.pathname.split('/').pop();
+    PAGES.forEach(function (p) {
+      var a = document.createElement('a');
+      a.className = 'xt-navlink' + (p[1] === cur ? ' active' : '');
+      a.textContent = p[0];
+      a.href = p[1] ? chrome.runtime.getURL('pages/' + p[1]) : 'chrome://newtab';
+      nav.appendChild(a);
+    });
+    var search = bar.querySelector('.xt-search');
+    if (search) bar.insertBefore(nav, search); else bar.appendChild(nav);
+  }
+
   function boot() {
     getScheme(apply);
-    if (document.body) buildPicker(); else document.addEventListener('DOMContentLoaded', buildPicker);
+    if (document.body) { buildPicker(); buildNav(); }
+    else document.addEventListener('DOMContentLoaded', function () { buildPicker(); buildNav(); });
     setInterval(function () { getScheme(function (s) { if (s !== applied) apply(s); }); }, 1500);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
