@@ -2,6 +2,8 @@
 .zbrowser/
 # Chromium compiles loaded themes into this cache inside theme/
 Cached Theme.pak
+# The global gitignore drops *.patch — but the fork patch series MUST be tracked
+!fork/patches/*.patch
 node_modules/
 *.log
 .DS_Store
