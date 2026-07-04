@@ -1,0 +1,22 @@
+diff --git a/chrome/app/theme/chromium/BRANDING b/chrome/app/theme/chromium/BRANDING
+--- a/chrome/app/theme/chromium/BRANDING
++++ b/chrome/app/theme/chromium/BRANDING
+@@ -1,10 +1,10 @@
+-COMPANY_FULLNAME=The Chromium Authors
+-COMPANY_SHORTNAME=The Chromium Authors
+-PRODUCT_FULLNAME=Chromium
+-PRODUCT_SHORTNAME=Chromium
+-PRODUCT_INSTALLER_FULLNAME=Chromium Installer
+-PRODUCT_INSTALLER_SHORTNAME=Chromium Installer
+-COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
+-MAC_BUNDLE_ID=org.chromium.Chromium
++COMPANY_FULLNAME=MenkeTechnologies
++COMPANY_SHORTNAME=MenkeTechnologies
++PRODUCT_FULLNAME=zbrowser
++PRODUCT_SHORTNAME=zbrowser
++PRODUCT_INSTALLER_FULLNAME=zbrowser Installer
++PRODUCT_INSTALLER_SHORTNAME=zbrowser Installer
++COPYRIGHT=Copyright @LASTCHANGE_YEAR@ MenkeTechnologies. All rights reserved.
++MAC_BUNDLE_ID=com.menketechnologies.zbrowser
+ MAC_CREATOR_CODE=Cr24
+ MAC_TEAM_ID=

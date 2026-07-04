@@ -41,8 +41,20 @@ zbrowser                                            # runs the HUD-chromed fork
 
 ## Status
 
-Pipeline: ready. HUD patches (`patches/series`): **Phase 1 — authored against the
-checked-out tree, not before.** See `patches/README.md` for the verified
-target-file map (tab shape → `tab_style_views.cc` `GetPath`, colors → the color
-mixer, fonts → the UI font list). Reference models: ungoogled-chromium (patch
-series), helium-chromium and brave-core (the same `GetPath` tab-shape edit).
+Pipeline: ready. HUD patches (`patches/series`): **5 of 6 authored** against the
+pinned tag `150.0.7871.46` and verified **apply-clean** (`git apply --check`
+against each target file read at that exact tag):
+
+| Patch | Restyles | State |
+|---|---|---|
+| 0001 tab shape | sharp 2px HUD tab corners | authored · apply-clean |
+| 0002 UI colors | HUD palette on frame / toolbar / tabs / omnibox + neon separator | authored · apply-clean |
+| 0004 toolbar border | 2px neon cyan line under the toolbar | authored · apply-clean |
+| 0005 omnibox | sharp 2px omnibox field | authored · apply-clean |
+| 0006 branding | `zbrowser` product strings | authored · apply-clean |
+| 0003 UI font | Orbitron / Share Tech Mono UI type | **pending** — needs the checked-out tree (font-resource pipeline) |
+
+Apply-clean proves the diff context matches the pinned source; it does **not**
+prove the C++ compiles — `fork/build.sh` is that gate. See `patches/README.md`
+for the target-file map and anchors. Reference models: ungoogled-chromium (patch
+series), helium-chromium and brave-core (native-chrome restyle).

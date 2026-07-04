@@ -1,0 +1,37 @@
+diff --git a/chrome/browser/ui/color/chrome_color_mixer.cc b/chrome/browser/ui/color/chrome_color_mixer.cc
+--- a/chrome/browser/ui/color/chrome_color_mixer.cc
++++ b/chrome/browser/ui/color/chrome_color_mixer.cc
+@@ -1117,6 +1117,33 @@
+   mixer[kColorReadAnythingFullPageScrollbarLowContrastDark] = {
+       SkColorSetRGB(0xC7, 0xC7, 0xC7)};
+ 
++  // zbrowser HUD: force the strykelang cyberpunk palette onto the native
++  // chrome, unconditionally (the HUD is always dark). Placed before the
++  // high-contrast early-return above so it always applies. Palette mirrors
++  // docs/hud-static.css / newtab.css (cyberpunk scheme).
++  {
++    const SkColor kHudFrame = SkColorSetRGB(0x05, 0x05, 0x0a);   // --bg-primary
++    const SkColor kHudToolbar = SkColorSetRGB(0x0a, 0x0a, 0x14); // --bg-secondary
++    const SkColor kHudCard = SkColorSetRGB(0x0d, 0x0d, 0x1a);    // --bg-card
++    const SkColor kHudText = SkColorSetRGB(0xe0, 0xf0, 0xff);    // --text
++    const SkColor kHudTextDim = SkColorSetRGB(0x7a, 0x8b, 0xa8); // --text-dim
++    const SkColor kHudCyan = SkColorSetRGB(0x05, 0xd9, 0xe8);    // --cyan
++    const SkColor kHudBorder = SkColorSetRGB(0x1a, 0x1a, 0x3e);  // --border
++    mixer[ui::kColorFrameActive] = {kHudFrame};
++    mixer[ui::kColorFrameInactive] = {kHudFrame};
++    mixer[kColorToolbar] = {kHudToolbar};
++    mixer[kColorToolbarText] = {kHudText};
++    mixer[kColorToolbarButtonIcon] = {kHudCyan};
++    mixer[kColorToolbarContentAreaSeparator] = {kHudCyan};  // neon under-toolbar line
++    mixer[kColorToolbarSeparator] = {kHudBorder};
++    mixer[kColorLocationBarBackground] = {kHudCard};
++    mixer[kColorLocationBarBorder] = {kHudCyan};
++    mixer[kColorTabBackgroundActiveFrameActive] = {kHudToolbar};
++    mixer[kColorTabBackgroundInactiveFrameActive] = {kHudFrame};
++    mixer[kColorTabForegroundActiveFrameActive] = {kHudCyan};
++    mixer[kColorTabForegroundInactiveFrameActive] = {kHudTextDim};
++  }
++
+   // Apply high contrast recipes if necessary.
+   if (!ShouldApplyHighContrastColors(key)) {
+     return;

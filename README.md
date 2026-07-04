@@ -100,8 +100,9 @@ scripts/rebrand-macos.sh           # re-apply the rebrand after the swap
 ## `[0x05] FULL-HUD FORK`
 
 The runtime rebrand can't restyle the native chrome. To put the whole browser —
-tab shapes, UI fonts, neon toolbar — in the HUD, `fork/` compiles a patched
-Chromium (~100 GB checkout, 1–4 hr first build, ongoing rebase maintenance):
+tab shapes, neon toolbar, HUD-colored frame — in the HUD, `fork/` compiles a
+patched Chromium (~100 GB checkout, 1–4 hr first build, ongoing rebase
+maintenance):
 
 ```sh
 fork/fetch.sh                                   # depot_tools + pinned Chromium
@@ -110,7 +111,14 @@ fork/build.sh          ~/zbrowser-chromium/src  # the long compile
 fork/package.sh        ~/zbrowser-chromium/src/out/zbrowser
 ```
 
-See [`fork/README.md`](fork/README.md) and [`fork/patches/README.md`](fork/patches/README.md).
+The HUD patch series is **authored** against the pinned tag (`150.0.7871.46`) and
+verified apply-clean: sharp 2px tabs (`tab_style_views.cc`), the cyberpunk
+palette on frame/toolbar/tabs/omnibox (`chrome_color_mixer.cc`), a neon cyan
+under-toolbar line (`toolbar_view.cc`), a sharp omnibox field
+(`location_bar_view.cc`), and `zbrowser` product strings (`BRANDING`). The UI
+font patch (Orbitron / Share Tech Mono) is pending the checked-out tree.
+`fork/build.sh` is the compile gate. See [`fork/README.md`](fork/README.md) and
+[`fork/patches/README.md`](fork/patches/README.md).
 
 ## `[0x06] NOTES`
 

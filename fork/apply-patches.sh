@@ -18,8 +18,9 @@ REVERSE=${2:-}
 [[ -d $SRC ]] || { echo "apply-patches: no src dir at $SRC" >&2; exit 1; }
 [[ -f $SERIES ]] || { echo "apply-patches: no series file at $SERIES" >&2; exit 1; }
 
-# Ordered, comment/blank-tolerant series read.
-mapfile -t PATCHES < <(grep -vE '^\s*(#|$)' "$SERIES")
+# Ordered series read: drop full-line comments/blanks, strip any inline `#...`
+# comment and surrounding whitespace so each entry is a bare patch filename.
+mapfile -t PATCHES < <(sed -E 's/#.*$//; s/[[:space:]]+$//; s/^[[:space:]]+//' "$SERIES" | grep -vE '^$')
 [[ ${#PATCHES[@]} -gt 0 ]] || { echo "apply-patches: series is empty (Phase 1 not authored yet)" >&2; exit 0; }
 
 apply_one() {
