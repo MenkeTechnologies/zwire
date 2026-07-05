@@ -19,7 +19,7 @@ permissions:
 
 # One live deployment at a time; don't cancel an in-flight publish.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
