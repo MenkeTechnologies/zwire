@@ -30,10 +30,20 @@ cyber_status "OPERATION" "LOCALINSTALL // self-contained deploy to /Applications
 echo
 
 cyber_section "PRE-FLIGHT"
-if [[ "$(uname -s)" != "Darwin" ]]; then
-  cyber_fail "localinstall builds a macOS .app; Linux/Windows need separate packaging"
-  exit 1
-fi
+# Cross-platform dispatch: this script builds a macOS .app; Linux has its own
+# self-contained installer (~/.local/opt/zwire + .desktop). Same idea, different
+# packaging. The native host (zwire-host) is one cross-platform Rust binary.
+case "$(uname -s)" in
+  Darwin) : ;;
+  Linux)  exec bash "$ROOT/scripts/localinstall-linux.sh" "$@" ;;
+  MINGW*|MSYS*|CYGWIN*)
+    # Windows native-messaging is registry-based + shortcuts are .lnk, so the
+    # Windows installer is PowerShell, not bash. Point the user at it.
+    cyber_warn "Windows install is PowerShell — run it from PowerShell:"
+    cyber_status "RUN" "powershell -ExecutionPolicy Bypass -File scripts\\localinstall-windows.ps1"
+    exit 0 ;;
+  *) cyber_fail "unsupported OS $(uname -s) — packaged: macOS (.app), Linux (~/.local), Windows (.ps1)"; exit 1 ;;
+esac
 STATE=${ZWIRE_STATE:-$HOME/.zwire}
 if [[ ! -f "$STATE/base.path" ]]; then
   cyber_warn "no base browser yet — building …"

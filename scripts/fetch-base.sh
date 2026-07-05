@@ -24,6 +24,7 @@ case "$os/$arch" in
   Darwin/arm64)             PLAT=Mac_Arm;   ZIP=chrome-mac.zip;   SUBDIR=chrome-mac ;;
   Darwin/x86_64)            PLAT=Mac;       ZIP=chrome-mac.zip;   SUBDIR=chrome-mac ;;
   Linux/x86_64|Linux/amd64) PLAT=Linux_x64; ZIP=chrome-linux.zip; SUBDIR=chrome-linux ;;
+  MINGW*/*|MSYS*/*|CYGWIN*/*) PLAT=Win_x64; ZIP=chrome-win.zip;  SUBDIR=chrome-win ;;  # Git Bash / MSYS
   *) echo "fetch-base: unsupported platform $os/$arch" >&2; exit 1 ;;
 esac
 
@@ -48,6 +49,7 @@ rm -f "$OUT"
 case "$os" in
   Darwin) BIN=$(find "$BASE_DIR/$SUBDIR" -type f -path '*Chromium.app/Contents/MacOS/*' -name 'Chromium' | head -1) ;;
   Linux)  BIN="$BASE_DIR/$SUBDIR/chrome" ;;
+  MINGW*|MSYS*|CYGWIN*) BIN="$BASE_DIR/$SUBDIR/chrome.exe" ;;
 esac
 
 [[ -n ${BIN:-} && -x $BIN ]] || { echo "fetch-base: binary not found after unzip" >&2; exit 1; }

@@ -139,6 +139,10 @@
   function removeEntry(row) {
     cmds = cmds.filter(function (c) { return c.id !== row.id; });
     if (editingId === row.id) resetForm();
+    // A deleted DEFAULT is remembered so the seeder won't re-add it next load.
+    if (String(row.id).indexOf('def-') === 0) {
+      try { chrome.storage.local.get('zb_cmds_removed', function (o) { void chrome.runtime.lastError; var r = (o && o.zb_cmds_removed) || []; if (r.indexOf(row.id) < 0) r.push(row.id); chrome.storage.local.set({ zb_cmds_removed: r }); }); } catch (e) {}
+    }
     persist(); drawTable(); toast('Deleted');
   }
 
@@ -207,8 +211,10 @@
 
   /* ---- init ---- */
   body.appendChild(buildForm());
-  try { chrome.storage.local.get(KEY, function (o) { void chrome.runtime.lastError; cmds = (o && o[KEY]) || []; drawTable(); }); }
-  catch (e) { drawTable(); }
+  // Seed the default registry once (page context — reliable storage write),
+  // then draw. onDone gives the resulting list so we don't wait on a re-read.
+  if (window.zwireSeedCmds) { window.zwireSeedCmds(function (list) { cmds = list || []; drawTable(); }); }
+  else { try { chrome.storage.local.get(KEY, function (o) { void chrome.runtime.lastError; cmds = (o && o[KEY]) || []; drawTable(); }); } catch (e) { drawTable(); } }
   // live-refresh when the registry changes (e.g. the background seeds defaults
   // just after this page loaded, or an edit lands from another tab).
   try { chrome.storage.onChanged.addListener(function (ch, area) { if (area === 'local' && ch[KEY] && !editingId) { cmds = ch[KEY].newValue || []; drawTable(); } }); } catch (e) {}

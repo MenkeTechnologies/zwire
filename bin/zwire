@@ -44,6 +44,19 @@ IFS=','; LOAD="${EXTS[*]}"; unset IFS
 
 mkdir -p "$PROFILE"
 
+# Ensure the native-messaging host (HUD terminal / system-stats / scheme bridge)
+# is wired for this profile. Only (re)build + install when the manifest is
+# missing or its target binary is gone, so normal launches stay instant. This is
+# what makes a plain `zwire` run self-sufficient on Linux too, not just the
+# packaged macOS .app. Never fatal — the browser still runs without the host.
+HOSTJSON=$PROFILE/NativeMessagingHosts/com.zwire.hud.json
+NHPATH=""
+[[ -f $HOSTJSON ]] && NHPATH=$(sed -n 's/.*"path"[^"]*"\([^"]*\)".*/\1/p' "$HOSTJSON" | head -1)
+if [[ -z $NHPATH || ! -x $NHPATH ]]; then
+  bash "$ROOT/scripts/setup-native-host.sh" || \
+    echo "zwire: native host unavailable (terminal/sysinfo disabled) — see scripts/setup-native-host.sh" >&2
+fi
+
 exec "$BASE" \
   --user-data-dir="$PROFILE" \
   --load-extension="$LOAD" \

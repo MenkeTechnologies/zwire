@@ -144,6 +144,7 @@
         "lib/zgui-core/webui/fzf.js",
         "lib/zgui-core/webui/command-palette.js",
         "zkeys.js",
+        "cmd-defaults.js",
         "zpalette.js",
         "zvim.js"
       ],

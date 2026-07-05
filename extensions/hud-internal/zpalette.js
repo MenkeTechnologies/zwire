@@ -8,6 +8,7 @@
   window.__zbPaletteLoaded = true;
   // wake the worker via the storage bus (reliable) so it fills zb_tabs.
   try { chrome.storage.local.set({ zb_cmd: { a: 'ping', n: 'load' + (window.__zbTick = (window.__zbTick || 0) + 1) } }); } catch (e) {}
+  try { if (window.zwireSeedCmds) window.zwireSeedCmds(); } catch (e) {}   // seed default ⌘K commands once (reliable page/content-script write)
   var HUD = window.ZWIRE_HUD || {};
   var SCHEMES = HUD.SCHEMES || {};
   var ORDER = HUD.ORDER || Object.keys(SCHEMES);
@@ -142,7 +143,7 @@
     [['hex', 'elixir'], 'Hex.pm', 'https://hex.pm/packages?search={q}'],
     [['brew', 'formula'], 'Homebrew', 'https://formulae.brew.sh/formula/{q}'],
     [['docker', 'hub'], 'Docker Hub', 'https://hub.docker.com/search?q={q}'],
-    [['amazon', 'amzn', 'ama'], 'Amazon', 'https://www.amazon.com/s?k={q}'],
+    [['am', 'amazon', 'amzn', 'ama'], 'Amazon', 'https://www.amazon.com/s?k={q}'],
     [['reddit'], 'Reddit', 'https://www.reddit.com/search/?q={q}'],
     [['twitter', 'x'], 'X / Twitter', 'https://twitter.com/search?q={q}'],
     [['imdb'], 'IMDb', 'https://www.imdb.com/find/?q={q}'],
@@ -158,7 +159,8 @@
     // exact alias first; else prefix-match an alias or the destination name, so
     // `git`->GitHub, `ama`->Amazon, `you`->YouTube, `cra`->crates.io — a known
     // destination beats a raw web search.
-    var hit = SEARCH.filter(function (s) { return s[0].indexOf(kw) >= 0; })[0];
+    var exact = SEARCH.filter(function (s) { return s[0].indexOf(kw) >= 0; })[0];
+    var hit = exact;
     if (!hit && kw.length >= 2) {
       hit = SEARCH.filter(function (s) {
         return s[0].some(function (a) { return a.indexOf(kw) === 0; }) || slug(s[1]).indexOf(kw) === 0;
@@ -168,8 +170,8 @@
       var url;
       if (rest) url = hit[2].replace('{q}', encodeURIComponent(rest));
       else { try { url = new URL(hit[2]).origin + '/'; } catch (e) { url = hit[2].replace('{q}', ''); } }
-      out.push({ icon: '⌕', label: hit[1] + (rest ? ': ' + rest : ''), detail: rest ? 'search' : 'open', run: function () { open(url); } });
-      return out;   // keyword is a strong signal — show just that destination, first
+      out.push({ icon: '⌕', label: hit[1] + (rest ? ': ' + rest : ''), detail: rest ? 'search' : 'open', top: !!exact, run: function () { open(url); } });
+      return out;   // exact keyword (am/gh/wa) pins to the very top; prefix stays strong
     }
     // url / domain? offer to open it directly.
     if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(q) && q.indexOf(' ') < 0) {
@@ -228,7 +230,7 @@
     var out = [];
     customCache.forEach(function (e) {
       if (e.keyword && e.keyword.toLowerCase() === kw) {
-        out.push({ icon: e.icon || '✦', label: e.label + (rest ? ': ' + rest : ''), detail: e.detail || typeLabel(e.type),
+        out.push({ icon: e.icon || '✦', label: e.label + (rest ? ': ' + rest : ''), detail: e.detail || typeLabel(e.type), top: true,
           run: function () { runCustom(e, rest); } });
       }
     });
