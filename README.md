@@ -87,6 +87,7 @@ State lives under `$ZWIRE_STATE` (default `~/.zwire`):
 | `base/` | the Chromium binary |
 | `base.path` / `base.version` | resolved binary + pinned revision |
 | `profile/` | the dedicated user-data-dir (bookmarks, history, sessions) |
+| `ext/` | per-user copy of the loaded extensions, staged from the `.app` bundle at launch (each user needs a writable copy — Chromium writes extension `_metadata/` indexes there) |
 
 Override the base with `ZWIRE_BASE=/path/to/chromium zwire`.
 

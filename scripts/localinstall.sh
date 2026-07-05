@@ -9,8 +9,11 @@
 #   Contents/MacOS/zwire          a bundle-relative launcher
 # So you can delete this repo (and ~/.zwire/base) and the app still runs — with
 # NO system dependencies (the native host is a self-contained Rust binary, not
-# python/psutil). The only thing kept outside is the user PROFILE
-# (~/.zwire/profile) — user data, like any app's ~/Library, not part of the app.
+# python/psutil). Kept outside the bundle are the per-user PROFILE
+# (~/.zwire/profile) and a per-user copy of the extensions (~/.zwire/ext, staged
+# from the bundle at launch so each user owns a writable copy — Chromium writes
+# each extension's indexed rulesets into <ext>/_metadata/, which a shared
+# /Applications bundle can't provide) — user data, like any app's ~/Library.
 #
 # Requires the Rust toolchain at build time (cargo). macOS .app here; the host
 # binary itself is cross-platform (sysinfo + portable-pty) for a future Linux/Win port.
@@ -117,7 +120,19 @@ printf '%s\n' "$HOSTJSON" > "$PROFILE/NativeMessagingHosts/com.zwire.hud.json"
 printf '%s\n' "$HOSTJSON" > "$PROFILE/Default/NativeMessagingHosts/com.zwire.hud.json"
 BROWSER_APP="$(ls -d "$RES/browser/"*.app | head -1)"
 EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$BROWSER_APP/Contents/Info.plist")"
-LOAD="$RES/ext/newtab,$RES/ext/zpwrchrome,$RES/ext/hud-internal"
+# Per-user extension copy. Chromium writes each unpacked extension's compiled
+# declarativeNetRequest ruleset + content hashes into <ext>/_metadata/, so the
+# browser needs WRITE access to the extension dir. The /Applications bundle has a
+# single owner (whoever ran localinstall), so a second user can't write into the
+# shared ext tree and extension loads fail ("Internal error while parsing rules").
+# Stage the bundled extensions into a per-user dir and load from there; --exclude
+# _metadata keeps each user's generated index across launches (no needless
+# re-index). Stable IDs come from the manifest "key", not the path, so native
+# messaging + externally_connectable are unaffected by the relocation.
+USEREXT="$STATE/ext"
+mkdir -p "$USEREXT"
+rsync -a --delete --exclude '_metadata' "$RES/ext/" "$USEREXT/"
+LOAD="$USEREXT/newtab,$USEREXT/zpwrchrome,$USEREXT/hud-internal"
 exec "$BROWSER_APP/Contents/MacOS/$EXE" \
   --user-data-dir="$PROFILE" \
   --load-extension="$LOAD" \
