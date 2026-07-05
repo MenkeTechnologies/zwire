@@ -225,6 +225,11 @@
    * palette: typing `<keyword> <arg>` runs it with {q}=<arg>. */
   var customCache = [];
   function typeLabel(t) { return ({ url: 'open url', shell: 'shell', js: 'javascript', action: 'action', scheme: 'scheme' })[t] || 'custom'; }
+  // Shipped defaults carry a 'def-…' id (cmd-defaults.js); a user's own additions
+  // get a 'c…' id (commands.js). Only the latter are personal, so only they are
+  // flagged user:true — zgui-core's palette ranks user:true items in a tier that
+  // ALWAYS sits above the built-in ("stdlib") + shipped-default rows.
+  function isDefaultCmd(e) { return String((e && e.id) || '').indexOf('def-') === 0; }
   function runAction(id) {
     switch (id) {
       case 'reload': try { location.reload(); } catch (e) {} break;
@@ -254,7 +259,7 @@
   function customItems(list) {
     return (list || []).map(function (e) {
       return { icon: e.icon || '✦', label: e.label, detail: e.detail || (e.keyword ? e.keyword + ' …' : typeLabel(e.type)),
-        run: function () { runCustom(e, ''); } };
+        user: !isDefaultCmd(e), run: function () { runCustom(e, ''); } };
     });
   }
   function customProvider(q) {
@@ -265,7 +270,7 @@
     var out = [];
     customCache.forEach(function (e) {
       if (e.keyword && e.keyword.toLowerCase() === kw) {
-        out.push({ icon: e.icon || '✦', label: e.label + (rest ? ': ' + rest : ''), detail: e.detail || typeLabel(e.type), top: true,
+        out.push({ icon: e.icon || '✦', label: e.label + (rest ? ': ' + rest : ''), detail: e.detail || typeLabel(e.type), user: !isDefaultCmd(e),
           run: function () { runCustom(e, rest); } });
       }
     });
@@ -347,7 +352,17 @@
     try {
       chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {
         void chrome.runtime.lastError;
-        try { customCache = (o && o.zb_custom_cmds) || []; ZGui.palette.register(customItems(customCache)); } catch (e) {}
+        try {
+          customCache = (o && o.zb_custom_cmds) || [];
+          // Personal commands go through setUserItems (their tier ranks above the
+          // built-ins + shipped defaults, and it's idempotent across re-opens);
+          // shipped defaults register as ordinary "stdlib" rows.
+          var userCmds = [], defCmds = [];
+          customCache.forEach(function (e) { (isDefaultCmd(e) ? defCmds : userCmds).push(e); });
+          if (ZGui.palette.setUserItems) ZGui.palette.setUserItems(customItems(userCmds));
+          else ZGui.palette.register(customItems(userCmds));   // older zgui-core: fall back to plain rows
+          ZGui.palette.register(customItems(defCmds));
+        } catch (e) {}
         try { ZGui.palette.register(frecentItems(o && o.zb_frecent)); } catch (e) {}
         try { shortcutsCache = (o && o.zb_shortcuts) || []; } catch (e) {}
         try { ZGui.palette.register(extItems(o && o.zb_exts)); } catch (e) {}

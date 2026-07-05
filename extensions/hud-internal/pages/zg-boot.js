@@ -46,9 +46,12 @@
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;
     if (url) { try { chrome.tabs.create({ url: url }); } catch (x) { try { location.href = url; } catch (y) {} } }
   }
+  // A user's own commands ('c…' id) are flagged user:true so zgui-core's palette
+  // ranks them in the tier above the built-in + shipped-default ('def-…') rows.
+  function isDefaultCmd(e) { return String((e && e.id) || '').indexOf('def-') === 0; }
   function bootCustomItems(list) {
     return (list || []).map(function (e) {
-      return { icon: e.icon || '✦', label: e.label, hint: e.keyword || e.type, run: function () { runCustomBoot(e, ''); } };
+      return { icon: e.icon || '✦', label: e.label, hint: e.keyword || e.type, user: !isDefaultCmd(e), run: function () { runCustomBoot(e, ''); } };
     });
   }
 
@@ -209,7 +212,13 @@
       var openPal = function () {
         // open synchronously with nav commands (nav always works); append tabs after.
         try { ZGui.palette.clear(); ZGui.palette.register(pageItems); ZGui.palette.open(); } catch (e) {}
-        try { chrome.storage.local.get('zb_custom_cmds', function (o) { void chrome.runtime.lastError; try { ZGui.palette.register(bootCustomItems((o && o.zb_custom_cmds) || [])); var ipc = document.querySelector('.palette-input'); if (ipc) ipc.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
+        try { chrome.storage.local.get('zb_custom_cmds', function (o) { void chrome.runtime.lastError; try {
+          var all = (o && o.zb_custom_cmds) || [], userCmds = [], defCmds = [];
+          all.forEach(function (e) { (isDefaultCmd(e) ? defCmds : userCmds).push(e); });
+          if (ZGui.palette.setUserItems) ZGui.palette.setUserItems(bootCustomItems(userCmds));
+          else ZGui.palette.register(bootCustomItems(userCmds));
+          ZGui.palette.register(bootCustomItems(defCmds));
+          var ipc = document.querySelector('.palette-input'); if (ipc) ipc.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
         try { frecentItems(function (fi) { try { ZGui.palette.register(fi); var inp2 = document.querySelector('.palette-input'); if (inp2) inp2.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
         try {
           chrome.tabs.query({}, function (tabs) {
