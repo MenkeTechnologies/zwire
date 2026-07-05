@@ -33,7 +33,7 @@
   <!-- accent glyph (monogram), width-pinned so all icons match size -->
   <text x="512" y="600" font-family="Orbitron" font-weight="900" font-size="340"
         textLength="520" lengthAdjust="spacingAndGlyphs"
-        fill="url(#ink)" text-anchor="middle" filter="url(#glow)">ZB</text>
+        fill="url(#ink)" text-anchor="middle" filter="url(#glow)">ZW</text>
 
   <!-- wordmark strip, width-pinned -->
   <text x="512" y="782" font-family="Orbitron" font-weight="700" font-size="92"
