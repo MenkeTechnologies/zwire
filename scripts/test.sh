@@ -3,7 +3,7 @@
 # theme + root scripts) plus each bundled extension's own test script. There is
 # no Rust/compile step at the browser level — the base is a prebuilt snapshot.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 export APP_TITLE="ZWIRE" APP_SUB="// chromium, rebranded"
 source scripts/cyberpunk.sh
 

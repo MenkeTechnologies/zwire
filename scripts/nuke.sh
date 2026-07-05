@@ -4,7 +4,7 @@
 # reinstall the wrapper. This RE-DOWNLOADS the base browser — slow, deliberate.
 # Your profile (~/.zwire/profile) is preserved. Ported from the sibling set.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 export APP_TITLE="ZWIRE" APP_SUB="// chromium, rebranded"
 source scripts/cyberpunk.sh
 

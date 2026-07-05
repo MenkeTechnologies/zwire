@@ -2,7 +2,7 @@
 # Purge build artifacts: the /Applications wrapper .app and any staged dist/.
 # Deliberately does NOT touch the 325MB base snapshot or your profile under
 # ~/.zwire — that is what `nuke` is for. Ported from the sibling script set.
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 export APP_TITLE="ZWIRE" APP_SUB="// chromium, rebranded"
 source scripts/cyberpunk.sh
 
