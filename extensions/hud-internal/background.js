@@ -86,12 +86,32 @@ function updateExts() {
   } catch (e) {}
 }
 updateExts();
+// Publish every extension's keyboard shortcuts (developerPrivate has the
+// commands; chrome.management does not) so the palette can list + search them.
+function updateShortcuts() {
+  try {
+    if (!chrome.developerPrivate || !chrome.developerPrivate.getExtensionsInfo) return;
+    chrome.developerPrivate.getExtensionsInfo({ includeDisabled: false, includeTerminated: false }, function (list) {
+      void chrome.runtime.lastError;
+      var out = [];
+      (list || []).forEach(function (e) {
+        (e.commands || []).forEach(function (c) {
+          out.push({ ext: e.name, desc: c.description || c.name, keybinding: c.keybinding || '', scope: c.scope || 'CHROME' });
+        });
+      });
+      chrome.storage.local.set({ zb_shortcuts: out });
+    });
+  } catch (e) {}
+}
+updateShortcuts();
 try {
   if (chrome.management) {
     chrome.management.onInstalled.addListener(updateExts);
     chrome.management.onUninstalled.addListener(updateExts);
     chrome.management.onEnabled.addListener(updateExts);
     chrome.management.onDisabled.addListener(updateExts);
+    chrome.management.onInstalled.addListener(updateShortcuts);
+    chrome.management.onEnabled.addListener(updateShortcuts);
   }
 } catch (e) {}
 
@@ -189,7 +209,7 @@ chrome.storage.onChanged.addListener(function (changes, area) {
     });
   }
   try {
-    if (c.a === 'ping') { updateTabs(); updateExts(); updateFrecent(); return; }   // wake + refresh lists
+    if (c.a === 'ping') { updateTabs(); updateExts(); updateFrecent(); updateShortcuts(); return; }   // wake + refresh lists
     if (c.a === 'open' && c.url) {
       active(function (t) { if (t) chrome.tabs.update(t.id, { url: c.url }); else chrome.tabs.create({ url: c.url }); });
     } else if (c.a === 'openTab' && c.url) {

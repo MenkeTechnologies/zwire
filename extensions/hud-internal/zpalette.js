@@ -134,15 +134,29 @@
     [['go', 'golang'], 'pkg.go.dev', 'https://pkg.go.dev/search?q={q}'],
     [['hex', 'elixir'], 'Hex.pm', 'https://hex.pm/packages?search={q}'],
     [['brew', 'formula'], 'Homebrew', 'https://formulae.brew.sh/formula/{q}'],
-    [['docker', 'hub'], 'Docker Hub', 'https://hub.docker.com/search?q={q}']
+    [['docker', 'hub'], 'Docker Hub', 'https://hub.docker.com/search?q={q}'],
+    [['amazon', 'amzn', 'ama'], 'Amazon', 'https://www.amazon.com/s?k={q}'],
+    [['reddit'], 'Reddit', 'https://www.reddit.com/search/?q={q}'],
+    [['twitter', 'x'], 'X / Twitter', 'https://twitter.com/search?q={q}'],
+    [['imdb'], 'IMDb', 'https://www.imdb.com/find/?q={q}'],
+    [['maps'], 'Google Maps', 'https://www.google.com/maps/search/{q}']
   ];
+  function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function searchProvider(q) {
     if (!q) return [];
     var out = [];
     var sp = q.indexOf(' ');
     var kw = (sp > 0 ? q.slice(0, sp) : q).toLowerCase();
     var rest = sp > 0 ? q.slice(sp + 1).trim() : '';
+    // exact alias first; else prefix-match an alias or the destination name, so
+    // `git`->GitHub, `ama`->Amazon, `you`->YouTube, `cra`->crates.io — a known
+    // destination beats a raw web search.
     var hit = SEARCH.filter(function (s) { return s[0].indexOf(kw) >= 0; })[0];
+    if (!hit && kw.length >= 2) {
+      hit = SEARCH.filter(function (s) {
+        return s[0].some(function (a) { return a.indexOf(kw) === 0; }) || slug(s[1]).indexOf(kw) === 0;
+      })[0];
+    }
     if (hit) {
       var url;
       if (rest) url = hit[2].replace('{q}', encodeURIComponent(rest));
@@ -166,6 +180,11 @@
         run: function () { cmd({ a: 'activate', tabId: t.id }); } };
     });
   }
+  function shortcutItems(list) {
+    return (list || []).map(function (s) {
+      return { icon: '⌨', label: 'Shortcut: ' + s.ext + ' — ' + s.desc, detail: s.keybinding || 'unset · click to set', run: function () { open(extUrl('extensions.html') + '#shortcuts'); } };
+    });
+  }
   function extItems(exts) {
     var out = [];
     (exts || []).forEach(function (e) {
@@ -186,9 +205,10 @@
     // async read — nav always works. Tabs (storage bus) are appended after.
     try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) ZGui.palette.registerProvider(searchProvider); ZGui.palette.open(); } catch (ex) {}
     try {
-      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent'], function (o) {
+      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts'], function (o) {
         void chrome.runtime.lastError;
         try { ZGui.palette.register(frecentItems(o && o.zb_frecent)); } catch (e) {}
+        try { ZGui.palette.register(shortcutItems(o && o.zb_shortcuts)); } catch (e) {}
         try { ZGui.palette.register(extItems(o && o.zb_exts)); } catch (e) {}
         try { ZGui.palette.register(tabItems(o && o.zb_tabs)); } catch (e) {}
         try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {}

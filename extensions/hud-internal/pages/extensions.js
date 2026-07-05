@@ -230,15 +230,85 @@
     view = 'shortcuts';
     body.innerHTML = '';
     body.appendChild(ZGui.button({ label: '← BACK', variant: 'mini', onClick: renderList }));
-    var withCmds = all.filter(function (e) { return isExt(e) && e.commands && e.commands.length; });
+    var q = (query || '').toLowerCase();
+    function cmdMatch(e, c) {
+      if (!q) return true;
+      return (e.name + ' ' + (c.description || '') + ' ' + (c.name || '') + ' ' + (c.keybinding || '')).toLowerCase().indexOf(q) >= 0;
+    }
+    // filter to extensions that have at least one command matching the query,
+    // and within each keep only the matching commands.
+    var withCmds = all.filter(isExt).map(function (e) {
+      var cmds = (e.commands || []).filter(function (c) { return cmdMatch(e, c); });
+      return cmds.length ? { e: e, cmds: cmds } : null;
+    }).filter(Boolean);
     var inner = el('div');
-    inner.appendChild(el('div', 'set-h', '// KEYBOARD SHORTCUTS'));
-    inner.innerHTML += withCmds.length ? withCmds.map(function (e) {
-      return '<div class="xt-scut-ext"><div class="xt-scut-name">' + esc(e.name) + '</div>' +
-        e.commands.map(function (c) { return '<div class="info-row"><span class="ik">' + esc(c.description || c.name) +
-          '</span><span class="iv"><kbd class="xt-kbd">' + esc(c.keybinding || '— unset —') + '</kbd> <span class="sub">' + (c.scope === 'GLOBAL' ? 'global' : 'in browser') + '</span></span></div>'; }).join('') + '</div>';
-    }).join('') : '<div class="xt-dbody">No extensions define keyboard shortcuts.</div>';
+    inner.appendChild(el('div', 'set-h', '// KEYBOARD SHORTCUTS' + (q ? ' · "' + esc(query) + '"' : '')));
+    if (withCmds.length) inner.appendChild(el('div', 'ci-hint', 'Click a shortcut to change it · press the combo · Esc cancel · ⌫ clear'));
+    var listHtml = withCmds.length ? withCmds.map(function (x) {
+      return '<div class="xt-scut-ext"><div class="xt-scut-name">' + esc(x.e.name) + '</div>' +
+        x.cmds.map(function (c) {
+          return '<div class="info-row"><span class="ik">' + esc(c.description || c.name) +
+            '</span><span class="iv"><kbd class="xt-kbd xt-kbd-edit" tabindex="0" title="click to set" ' +
+            'data-ext="' + esc(x.e.id) + '" data-cmd="' + esc(c.name) + '" data-scope="' + esc(c.scope || 'CHROME') + '">' +
+            esc(c.keybinding || '— unset —') + '</kbd> <span class="sub">' + (c.scope === 'GLOBAL' ? 'global' : 'in browser') + '</span></span></div>';
+        }).join('') + '</div>';
+    }).join('') : '<div class="xt-dbody">' + (q ? 'No shortcuts match "' + esc(query) + '".' : 'No extensions define keyboard shortcuts.') + '</div>';
+    var listWrap = el('div', null, listHtml);
+    inner.appendChild(listWrap);
+    // delegate: clicking a binding starts key capture
+    listWrap.addEventListener('click', function (ev) { var k = ev.target.closest && ev.target.closest('.xt-kbd-edit'); if (k) startCapture(k); });
+    listWrap.addEventListener('keydown', function (ev) { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.closest && ev.target.closest('.xt-kbd-edit')) { ev.preventDefault(); startCapture(ev.target); } });
     body.appendChild(ZGui.card({ body: inner }).el);
+  }
+
+  /* --- editable shortcut capture (chrome.developerPrivate.updateExtensionCommand) --- */
+  var capturing = null;
+  var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || '');
+  function fmtCombo(e) {
+    var mods = [];
+    if (e.metaKey) mods.push(IS_MAC ? 'Command' : 'Ctrl');
+    if (e.ctrlKey) mods.push(IS_MAC ? 'MacCtrl' : 'Ctrl');
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    var key = e.key, main = '';
+    var named = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', ' ': 'Space', Spacebar: 'Space', ',': 'Comma', '.': 'Period', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown', Insert: 'Insert', Delete: 'Delete' };
+    if (/^[a-zA-Z]$/.test(key)) main = key.toUpperCase();
+    else if (/^[0-9]$/.test(key)) main = key;
+    else if (/^F\d{1,2}$/.test(key)) main = key;
+    else if (named[key]) main = named[key];
+    if (!main) return null;
+    var hasPrimary = mods.some(function (m) { return m !== 'Shift'; });
+    if (!hasPrimary && !/^F\d{1,2}$/.test(main)) return null;   // Chrome needs Ctrl/Cmd/Alt (or a fn key)
+    return mods.concat([main]).join('+');
+  }
+  function endCapture() { if (!capturing) return; document.removeEventListener('keydown', onCapKey, true); try { dp.setShortcutHandlingSuspended(false); } catch (e) {} capturing = null; }
+  function startCapture(kbdEl) {
+    endCapture();
+    capturing = { ext: kbdEl.dataset.ext, cmd: kbdEl.dataset.cmd, scope: kbdEl.dataset.scope, el: kbdEl };
+    kbdEl.textContent = 'press keys…'; kbdEl.classList.add('capturing');
+    try { dp.setShortcutHandlingSuspended(true); } catch (e) {}
+    document.addEventListener('keydown', onCapKey, true);
+  }
+  function onCapKey(ev) {
+    if (!capturing) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    if (ev.key === 'Escape') { endCapture(); renderShortcuts(); return; }
+    if (['Shift', 'Control', 'Alt', 'Meta'].indexOf(ev.key) >= 0) return;   // wait for the real key
+    if (ev.key === 'Backspace' || ev.key === 'Delete') { return setBinding(''); }
+    var combo = fmtCombo(ev);
+    if (!combo) { capturing.el.textContent = 'need Ctrl/⌘/Alt + key…'; return; }
+    setBinding(combo);
+  }
+  function setBinding(kb) {
+    var c = capturing; endCapture(); if (!c) return;
+    try {
+      dp.updateExtensionCommand({ extensionId: c.ext, commandName: c.cmd, keybinding: kb, scope: c.scope || 'CHROME' }, function () {
+        var err = chrome.runtime.lastError;
+        if (err && window.ZGui.toast) ZGui.toast('Shortcut: ' + err.message);
+        else if (window.ZGui.toast) ZGui.toast(kb ? 'Set ' + kb : 'Cleared shortcut');
+        refresh();
+      });
+    } catch (e) { if (window.ZGui.toast) ZGui.toast('Shortcut error'); refresh(); }
   }
 
   /* -------------------------------------------------------------- actions */
@@ -265,10 +335,11 @@
 
   function boot() {
     shell = ZBHUD.mount({ title: 'EXTENSIONS', current: 'extensions.html', filterPlaceholder: 'filter extensions…',
-      onFilter: function (q) { query = q; if (view === 'list') renderList(); },
+      onFilter: function (q) { query = q; if (view === 'shortcuts') renderShortcuts(); else if (view === 'list') renderList(); },
       palette: [ { label: 'Load unpacked extension', run: loadUnpacked }, { label: 'Pack extension', run: pack },
         { label: 'Update all extensions', run: updateAll }, { label: 'Keyboard shortcuts', run: renderShortcuts } ] });
     body = shell.body;
+    if (location.hash === '#shortcuts') view = 'shortcuts';   // deep-link from the palette
     if (dp.onItemStateChanged) dp.onItemStateChanged.addListener(refresh);
     if (dp.onProfileStateChanged) dp.onProfileStateChanged.addListener(function (p) { if (p) profile = p; if (view === 'list') renderList(); });
     loadProfile(refresh);

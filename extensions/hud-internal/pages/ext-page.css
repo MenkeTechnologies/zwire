@@ -86,6 +86,11 @@
 .xt-scut-name { color:var(--accent); letter-spacing:1px; margin:6px 0; }
 .xt-kbd { display:inline-block; border:1px solid var(--cyan); border-radius:2px; padding:2px 8px;
   color:var(--cyan); background:var(--bg-secondary); font-size:11px; }
+.xt-kbd-edit { cursor:pointer; outline:none; }
+.xt-kbd-edit:hover, .xt-kbd-edit:focus { border-color:var(--accent); color:var(--accent); box-shadow:0 0 8px var(--accent-glow); }
+.xt-kbd.capturing { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); animation:xt-cap 1s steps(2) infinite; }
+@keyframes xt-cap { 50% { opacity:.55; } }
+.ci-hint { color:var(--text-muted,var(--text-dim)); font-size:11px; margin:2px 0 10px; }
 
 /* toolbar header */
 .xt-topbar { display:flex; justify-content:flex-start; align-items:center; gap:18px; flex-wrap:wrap; }
