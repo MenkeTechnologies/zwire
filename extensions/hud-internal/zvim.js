@@ -1,9 +1,13 @@
-/* zbrowser HUD — Vimium-style vim keybindings on every page.
- * Normal mode by default; suppressed while typing in an editable field. Scroll
- * (j/k/d/u/gg/G/h/l), history+tabs (H/L back-fwd, J/K prev-next tab, x close,
- * t new, r reload, yy copy URL), link hints (f click, F new tab), and o/⌘K
- * palette + / find (delegates to zpalette/zfind). Tab ops go through the
- * background worker. Disable per-tab with `\`. */
+/* zbrowser HUD — real-vim keybindings on every page.
+ * Normal mode by default; suppressed while typing in an editable field.
+ *   scroll   j/k/d/u  h/l(horizontal)  gg/G(top/bottom)
+ *   screen   H/M/L -> top/middle/bottom of the document (vim High/Mid/Low)
+ *   z-family zt/zz/zb -> focused element (or screen center) to top/center/bottom
+ *   marks    m<x> set mark, `<x> or '<x> jump to it
+ *   history  [ back, ] forward
+ *   tabs     J/K prev/next, x close, t new, r reload, yy copy URL
+ *   hints    f click, F new-tab ;  o/⌘K palette ; / find (via zpalette/zfind)
+ * Tab ops go through the background worker. Disable per-tab with `\`. */
 (function () {
   'use strict';
   if (window.__zbVimLoaded) return;
@@ -11,6 +15,27 @@
 
   var enabled = true, pending = '', pendingTimer = null;
   var hintMode = false, hints = [], hintKeys = 'asdfghjklqwertyuiopzxcvbnm', hintTyped = '', hintNewTab = false;
+  var marks = {};   // m<letter> sets, `<letter> jumps (scroll positions)
+
+  function docHeight() { return Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0); }
+  // The element the z-family (zt/zz/zb) positions: the focused element if it's a
+  // real, in-viewport element, else whatever is at the center of the screen.
+  function refEl() {
+    var a = document.activeElement;
+    if (a && a !== document.body && a !== document.documentElement && a.getBoundingClientRect) {
+      var r = a.getBoundingClientRect();
+      if (r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) return a;
+    }
+    return document.elementFromPoint(Math.round(window.innerWidth / 2), Math.round(window.innerHeight / 2));
+  }
+  function zPos(where) {
+    var el = refEl(); if (!el) return;
+    var r = el.getBoundingClientRect(), dy;
+    if (where === 't') dy = r.top - 4;
+    else if (where === 'b') dy = r.bottom - window.innerHeight + 4;
+    else dy = r.top - (window.innerHeight / 2 - r.height / 2);   // 'z' = center
+    window.scrollBy({ top: dy, left: 0, behavior: 'auto' });
+  }
 
   function editable(el) {
     if (!el) return false;
@@ -109,6 +134,21 @@
       return;
     }
     if (pending === 'y') { pending = ''; if (k === 'y') { copy(location.href); toast('yanked url'); e.preventDefault(); } return; }
+    if (pending === 'z') {
+      pending = '';
+      if (k === 't' || k === 'z' || k === 'b') { zPos(k); e.preventDefault(); }
+      return;
+    }
+    if (pending === 'm') {   // set mark <letter> at current scroll position
+      pending = '';
+      if (/^[a-zA-Z0-9]$/.test(k)) { marks[k] = { x: window.scrollX, y: window.scrollY }; toast("mark '" + k); e.preventDefault(); }
+      return;
+    }
+    if (pending === '`') {   // jump to mark <letter>
+      pending = '';
+      if (marks[k]) { window.scrollTo({ top: marks[k].y, left: marks[k].x, behavior: 'auto' }); e.preventDefault(); }
+      return;
+    }
 
     switch (k) {
       case 'j': scrollBy(0, 66); break;
@@ -117,12 +157,20 @@
       case 'l': scrollBy(66, 0); break;
       case 'd': scrollBy(0, halfPage()); break;
       case 'u': scrollBy(0, -halfPage()); break;
-      case 'G': window.scrollTo({ top: document.body.scrollHeight }); break;
+      case 'G': window.scrollTo({ top: docHeight() }); break;
       case 'g': setPending('g'); break;
       case 'y': setPending('y'); break;
+      case 'z': setPending('z'); break;      // zt / zz / zb
+      case 'm': setPending('m'); break;      // set mark
+      case '`': setPending('`'); break;      // jump to mark
+      case "'": setPending('`'); break;      // 'a also jumps to mark a (vim line-mark)
       case 'r': location.reload(); break;
-      case 'H': history.back(); break;
-      case 'L': history.forward(); break;
+      // vim screen positioning adapted to the whole document (no text cursor):
+      case 'H': window.scrollTo({ top: 0 }); break;                                   // High -> top
+      case 'M': window.scrollTo({ top: (docHeight() - window.innerHeight) / 2 }); break; // Middle
+      case 'L': window.scrollTo({ top: docHeight() }); break;                          // Low -> bottom
+      case '[': history.back(); break;       // history moved off H/L
+      case ']': history.forward(); break;
       case 'J': tabCmd('prevTab'); break;
       case 'K': tabCmd('nextTab'); break;
       case 'x': tabCmd('closeTab'); break;

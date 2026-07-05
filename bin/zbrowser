@@ -53,4 +53,5 @@ exec "$BASE" \
   --no-default-browser-check \
   --homepage="chrome://newtab" \
   --disable-features=NtpFooter \
+  --enable-features=SplitViewHorizontal,SplitViewTabRestore \
   "$@"

@@ -51,7 +51,7 @@
   // the value changes so onChanged always fires.
   var cmdN = 0;
   function cmd(obj) { try { obj.n = ++cmdN + '.' + (window.__zbTick = (window.__zbTick || 0) + 1); chrome.storage.local.set({ zb_cmd: obj }); } catch (e) {} }
-  function open(url) { cmd({ a: 'open', url: url }); }
+  function open(url) { cmd({ a: 'openTab', url: url }); }   // palette opens pages in a NEW tab
   function extUrl(p) { return chrome.runtime.getURL('pages/' + p); }
   function setScheme(name) {
     try { chrome.runtime.sendMessage({ type: 'zbhud-scheme', scheme: name }); } catch (e) {}
@@ -59,19 +59,29 @@
   }
 
   var PAGES = [['◈', 'Extensions', 'extensions.html'], ['⚙', 'Settings', 'settings.html'],
-    ['◷', 'History', 'history.html'], ['▼', 'Downloads', 'downloads.html'],
-    ['★', 'Bookmarks', 'bookmarks.html'], ['⚉', 'System info', 'version.html']];
-  var CHROME = [['+', 'New tab', 'chrome://newtab'], ['⚑', 'Flags', 'chrome://flags'],
-    ['✧', 'Discards', 'chrome://discards'], ['⌗', 'DNS', 'chrome://net-internals/#dns'],
-    ['▤', 'GPU', 'chrome://gpu'], ['⇅', 'Net internals', 'chrome://net-internals'],
-    ['⚿', 'Password manager', 'chrome://password-manager']];
+    ['◷', 'History', 'history.html'], ['★', 'Bookmarks', 'bookmarks.html'],
+    ['⚡', 'CI runs', 'ci.html'], ['⚉', 'System info', 'version.html']];
+  var CHROME = [['+', 'New tab', 'chrome://newtab'], ['▼', 'Downloads', 'chrome://downloads'],
+    ['⚑', 'Flags', 'chrome://flags'], ['✧', 'Discards', 'chrome://discards'],
+    ['⌗', 'DNS', 'chrome://net-internals/#dns'], ['▤', 'GPU', 'chrome://gpu'],
+    ['⇅', 'Net internals', 'chrome://net-internals'], ['⚿', 'Passwords', 'chrome://password-manager'],
+    ['⌨', 'Keyboard shortcuts', 'chrome://extensions/shortcuts'], ['◎', 'Inspect devices', 'chrome://inspect'],
+    ['⇩', 'Net export', 'chrome://net-export'], ['§', 'Policy', 'chrome://policy'],
+    ['⊛', 'Components', 'chrome://components'], ['≡', 'All chrome:// pages', 'chrome://about'],
+    ['✎', 'Site settings', 'chrome://settings/content']];
+  var WEB = [['◈', 'Chrome Web Store', 'https://chromewebstore.google.com/'],
+    ['⌂', 'zbrowser app store', 'https://menketechnologies.github.io/app-store/']];
 
   function items() {
     var out = [];
     PAGES.forEach(function (p) { out.push({ icon: p[0], label: 'Go: ' + p[1], detail: p[2], run: function () { open(extUrl(p[2])); } }); });
     CHROME.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { open(p[2]); } }); });
+    WEB.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { open(p[2]); } }); });
     ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the whole browser', run: function () { setScheme(n); } }); });
     return out;
+  }
+  function frecentItems(frec) {
+    return (frec || []).map(function (f) { return { icon: '★', label: (f.title || f.url), detail: f.url, run: function () { open(f.url); } }; });
   }
 
   function tabItems(tabs) {
@@ -79,6 +89,14 @@
       return { icon: '▣', label: 'Tab: ' + (t.title || t.url || '(tab)'), detail: t.url,
         run: function () { cmd({ a: 'activate', tabId: t.id }); } };
     });
+  }
+  function extItems(exts) {
+    var out = [];
+    (exts || []).forEach(function (e) {
+      if (e.optionsUrl) out.push({ icon: '⚙', label: 'Tweak: ' + e.name, detail: 'options', run: function () { open(e.optionsUrl); } });
+      out.push({ icon: '⬡', label: 'Manage: ' + e.name, detail: e.id, run: function () { open('chrome://extensions/?id=' + e.id); } });
+    });
+    return out;
   }
   function ensureStyle() {
     // sync-inject the overlay CSS (position:fixed) before the palette opens +
@@ -92,8 +110,10 @@
     // async read — nav always works. Tabs (storage bus) are appended after.
     try { ZGui.palette.clear(); ZGui.palette.register(items()); ZGui.palette.open(); } catch (ex) {}
     try {
-      chrome.storage.local.get('zb_tabs', function (o) {
+      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent'], function (o) {
         void chrome.runtime.lastError;
+        try { ZGui.palette.register(frecentItems(o && o.zb_frecent)); } catch (e) {}
+        try { ZGui.palette.register(extItems(o && o.zb_exts)); } catch (e) {}
         try { ZGui.palette.register(tabItems(o && o.zb_tabs)); } catch (e) {}
         try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {}
       });

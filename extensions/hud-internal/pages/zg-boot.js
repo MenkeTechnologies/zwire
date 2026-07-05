@@ -14,12 +14,21 @@
   // built on chrome.downloads.search would only show the cancelled stubs.
   var PAGES = [['EXTENSIONS', 'extensions.html'], ['SETTINGS', 'settings.html'],
     ['HISTORY', 'history.html'], ['DOWNLOADS', 'chrome://downloads'], ['BOOKMARKS', 'bookmarks.html'],
-    ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
+    ['CI', 'ci.html'], ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
   var NATIVE_PAGES = [['FLAGS', 'chrome://flags'], ['DISCARDS', 'chrome://discards'],
     ['DNS', 'chrome://net-internals/#dns'], ['GPU', 'chrome://gpu'], ['NET', 'chrome://net-internals']];
+  // Extra palette-only destinations (not shown as nav buttons): more chrome://
+  // internals + the web stores. External (http) targets open in a new tab.
+  var MORE = [['Passwords', 'chrome://password-manager'], ['Keyboard shortcuts', 'chrome://extensions/shortcuts'],
+    ['Inspect devices', 'chrome://inspect'], ['Net export', 'chrome://net-export'], ['Policy', 'chrome://policy'],
+    ['Components', 'chrome://components'], ['All chrome:// pages', 'chrome://about'],
+    ['Site settings', 'chrome://settings/content'], ['Chrome Web Store', 'https://chromewebstore.google.com/'],
+    ['zbrowser app store', 'https://menketechnologies.github.io/app-store/']];
 
+  function isChromeUrl(t) { return t.indexOf('chrome://') === 0; }
+  function isWebUrl(t) { return /^https?:\/\//.test(t); }
   function go(target) {
-    if (target.indexOf('chrome://') === 0) { try { chrome.tabs.create({ url: target }); } catch (e) {} }
+    if (isChromeUrl(target) || isWebUrl(target)) { try { chrome.tabs.create({ url: target }); } catch (e) {} }
     else location.href = chrome.runtime.getURL('pages/' + target);
   }
   function navButton(label, target, current) {
@@ -32,10 +41,33 @@
   function navActions(current) {
     return PAGES.map(function (p) { return navButton(p[0], p[1], current); });
   }
+  function goNewTab(target) {
+    var url = (isChromeUrl(target) || isWebUrl(target)) ? target : chrome.runtime.getURL('pages/' + target);
+    try { chrome.tabs.create({ url: url }); } catch (e) { location.href = url; }
+  }
   function paletteNav() {
-    return PAGES.concat(NATIVE_PAGES).map(function (p) {
-      return { label: 'Go: ' + p[0], hint: p[1], run: function () { go(p[1]); } };
+    // palette opens the page in a NEW tab (the nav bar still navigates in place).
+    return PAGES.concat(NATIVE_PAGES).concat(MORE).map(function (p) {
+      return { label: 'Go: ' + p[0], hint: p[1], run: function () { goNewTab(p[1]); } };
     });
+  }
+  // Frecent (frequent + recent) sites from history — internal pages have the
+  // history permission directly, so score here (same formula as background.js).
+  function frecentItems(cb) {
+    try {
+      var now = Date.now();
+      chrome.history.search({ text: '', maxResults: 500, startTime: now - 1000 * 60 * 60 * 24 * 90 }, function (items) {
+        void chrome.runtime.lastError;
+        var scored = (items || []).map(function (h) {
+          var ageDays = (now - (h.lastVisitTime || 0)) / (1000 * 60 * 60 * 24);
+          return { title: h.title || h.url, url: h.url, score: ((h.visitCount || 1) + 2 * (h.typedCount || 0)) / (1 + ageDays * 0.3) };
+        }).filter(function (x) { return x.url && x.url.indexOf('chrome') !== 0; });
+        scored.sort(function (a, b) { return b.score - a.score; });
+        cb(scored.slice(0, 30).map(function (x) {
+          return { icon: '★', label: (x.title || x.url), detail: x.url, run: function () { goNewTab(x.url); } };
+        }));
+      });
+    } catch (e) { cb([]); }
   }
 
   /* ---- colorscheme <-> native host bridge -------------------------------- */
@@ -133,6 +165,7 @@
       var openPal = function () {
         // open synchronously with nav commands (nav always works); append tabs after.
         try { ZGui.palette.clear(); ZGui.palette.register(pageItems); ZGui.palette.open(); } catch (e) {}
+        try { frecentItems(function (fi) { try { ZGui.palette.register(fi); var inp2 = document.querySelector('.palette-input'); if (inp2) inp2.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
         try {
           chrome.tabs.query({}, function (tabs) {
             void chrome.runtime.lastError;
@@ -143,6 +176,19 @@
               }));
             } catch (e) {}
             try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {}
+          });
+        } catch (e) {}
+        // extension option pages (tweak zpwrchrome etc.) via chrome.management.
+        try {
+          if (chrome.management) chrome.management.getAll(function (exts) {
+            void chrome.runtime.lastError;
+            try {
+              (exts || []).filter(function (e) { return e.type === 'extension' && e.enabled; }).forEach(function (e) {
+                if (e.optionsUrl) ZGui.palette.register([{ icon: '⚙', label: 'Tweak: ' + e.name, detail: 'options', run: function () { chrome.tabs.create({ url: e.optionsUrl }); } }]);
+                ZGui.palette.register([{ icon: '⬡', label: 'Manage: ' + e.name, detail: e.id, run: function () { chrome.tabs.create({ url: 'chrome://extensions/?id=' + e.id }); } }]);
+              });
+              var inp3 = document.querySelector('.palette-input'); if (inp3) inp3.dispatchEvent(new Event('input'));
+            } catch (e) {}
           });
         } catch (e) {}
       };

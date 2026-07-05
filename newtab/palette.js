@@ -38,7 +38,7 @@
     document.head.appendChild(styleEl);
   }
 
-  function goCurrent(url) { chrome.tabs.query({ active: true, currentWindow: true }, function (t) { if (t && t[0]) chrome.tabs.update(t[0].id, { url: url }); else chrome.tabs.create({ url: url }); }); }
+  function goCurrent(url) { chrome.tabs.create({ url: url }); }   // open in a NEW tab
   function setScheme(name) {
     try { chrome.runtime.sendNativeMessage(HOST, { scheme: name }, function () { void chrome.runtime.lastError; }); } catch (e) {}
     if (window.__applyScheme) try { window.__applyScheme(name); } catch (e) {}
@@ -47,13 +47,36 @@
   var PAGES = [['◈', 'Extensions', 'chrome://extensions'], ['⚙', 'Settings', 'chrome://settings'],
     ['◷', 'History', 'chrome://history'], ['▼', 'Downloads', 'chrome://downloads'],
     ['★', 'Bookmarks', 'chrome://bookmarks'], ['⚑', 'Flags', 'chrome://flags'],
-    ['▤', 'GPU', 'chrome://gpu'], ['⌗', 'DNS', 'chrome://net-internals/#dns']];
+    ['▤', 'GPU', 'chrome://gpu'], ['⌗', 'DNS', 'chrome://net-internals/#dns'],
+    ['⚿', 'Passwords', 'chrome://password-manager'], ['⌨', 'Keyboard shortcuts', 'chrome://extensions/shortcuts'],
+    ['◎', 'Inspect devices', 'chrome://inspect'], ['§', 'Policy', 'chrome://policy'],
+    ['⊛', 'Components', 'chrome://components'], ['≡', 'All chrome:// pages', 'chrome://about'],
+    ['⚡', 'CI runs', 'chrome-extension://omcgnnjfmbmpdlofklbpddkhnfibfhgg/pages/ci.html'],
+    ['◈', 'Chrome Web Store', 'https://chromewebstore.google.com/'],
+    ['⌂', 'zbrowser app store', 'https://menketechnologies.github.io/app-store/']];
 
   function items() {
     var out = [];
     PAGES.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { goCurrent(p[2]); } }); });
     ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the browser', run: function () { setScheme(n); } }); });
     return out;
+  }
+  function frecentItems(cb) {
+    if (!chrome.history) { cb([]); return; }
+    try {
+      var now = Date.now();
+      chrome.history.search({ text: '', maxResults: 500, startTime: now - 1000 * 60 * 60 * 24 * 90 }, function (h) {
+        void chrome.runtime.lastError;
+        var scored = (h || []).map(function (x) {
+          var ageDays = (now - (x.lastVisitTime || 0)) / (1000 * 60 * 60 * 24);
+          return { title: x.title || x.url, url: x.url, score: ((x.visitCount || 1) + 2 * (x.typedCount || 0)) / (1 + ageDays * 0.3) };
+        }).filter(function (x) { return x.url && x.url.indexOf('chrome') !== 0; });
+        scored.sort(function (a, b) { return b.score - a.score; });
+        cb(scored.slice(0, 30).map(function (x) {
+          return { icon: '★', label: (x.title || x.url), detail: x.url, run: function () { goCurrent(x.url); } };
+        }));
+      });
+    } catch (e) { cb([]); }
   }
   function tabItems(cb) {
     chrome.tabs.query({}, function (tabs) {
@@ -67,6 +90,7 @@
   function openPalette() {
     ensureStyle();
     try { ZGui.palette.clear(); ZGui.palette.register(items()); ZGui.palette.open(); } catch (e) {}
+    try { frecentItems(function (fi) { try { ZGui.palette.register(fi); var inpf = document.querySelector('.palette-input'); if (inpf) inpf.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
     try { tabItems(function (ti) { try { ZGui.palette.register(ti); var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
   }
   window.__zbPaletteOpen = openPalette;

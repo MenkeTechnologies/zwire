@@ -1,0 +1,17 @@
+/* zbrowser HUD — CI runs page. */
+.ci-toolbar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px; padding:14px 16px; }
+.ci-toolbar .zg-field { margin:0; }
+.ci-toolbar .zs-input { min-width:170px; }
+.ci-toolbar .ci-tok { min-width:260px; }
+.ci-actions { display:flex; gap:8px; margin-left:auto; }
+.ci-status { padding:6px 2px 12px; color:var(--text-dim); letter-spacing:1px; font-size:12px; display:flex; align-items:center; gap:10px; }
+.ci-status .err { color:var(--red,#ff5c7a); }
+.ci-hint { color:var(--text-muted,var(--text-dim)); font-size:11px; margin-top:6px; }
+.ci-hint a { color:var(--cyan); }
+.ci-repo { color:var(--cyan); }
+.ci-wf { color:var(--text); }
+.ci-branch { color:var(--accent); }
+.ci-when { color:var(--text-dim); white-space:nowrap; }
+.ci-num { color:var(--text-muted,var(--text-dim)); }
+.zg-datatable td, .zg-datatable th { white-space:nowrap; }
+.zg-datatable td.ci-wfcell { white-space:normal; max-width:340px; }
