@@ -163,6 +163,8 @@
       var raw = sessionStorage.getItem(SS_KEY); if (!raw) return;
       var d = JSON.parse(raw); if (!d || !d.windows || !d.windows.length) return;
       S = { windows: d.windows, active: Math.min(d.active || 0, d.windows.length - 1) };
+      // back-compat: older state used a per-window sync bool; map it to a member set.
+      S.windows.forEach(function (w) { if (!Array.isArray(w.syncPanes)) w.syncPanes = w.sync ? leaves(w.tree).map(function (l) { return l.id; }) : []; });
       uid = d.uid || uid; if (Array.isArray(d.buffers)) buffers = d.buffers;
       if (d.open) { open = true; render(); focusActive(); }
     } catch (e) {}
@@ -306,7 +308,15 @@
     if (!S.windows.length) { open = false; S.windows.push(mkWindow('')); S.active = 0; return; }
     S.active = Math.min(S.active, S.windows.length - 1);
   }
-  function toggleSync() { var w = W(); w.sync = !w.sync; broadcastSync(w); }
+  // Partial synchronize-panes: w.syncPanes is the set of pane (leaf) ids that
+  // share typing. Empty = off. tmux-sync toggles ALL on/off; tmux-sync-pane
+  // toggles just the active pane, so you can sync an arbitrary subset.
+  function syncMembers(w) { return w.syncPanes || (w.syncPanes = []); }
+  function paneSynced(w, id) { return syncMembers(w).indexOf(id) >= 0; }
+  function syncActive(w) { return syncMembers(w).length > 0; }
+  function pruneSync(w) { var ids = leaves(w.tree).map(function (l) { return l.id; }); w.syncPanes = syncMembers(w).filter(function (id) { return ids.indexOf(id) >= 0; }); }
+  function toggleSync() { var w = W(), ls = leaves(w.tree); w.syncPanes = (ls.length && syncMembers(w).length >= ls.length) ? [] : ls.map(function (l) { return l.id; }); broadcastSync(w); }
+  function toggleSyncPane() { var w = W(), m = syncMembers(w), i = m.indexOf(w.active); if (i >= 0) m.splice(i, 1); else m.push(w.active); broadcastSync(w); }
 
   function exec(k, mods) {
     var wasClosed = !open;                       // is this command the one opening the overlay?
@@ -344,6 +354,7 @@
       case 'tmux-win-list': showChooser(); return;
       case 'tmux-win-kill': killWindow(); break;
       case 'tmux-sync': toggleSync(); break;
+      case 'tmux-sync-pane': toggleSyncPane(); break;
       case 'tmux-copy-mode': enterCopyMode(); return;
       case 'tmux-paste': pasteBuffer(); return;
       case 'tmux-buffers': showBuffers(); return;
@@ -393,6 +404,8 @@
     '#zbtmux .zt-pane.act .zt-ttl{color:var(--cyan,#05d9e8);}',
     '#zbtmux .zt-pane.zt-mark{border-color:var(--accent,#ff2a6d);}',
     '#zbtmux .zt-pane.zt-mark .zt-ttl::before{content:"◆ ";color:var(--accent,#ff2a6d);}',
+    '#zbtmux .zt-pane.zt-synced{border-color:var(--cyan,#05d9e8);}',
+    '#zbtmux .zt-psync{color:var(--cyan,#05d9e8);font-size:11px;flex-shrink:0;}',
     '#zbtmux .zt-addr{flex:1;min-width:0;background:transparent;border:none;outline:none;color:inherit;',
     ' font:inherit;padding:2px 0;}',
     '#zbtmux .zt-addr::placeholder{color:var(--text-muted,#5a6b82);}',
@@ -478,7 +491,8 @@
     var addr = document.createElement('input'); addr.className = 'zt-addr'; addr.spellcheck = false;
     addr.placeholder = 'url or search …'; addr.value = (l.url && l.url !== 'about:blank' && l.url !== NEWTAB) ? l.url : '';
     var x = document.createElement('span'); x.className = 'zt-x'; x.textContent = '✕';
-    ttl.appendChild(addr); ttl.appendChild(x);
+    var sy = document.createElement('span'); sy.className = 'zt-psync'; sy.textContent = '⇄'; sy.title = 'synced pane'; sy.style.display = 'none';
+    ttl.appendChild(sy); ttl.appendChild(addr); ttl.appendChild(x);
     var fr = document.createElement('iframe'); fr.className = 'zt-fr'; fr.name = 'zbtmux';
     fr.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
     // Contain the pane: full functionality (scripts/forms/popups/modals/
@@ -491,11 +505,11 @@
     fr.src = normalizeUrl(l.url);
     // every (re)load of a pane re-arms its sync state — a freshly navigated page
     // starts with sync off, so without this it could receive but not broadcast.
-    fr.addEventListener('load', function () { var win = windowOfLeaf(l.id); if (win) { try { fr.contentWindow.postMessage({ __zbtmux: 1, setSync: !!win.sync }, '*'); } catch (e) {} } });
+    fr.addEventListener('load', function () { var win = windowOfLeaf(l.id); if (win) { try { fr.contentWindow.postMessage({ __zbtmux: 1, setSync: paneSynced(win, l.id) }, '*'); } catch (e) {} } });
     var cover = document.createElement('div'); cover.className = 'zt-cover';
     var ac = document.createElement('div'); ac.className = 'zt-ac'; ac.style.display = 'none';
     wrap.appendChild(ttl); wrap.appendChild(fr); wrap.appendChild(cover); bodyEl.appendChild(ac);
-    var rec = { wrap: wrap, frame: fr, addr: addr, url: l.url, ac: ac };
+    var rec = { wrap: wrap, frame: fr, addr: addr, url: l.url, ac: ac, sy: sy };
     var sug = [], sel = -1;
     function go(url) { if (!url) return; l.url = url; rec.url = url; fr.src = normalizeUrl(url); hideAc(); try { fr.focus(); } catch (e) {} }
     function hideAc() { ac.style.display = 'none'; sug = []; sel = -1; }
@@ -612,17 +626,22 @@
     ensureDom();
     root.classList.toggle('on', open);
     if (!open) return;
+    // drop stale sync members left over from closed/broken panes.
+    S.windows.forEach(pruneSync);
     // tabs
     tabsEl.innerHTML = '';
     S.windows.forEach(function (win, i) {
       var t = document.createElement('div'); t.className = 'zt-tab' + (i === S.active ? ' act' : '');
       t.textContent = (i) + ': ' + (win.name || label(win));
-      if (win.sync) { var s = document.createElement('span'); s.className = 'zt-sync'; s.textContent = '⇄'; t.appendChild(s); }
+      if (syncActive(win)) { var s = document.createElement('span'); s.className = 'zt-sync'; var full = syncMembers(win).length >= leaves(win.tree).length; s.textContent = full ? '⇄' : ('⇄' + syncMembers(win).length); t.appendChild(s); }
       t.addEventListener('click', function () { S.active = i; render(); focusActive(); });
       tabsEl.appendChild(t);
     });
     // ensure a pane element exists for every leaf in the active window, then tile.
-    leaves(W().tree).forEach(function (l) { if (!panes[l.id]) makePane(l); });
+    var aw = W();
+    leaves(aw.tree).forEach(function (l) { if (!panes[l.id]) makePane(l); });
+    // reflect each pane's sync membership (border + ⇄ badge in its title bar).
+    leaves(aw.tree).forEach(function (l) { var p = panes[l.id]; if (p) { var on = paneSynced(aw, l.id); if (p.wrap) p.wrap.classList.toggle('zt-synced', on); if (p.sy) p.sy.style.display = on ? '' : 'none'; } });
     layout();
     // Feed the REAL powerline statusbar (zstatus.js reads zb_tmux) instead of a
     // hand-rolled bar — it renders the window/pane/zoom/sync segment for us.
@@ -634,8 +653,8 @@
     try {
       var st = open ? {
         armed: armed,
-        windows: S.windows.map(function (win) { return { name: win.name || label(win), panes: leaves(win.tree).length, zoom: !!win.zoom, sync: !!win.sync }; }),
-        active: S.active, anySync: S.windows.some(function (win) { return win.sync; })
+        windows: S.windows.map(function (win) { return { name: win.name || label(win), panes: leaves(win.tree).length, zoom: !!win.zoom, sync: syncActive(win), syncPanes: syncMembers(win).length }; }),
+        active: S.active, anySync: S.windows.some(syncActive)
       } : { armed: armed, windows: [] };
       chrome.storage.local.set({ zb_tmux: st });
     } catch (e) {}
@@ -685,10 +704,13 @@
   }
 
   /* -------------------------------- sync ---------------------------------- */
-  function broadcastSync(win) { leaves(win.tree).forEach(function (l) { var p = panes[l.id]; if (p) try { p.frame.contentWindow.postMessage({ __zbtmux: 1, setSync: win.sync }, '*'); } catch (e) {} }); }
+  function broadcastSync(win) { leaves(win.tree).forEach(function (l) { var p = panes[l.id]; if (p) try { p.frame.contentWindow.postMessage({ __zbtmux: 1, setSync: paneSynced(win, l.id) }, '*'); } catch (e) {} }); render(); }
+  function sourceLeafId(source) { var ls = leaves(W().tree); for (var i = 0; i < ls.length; i++) { var p = panes[ls[i].id]; if (p && p.frame.contentWindow === source) return ls[i].id; } return null; }
   function relaySync(source, key) {
-    var w = W(); if (!w.sync) return;
+    var w = W(), sid = sourceLeafId(source);
+    if (!sid || !paneSynced(w, sid)) return;            // only a member pane broadcasts
     leaves(w.tree).forEach(function (l) {
+      if (!paneSynced(w, l.id)) return;                 // and only member panes receive
       var p = panes[l.id]; if (!p || p.frame.contentWindow === source) return;
       try { p.frame.contentWindow.postMessage({ __zbtmux: 1, syncapply: key }, '*'); } catch (e) {}
     });
@@ -743,7 +765,7 @@
       var rev = {}; Object.keys(keyToAction).forEach(function (kk) { rev[keyToAction[kk]] = kk; });
       var h = '<h4>zwire tmux — prefix C-b (or ⌥b), then…</h4><div style="columns:2;column-gap:28px;">';
       (cat ? cat.actions : []).forEach(function (a) { var kk = rev[a.name] || a.def; h += '<div><kbd>' + escq(kk === ' ' ? 'Space' : kk) + '</kbd> ' + escq(a.label) + '</div>'; });
-      h += '</div><div style="margin-top:10px;opacity:.7;">Arrows focus panes · C-arrow / drag borders resize · 0-9 select window · m mark then m elsewhere to swap · Remap any of these on the <b>Keyboard</b> page.<br>Not applicable (panes are live web pages, not shells): copy-mode <kbd>[</kbd>, paste-buffers <kbd>]</kbd>/<kbd>=</kbd>, sessions <kbd>s</kbd>/<kbd>(</kbd>/<kbd>)</kbd>, clients <kbd>D</kbd>.</div>';
+      h += '</div><div style="margin-top:10px;opacity:.7;">Arrows focus panes · C-arrow / drag borders resize · 0-9 select window · m mark then m elsewhere to swap · Remap any of these on the <b>Keyboard</b> page.<br>Not applicable (panes are live web pages, not shells): copy-mode <kbd>[</kbd>, paste-buffers <kbd>]</kbd>/<kbd>=</kbd>, client switching <kbd>(</kbd>/<kbd>)</kbd>/<kbd>D</kbd>.</div>';
       card.innerHTML = h;
     });
   }
