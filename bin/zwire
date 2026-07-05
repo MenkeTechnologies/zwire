@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# zwire — Chromium, rebranded, with the zpwrchrome power-tool + cyberpunk
+# new-tab + the internal-HUD skin preloaded. Runtime rebrand: a plain Chromium
+# snapshot binary launched against a dedicated profile with a fixed extension
+# set. Nothing to compile (the optional whole-chrome HUD lives in fork/).
+#
+#   zwire [chromium-args...] [url]
+#
+# First run: scripts/fetch-base.sh downloads the base binary. If it is missing
+# this launcher says so and exits.
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+STATE=${ZWIRE_STATE:-$HOME/.zwire}
+PROFILE=$STATE/profile
+BASE_PATH_FILE=$STATE/base.path
+
+# Resolve the base Chromium binary: env override, then the path recorded by
+# scripts/fetch-base.sh.
+if [[ -n ${ZWIRE_BASE:-} && -x ${ZWIRE_BASE:-} ]]; then
+  BASE=$ZWIRE_BASE
+elif [[ -f $BASE_PATH_FILE ]]; then
+  BASE=$(cat "$BASE_PATH_FILE")
+else
+  BASE=""
+fi
+
+if [[ -z $BASE || ! -x $BASE ]]; then
+  echo "zwire: no base browser installed — run: $ROOT/scripts/fetch-base.sh" >&2
+  exit 1
+fi
+
+# Extensions loaded on every launch, comma-separated. Only directories that
+# exist are included, so a missing zpwrchrome submodule degrades gracefully to
+# just the theme + new-tab.
+# NOTE: theme/ is intentionally NOT loaded — the fork's native color mixer owns
+# the chrome palette (scheme-driven via the HUD picker), and a static theme
+# extension would override it (custom themes apply last in the color pipeline).
+EXTS=()
+for ext in "$ROOT/newtab" "$ROOT/extensions/zpwrchrome" "$ROOT/extensions/hud-internal"; do
+  [[ -f $ext/manifest.json ]] && EXTS+=("$ext")
+done
+IFS=','; LOAD="${EXTS[*]}"; unset IFS
+
+mkdir -p "$PROFILE"
+
+exec "$BASE" \
+  --user-data-dir="$PROFILE" \
+  --load-extension="$LOAD" \
+  --extensions-on-chrome-urls \
+  --test-type \
+  --no-first-run \
+  --no-default-browser-check \
+  --homepage="chrome://newtab" \
+  --disable-features=NtpFooter \
+  --enable-features=SplitViewHorizontal,SplitViewTabRestore \
+  "$@"
