@@ -188,6 +188,15 @@
   document.addEventListener('keydown', function (e) {
     if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'b' || e.key === 'B')) litPrefix();
   }, true);
+  // The keydown above misses whenever ztmux (which owns Ctrl-b) calls
+  // stopImmediatePropagation first, or focus is in an iframe. ztmux publishes
+  // its armed state to zb_tmux, so light the indicator off that too — reliable
+  // and cross-frame (storage is shared).
+  try {
+    chrome.storage.onChanged.addListener(function (ch, area) {
+      if (area === 'local' && ch.zb_tmux && ch.zb_tmux.newValue && ch.zb_tmux.newValue.armed) litPrefix();
+    });
+  } catch (e) {}
 
   if (document.body) syncBar();
   else document.addEventListener('DOMContentLoaded', syncBar);

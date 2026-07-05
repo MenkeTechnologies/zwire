@@ -58,6 +58,13 @@ seedFromNative();
 try { chrome.runtime.onStartup.addListener(seedFromNative); } catch (e) {}
 try { chrome.runtime.onInstalled.addListener(seedFromNative); } catch (e) {}
 
+// The terminal's open state (zb_term_open) persists across navigation within a
+// session, but must NOT survive a browser restart / extension reload — a stale
+// "open" flag would re-pop the terminal on every page. Clear it on both.
+function zbClearTermOpen() { try { chrome.storage.local.set({ zb_term_open: false }); } catch (e) {} }
+try { chrome.runtime.onStartup.addListener(zbClearTermOpen); } catch (e) {}
+try { chrome.runtime.onInstalled.addListener(zbClearTermOpen); } catch (e) {}
+
 // Seed the ⌘K custom-command registry with a default rule set on FIRST RUN only.
 // `zb_custom_cmds` is a user-editable array (commands.html); seed it just when
 // the key has never been set, so we never clobber a user's edits/deletions.

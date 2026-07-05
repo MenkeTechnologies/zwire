@@ -455,6 +455,13 @@
     ttl.appendChild(addr); ttl.appendChild(x);
     var fr = document.createElement('iframe'); fr.className = 'zt-fr'; fr.name = 'zbtmux';
     fr.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
+    // Contain the pane: full functionality (scripts/forms/popups/modals/
+    // downloads/same-origin) but no AUTOMATIC top-navigation, which neutralizes
+    // the JS frame-busting (`if (top !== self) top.location = self.location`)
+    // that occasionally yanked a framed site out of the tiling — the one gap
+    // the header stripper (DNR) + native allow-framing can't cover. User-
+    // activated top-nav is still allowed so real navigations aren't broken.
+    fr.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-top-navigation-by-user-activation allow-storage-access-by-user-activation allow-presentation');
     fr.src = normalizeUrl(l.url);
     // every (re)load of a pane re-arms its sync state — a freshly navigated page
     // starts with sync off, so without this it could receive but not broadcast.
@@ -600,9 +607,10 @@
   function publishTmux() {
     try {
       var st = open ? {
+        armed: armed,
         windows: S.windows.map(function (win) { return { name: win.name || label(win), panes: leaves(win.tree).length, zoom: !!win.zoom, sync: !!win.sync }; }),
         active: S.active, anySync: S.windows.some(function (win) { return win.sync; })
-      } : { windows: [] };
+      } : { armed: armed, windows: [] };
       chrome.storage.local.set({ zb_tmux: st });
     } catch (e) {}
   }
@@ -618,7 +626,7 @@
   }
 
   /* ----------------------------- key handling ----------------------------- */
-  function armTop() { armed = true; clearTimeout(armTimer); armTimer = setTimeout(function () { armed = false; render(); }, 2500); render(); }
+  function armTop() { armed = true; clearTimeout(armTimer); armTimer = setTimeout(function () { armed = false; render(); publishTmux(); }, 2500); render(); publishTmux(); }
   document.addEventListener('keydown', function (e) {
     if (armed) {
       if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta' || e.key === 'Dead' || e.key === 'Process') return;
