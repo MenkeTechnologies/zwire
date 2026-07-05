@@ -136,10 +136,10 @@
     injectCss();
     var root = document.getElementById('app') || document.body;
     var app = el('div', 'zb-app');
-    // header: ZB // TITLE  +  ZGui.searchBox filter
+    // header: ZW // TITLE  +  ZGui.searchBox filter
     var header = el('header', 'zb-header');
     var inner = el('div', 'zb-header-inner');
-    inner.appendChild(el('div', 'zb-logo', '<span class="zb">ZB</span> <span class="ti">// ' + (opts.title || 'ZWIRE') + '</span>'));
+    inner.appendChild(el('div', 'zb-logo', '<span class="zb">ZW</span> <span class="ti">// ' + (opts.title || 'ZWIRE') + '</span>'));
     var filterHost = el('div', 'zb-filter'); inner.appendChild(filterHost);
     header.appendChild(inner);
     // cross-page nav row

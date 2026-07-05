@@ -1,5 +1,5 @@
 /* zwire HUD — tmux-style statusbar, pinned to the bottom of every page.
- * Segments (left→right): ZB sigil · active scheme · host · [flex] · CI dot ·
+ * Segments (left→right): ZW sigil · active scheme · host · [flex] · CI dot ·
  * tab count · vim indicator · ⌘K · clock. Themed by the active scheme (same
  * source as zpalette/zvim: window.ZWIRE_HUD + chrome.storage 'zb_scheme').
  * Toggle from the ⌘K palette ("Toggle HUD statusbar", stored as zb_status).
@@ -51,7 +51,7 @@
   function build() {
     if (bar) return;
     bar = document.createElement('div'); bar.id = 'zb-statusbar';
-    var sig = document.createElement('span'); sig.className = 'sig'; sig.textContent = 'ZB'; bar.appendChild(sig);
+    var sig = document.createElement('span'); sig.className = 'sig'; sig.textContent = 'ZW'; bar.appendChild(sig);
     bar.appendChild(seg('scheme', '<span class="scheme" data-scheme>—</span>'));
     var host = location.host || location.protocol.replace(':', '');
     bar.appendChild(seg('host', '<span class="host">' + host.replace(/[<>&]/g, '') + '</span>'));
