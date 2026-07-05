@@ -20,6 +20,15 @@
   if (window.__zbtmuxLoaded) return; window.__zbtmuxLoaded = true;
 
   function editable(el) { if (!el) return false; var t = el.tagName; return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || el.isContentEditable; }
+  // Prefix: Ctrl-b (the real one — but the fork's native-split patch eats it until
+  // the fork is rebuilt) OR ⌥-b (Alt-b, which nothing intercepts — use it to test
+  // the overlay now, pre-rebuild).
+  function isPrefix(e) {
+    if (e.metaKey) return false;
+    if (e.ctrlKey && !e.altKey && (e.key === 'b' || e.key === 'B')) return true;
+    if (e.altKey && !e.ctrlKey && e.code === 'KeyB') return true;
+    return false;
+  }
 
   /* ===================== PANE FRAME: forwarder + sync ===================== */
   if (!TOP) {
@@ -33,7 +42,7 @@
         up({ cmdKey: e.key });
         return;
       }
-      if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+      if (isPrefix(e)) {
         e.preventDefault(); e.stopImmediatePropagation();
         pArmed = true; clearTimeout(pTimer); pTimer = setTimeout(function () { pArmed = false; }, 2500);
         up({ prefix: 1 });
@@ -60,10 +69,11 @@
   }
 
   /* ============================ TOP FRAME: state ============================ */
+  var NEWTAB = 'chrome://newtab';           // every fresh pane opens the zwire new-tab
   var uid = 0; function nid(p) { return (p || 'p') + (++uid); }
-  function leaf(url) { return { t: 'leaf', id: nid('p'), url: url || '', title: '' }; }
+  function leaf(url) { return { t: 'leaf', id: nid('p'), url: url || NEWTAB, title: '' }; }
   function mkWindow(url) { var l = leaf(url); return { id: nid('w'), name: '', tree: l, active: l.id, zoom: null, sync: false }; }
-  var S = { windows: [mkWindow(location.href)], active: 0 };
+  var S = { windows: [mkWindow(NEWTAB)], active: 0 };
   var open = false, armed = false, armTimer = null;
 
   function W() { return S.windows[S.active]; }
@@ -142,7 +152,7 @@
   }
 
   /* --------------------------------- DOM ---------------------------------- */
-  var root, tabsEl, bodyEl, statusEl, styleEl;
+  var root, tabsEl, bodyEl, styleEl;
   var panes = {};          // leafId -> { wrap, frame, addr, titleEl, url }
   var paneRects = {};      // leafId -> {x,y,w,h} in % (active window only)
 
@@ -178,8 +188,7 @@
     root = document.createElement('div'); root.id = 'zbtmux';
     tabsEl = document.createElement('div'); tabsEl.className = 'zt-tabs';
     bodyEl = document.createElement('div'); bodyEl.className = 'zt-body';
-    statusEl = document.createElement('div'); statusEl.className = 'zt-status';
-    root.appendChild(tabsEl); root.appendChild(bodyEl); root.appendChild(statusEl);
+    root.appendChild(tabsEl); root.appendChild(bodyEl);
     (document.body || document.documentElement).appendChild(root);
   }
 
@@ -193,7 +202,7 @@
     var wrap = document.createElement('div'); wrap.className = 'zt-pane';
     var ttl = document.createElement('div'); ttl.className = 'zt-ttl';
     var addr = document.createElement('input'); addr.className = 'zt-addr'; addr.spellcheck = false;
-    addr.placeholder = 'url or search …'; addr.value = l.url && l.url !== 'about:blank' ? l.url : '';
+    addr.placeholder = 'url or search …'; addr.value = (l.url && l.url !== 'about:blank' && l.url !== NEWTAB) ? l.url : '';
     var x = document.createElement('span'); x.className = 'zt-x'; x.textContent = '✕';
     ttl.appendChild(addr); ttl.appendChild(x);
     var fr = document.createElement('iframe'); fr.className = 'zt-fr'; fr.name = 'zbtmux';
@@ -253,16 +262,20 @@
       p.wrap.style.width = r.w + '%'; p.wrap.style.height = r.h + '%';
       p.wrap.classList.toggle('act', id === W().active);
     });
-    // status
-    var w = W();
-    statusEl.innerHTML = '';
-    add(statusEl, 'span', 'zwire tmux');
-    if (armed) add(statusEl, 'span', 'C-b', 'zt-armed');
-    add(statusEl, 'span', 'win ' + S.active + '/' + (S.windows.length - 1) + ' · panes ' + leaves(w.tree).length + (w.zoom ? ' · ZOOM' : '') + (w.sync ? ' · SYNC' : ''));
-    add(statusEl, 'span', 'C-b: % " o ←→ z x c n p e d', 'zt-sp');
+    // Feed the REAL powerline statusbar (zstatus.js reads zb_tmux) instead of a
+    // hand-rolled bar — it renders the window/pane/zoom/sync segment for us.
+    publishTmux();
   }
-  function add(host, tag, txt, cls) { var e = document.createElement(tag); if (cls) e.className = cls; e.textContent = txt; host.appendChild(e); return e; }
-  function label(win) { var l = leaves(win.tree)[0]; try { return l.url ? new URL(normalizeUrl(l.url)).hostname.replace(/^www\./, '') : 'pane'; } catch (e) { return 'pane'; } }
+  function label(win) { var l = leaves(win.tree)[0]; try { return l.url && l.url !== NEWTAB ? new URL(normalizeUrl(l.url)).hostname.replace(/^www\./, '') : 'newtab'; } catch (e) { return 'newtab'; } }
+  function publishTmux() {
+    try {
+      var st = open ? {
+        windows: S.windows.map(function (win) { return { name: win.name || label(win), panes: leaves(win.tree).length, zoom: !!win.zoom, sync: !!win.sync }; }),
+        active: S.active, anySync: S.windows.some(function (win) { return win.sync; })
+      } : { windows: [] };
+      chrome.storage.local.set({ zb_tmux: st });
+    } catch (e) {}
+  }
 
   /* -------------------------------- sync ---------------------------------- */
   function broadcastSync(win) { leaves(win.tree).forEach(function (l) { var p = panes[l.id]; if (p) try { p.frame.contentWindow.postMessage({ __zbtmux: 1, setSync: win.sync }, '*'); } catch (e) {} }); }
@@ -284,7 +297,7 @@
       if (e.key !== 'Escape') exec(e.key); else render();
       return;
     }
-    if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+    if (isPrefix(e)) {
       e.preventDefault(); e.stopImmediatePropagation(); armTop();
     }
   }, true);
