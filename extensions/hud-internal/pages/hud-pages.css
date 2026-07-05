@@ -1,4 +1,4 @@
-/* zbrowser HUD internal-page skin — our own pages, fully styled (no Chrome WebUI). */
+/* zwire HUD internal-page skin — our own pages, fully styled (no Chrome WebUI). */
 :root {
   --bg-primary:#05050a; --bg-secondary:#0a0a14; --bg-card:#0d0d1a; --bg-hover:#12122a;
   --text:#e0f0ff; --text-dim:#7a8ba8; --accent:#ff2a6d; --cyan:#05d9e8; --magenta:#d300c5; --border:#1a1a3e;

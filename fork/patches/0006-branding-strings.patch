@@ -12,11 +12,11 @@ diff --git a/chrome/app/theme/chromium/BRANDING b/chrome/app/theme/chromium/BRAN
 -MAC_BUNDLE_ID=org.chromium.Chromium
 +COMPANY_FULLNAME=MenkeTechnologies
 +COMPANY_SHORTNAME=MenkeTechnologies
-+PRODUCT_FULLNAME=zbrowser
-+PRODUCT_SHORTNAME=zbrowser
-+PRODUCT_INSTALLER_FULLNAME=zbrowser Installer
-+PRODUCT_INSTALLER_SHORTNAME=zbrowser Installer
++PRODUCT_FULLNAME=zwire
++PRODUCT_SHORTNAME=zwire
++PRODUCT_INSTALLER_FULLNAME=zwire Installer
++PRODUCT_INSTALLER_SHORTNAME=zwire Installer
 +COPYRIGHT=Copyright @LASTCHANGE_YEAR@ MenkeTechnologies. All rights reserved.
-+MAC_BUNDLE_ID=com.menketechnologies.zbrowser
++MAC_BUNDLE_ID=com.menketechnologies.zwire
  MAC_CREATOR_CODE=Cr24
  MAC_TEAM_ID=

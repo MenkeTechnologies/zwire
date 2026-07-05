@@ -13,7 +13,7 @@ index 30286417f7..66d934f743 100644
 -        SkVector(bottom_right_corner_radius, bottom_right_corner_radius),
 -        SkVector(bottom_left_corner_radius, bottom_left_corner_radius)};
 -
-+    // zbrowser HUD: inactive / hover / hit-test tabs are hard trapezoids too
++    // zwire HUD: inactive / hover / hit-test tabs are hard trapezoids too
 +    // (wider bottom, sloped sides) so the whole strip is classic-Chrome shaped,
 +    // not detached squarcles. The hit-test path keeps square bottom corners.
 +    (void)top_left_corner_radius;
@@ -43,7 +43,7 @@ index 30286417f7..66d934f743 100644
    const int kMaxPathPoints = 20;
    path.incReserve(kMaxPathPoints);
  
-+  // zbrowser HUD: hard trapezoid tabs (classic Chrome) — the top edge is inset
++  // zwire HUD: hard trapezoid tabs (classic Chrome) — the top edge is inset
 +  // by `hud_slope` on each side so the sides slope in as straight diagonals.
 +  // The top corner radii are unused now (diagonal sides, sharp top corners).
 +  (void)top_left_corner_radius;
@@ -60,7 +60,7 @@ index 30286417f7..66d934f743 100644
 -    // Draw the ascender and top-left curve.
 -    //   ╔─────────╮
 -    //   ┃ Content │
-+    // zbrowser HUD: diagonal left side up to the inset top-left corner.
++    // zwire HUD: diagonal left side up to the inset top-left corner.
 +    //   ╱─────────╮
 +    //  ╱ Content  │
      // ┌─╯         ╰─┐
@@ -74,7 +74,7 @@ index 30286417f7..66d934f743 100644
 -  // Draw the top crossbar.
 -  //   ╭━━━━━━━━━╮
 -  //   │ Content │
-+  // zbrowser HUD: top crossbar between the two inset top corners.
++  // zwire HUD: top crossbar between the two inset top corners.
 +  //   ┌━━━━━━━━━┐
 +  //  ╱ Content   ╲
    // ┌─╯         ╰─┐
@@ -89,7 +89,7 @@ index 30286417f7..66d934f743 100644
 -    // Draw the top-right curve.
 -    //   ╭─────────╗
 -    //   │ Content │
-+    // zbrowser HUD: diagonal right side down to the bottom-right corner.
++    // zwire HUD: diagonal right side down to the bottom-right corner.
 +    //   ┌─────────┐
 +    //   │ Content  ╲
      // ┌─╯         ╰─┐

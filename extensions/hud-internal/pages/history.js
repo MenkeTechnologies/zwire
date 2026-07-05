@@ -1,4 +1,4 @@
-/* zbrowser HUD History (replaces chrome://history) — ZGui.dataTable. */
+/* zwire HUD History (replaces chrome://history) — ZGui.dataTable. */
 (function () {
   'use strict';
   function fmt(t) { try { var d = new Date(t); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }

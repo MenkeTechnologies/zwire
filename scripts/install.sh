@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — put `zbrowser` on PATH, fetch the base browser, and (macOS)
+# install.sh — put `zwire` on PATH, fetch the base browser, and (macOS)
 # rebrand the base bundle's Dock name + icon in place.
 #
 #   scripts/install.sh [--bindir DIR]
@@ -17,17 +17,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 # 1. base browser
-if [[ ! -f ${ZBROWSER_STATE:-$HOME/.zbrowser}/base.path ]]; then
+if [[ ! -f ${ZWIRE_STATE:-$HOME/.zwire}/base.path ]]; then
   "$ROOT/scripts/fetch-base.sh"
 fi
 
 # 2. launcher on PATH
 mkdir -p "$BINDIR"
-ln -sf "$ROOT/bin/zbrowser" "$BINDIR/zbrowser"
-echo "install: linked $BINDIR/zbrowser" >&2
+ln -sf "$ROOT/bin/zwire" "$BINDIR/zwire"
+echo "install: linked $BINDIR/zwire" >&2
 case ":$PATH:" in
   *":$BINDIR:"*) ;;
-  *) echo "install: add $BINDIR to PATH to use \`zbrowser\`" >&2 ;;
+  *) echo "install: add $BINDIR to PATH to use \`zwire\`" >&2 ;;
 esac
 
 # 3. macOS: rebrand the running app's Dock presence
@@ -35,4 +35,4 @@ if [[ $(uname -s) == Darwin ]]; then
   "$ROOT/scripts/rebrand-macos.sh" || true
 fi
 
-echo "install: done — run \`zbrowser\`" >&2
+echo "install: done — run \`zwire\`" >&2

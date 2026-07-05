@@ -7,7 +7,7 @@ diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/
  int LocationBarView::ComputeBorderRadius(gfx::Size size) {
 -  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
 -      views::Emphasis::kMaximum, size);
-+  // zbrowser HUD: sharp 2px omnibox field, matching the strykelang HUD
++  // zwire HUD: sharp 2px omnibox field, matching the strykelang HUD
 +  // radius (.omni border-radius: 2px), instead of the fully-rounded pill.
 +  return std::min(ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
 +                      views::Emphasis::kMaximum, size),

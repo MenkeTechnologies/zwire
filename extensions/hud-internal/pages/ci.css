@@ -1,4 +1,4 @@
-/* zbrowser HUD — CI runs page. */
+/* zwire HUD — CI runs page. */
 .ci-toolbar { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px; padding:14px 16px; }
 .ci-toolbar .zg-field { margin:0; }
 .ci-toolbar .zs-input { min-width:170px; }

@@ -8,7 +8,7 @@ index 73e2f1e749..f83c267061 100644
  #else
 -  // Use a single default font as the default font list.
 -  gfx::FontList::SetDefaultFontDescription(std::string());
-+  // zbrowser HUD: drive ALL native chrome UI text with the cyberpunk mono
++  // zwire HUD: drive ALL native chrome UI text with the cyberpunk mono
 +  // typeface. "Share Tech Mono" (installed to ~/Library/Fonts) matches the
 +  // strykelang HUD; "Monaco" is a guaranteed-present monospace fallback so the
 +  // chrome is always mono even before the custom font is installed.

@@ -1,5 +1,5 @@
 // Auto-extracted from strykelang/app-store hud-theme.js — the 8 canonical schemes.
-window.ZBROWSER_HUD = window.ZBROWSER_HUD || {};
+window.ZWIRE_HUD = window.ZWIRE_HUD || {};
 var SCHEME_VAR_KEYS = [
     '--accent', '--accent-light', '--accent-glow',
     '--cyan', '--cyan-glow', '--cyan-dim',
@@ -253,6 +253,6 @@ var COLOR_SCHEMES = {
       },
     },
   };
-window.ZBROWSER_HUD.VAR_KEYS=SCHEME_VAR_KEYS;
-window.ZBROWSER_HUD.ORDER=SCHEME_ORDER;
-window.ZBROWSER_HUD.SCHEMES=COLOR_SCHEMES;
+window.ZWIRE_HUD.VAR_KEYS=SCHEME_VAR_KEYS;
+window.ZWIRE_HUD.ORDER=SCHEME_ORDER;
+window.ZWIRE_HUD.SCHEMES=COLOR_SCHEMES;

@@ -1,0 +1,11 @@
+{
+  "name": "com.zwire.hud",
+  "description": "zwire HUD scheme bridge",
+  "path": "/Users/tommy/RustRoverProjects/MenkeTechnologiesMeta/zwire/extensions/hud-internal/native/hud_host.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://omcgnnjfmbmpdlofklbpddkhnfibfhgg/",
+    "chrome-extension://hpppdchpnphmiijdeanibpcadgknmaja/",
+    "chrome-extension://gpoepnekoiplhkegjpocnpeijiefgieb/"
+  ]
+}

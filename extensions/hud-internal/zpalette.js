@@ -1,4 +1,4 @@
-/* zbrowser HUD — global ⌘K command palette on EVERY page (like the Cmd+F bar).
+/* zwire HUD — global ⌘K command palette on EVERY page (like the Cmd+F bar).
  * Loads zgui-core's ZGui.palette as a content script; ⌘K opens it anywhere with
  * commands to jump to any internal/native page and switch color scheme. Themed
  * by the active scheme (chrome.storage 'zb_scheme'), same as zfind. */
@@ -8,7 +8,7 @@
   window.__zbPaletteLoaded = true;
   // wake the worker via the storage bus (reliable) so it fills zb_tabs.
   try { chrome.storage.local.set({ zb_cmd: { a: 'ping', n: 'load' + (window.__zbTick = (window.__zbTick || 0) + 1) } }); } catch (e) {}
-  var HUD = window.ZBROWSER_HUD || {};
+  var HUD = window.ZWIRE_HUD || {};
   var SCHEMES = HUD.SCHEMES || {};
   var ORDER = HUD.ORDER || Object.keys(SCHEMES);
   var VAR_KEYS = HUD.VAR_KEYS || [];
@@ -70,7 +70,7 @@
     ['⊛', 'Components', 'chrome://components'], ['≡', 'All chrome:// pages', 'chrome://about'],
     ['✎', 'Site settings', 'chrome://settings/content']];
   var WEB = [['◈', 'Chrome Web Store', 'https://chromewebstore.google.com/'],
-    ['⌂', 'zbrowser app store', 'https://menketechnologies.github.io/app-store/']];
+    ['⌂', 'zwire app store', 'https://menketechnologies.github.io/app-store/']];
 
   function items() {
     var out = [];
@@ -114,18 +114,27 @@
     ];
   }
 
-  // Web-search keywords (from zgo BUILTINS): `gh foo` -> search GitHub for foo.
+  // Keyword search (from zgo BUILTINS) + package registries. Each entry is
+  // [aliases, label, urlTemplate]. Typing a keyword (even alone) surfaces that
+  // destination FIRST: `crate`->crates.io, `crate serde`->crates.io/serde.
   var SEARCH = [
-    ['g', 'Google', 'https://www.google.com/search?q={q}'],
-    ['ddg', 'DuckDuckGo', 'https://duckduckgo.com/?q={q}'],
-    ['gh', 'GitHub', 'https://github.com/search?q={q}'],
-    ['yt', 'YouTube', 'https://www.youtube.com/results?search_query={q}'],
-    ['npm', 'npm', 'https://www.npmjs.com/search?q={q}'],
-    ['mdn', 'MDN', 'https://developer.mozilla.org/en-US/search?q={q}'],
-    ['so', 'Stack Overflow', 'https://stackoverflow.com/search?q={q}'],
-    ['wiki', 'Wikipedia', 'https://en.wikipedia.org/w/index.php?search={q}'],
-    ['maps', 'Google Maps', 'https://www.google.com/maps/search/{q}'],
-    ['crates', 'crates.io', 'https://crates.io/search?q={q}']
+    [['g', 'google'], 'Google', 'https://www.google.com/search?q={q}'],
+    [['ddg'], 'DuckDuckGo', 'https://duckduckgo.com/?q={q}'],
+    [['gh', 'github'], 'GitHub', 'https://github.com/search?q={q}'],
+    [['yt', 'youtube'], 'YouTube', 'https://www.youtube.com/results?search_query={q}'],
+    [['mdn'], 'MDN', 'https://developer.mozilla.org/en-US/search?q={q}'],
+    [['so', 'stackoverflow'], 'Stack Overflow', 'https://stackoverflow.com/search?q={q}'],
+    [['wiki'], 'Wikipedia', 'https://en.wikipedia.org/w/index.php?search={q}'],
+    [['maps'], 'Google Maps', 'https://www.google.com/maps/search/{q}'],
+    // package registries
+    [['crate', 'crates', 'cargo', 'rust'], 'crates.io', 'https://crates.io/search?q={q}'],
+    [['npm', 'node'], 'npm', 'https://www.npmjs.com/search?q={q}'],
+    [['pip', 'pypi', 'python'], 'PyPI', 'https://pypi.org/search/?q={q}'],
+    [['gem', 'gems', 'ruby'], 'RubyGems', 'https://rubygems.org/search?query={q}'],
+    [['go', 'golang'], 'pkg.go.dev', 'https://pkg.go.dev/search?q={q}'],
+    [['hex', 'elixir'], 'Hex.pm', 'https://hex.pm/packages?search={q}'],
+    [['brew', 'formula'], 'Homebrew', 'https://formulae.brew.sh/formula/{q}'],
+    [['docker', 'hub'], 'Docker Hub', 'https://hub.docker.com/search?q={q}']
   ];
   function searchProvider(q) {
     if (!q) return [];
@@ -133,10 +142,13 @@
     var sp = q.indexOf(' ');
     var kw = (sp > 0 ? q.slice(0, sp) : q).toLowerCase();
     var rest = sp > 0 ? q.slice(sp + 1).trim() : '';
-    var hit = SEARCH.filter(function (s) { return s[0] === kw; })[0];
-    if (hit && rest) {
-      out.push({ icon: '⌕', label: hit[1] + ': ' + rest, detail: 'search', run: function () { open(hit[2].replace('{q}', encodeURIComponent(rest))); } });
-      return out;   // strong keyword signal — show just that engine
+    var hit = SEARCH.filter(function (s) { return s[0].indexOf(kw) >= 0; })[0];
+    if (hit) {
+      var url;
+      if (rest) url = hit[2].replace('{q}', encodeURIComponent(rest));
+      else { try { url = new URL(hit[2]).origin + '/'; } catch (e) { url = hit[2].replace('{q}', ''); } }
+      out.push({ icon: '⌕', label: hit[1] + (rest ? ': ' + rest : ''), detail: rest ? 'search' : 'open', run: function () { open(url); } });
+      return out;   // keyword is a strong signal — show just that destination, first
     }
     // url / domain? offer to open it directly.
     if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(q) && q.indexOf(' ') < 0) {

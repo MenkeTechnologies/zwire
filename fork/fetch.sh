@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# fork/fetch.sh — check out the pinned Chromium source for the zbrowser fork.
+# fork/fetch.sh — check out the pinned Chromium source for the zwire fork.
 #
 #   fork/fetch.sh [SRC_ROOT]
 #
-# SRC_ROOT defaults to $ZBROWSER_SRC or ~/zbrowser-chromium. Expect ~100GB and
+# SRC_ROOT defaults to $ZWIRE_SRC or ~/zwire-chromium. Expect ~100GB and
 # 30min–several hours. Installs depot_tools if missing, fetches Chromium,
 # checks out the pinned tag from fork/CHROMIUM_VERSION, and syncs deps.
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VERSION=$(cat "$ROOT/fork/CHROMIUM_VERSION")
-SRC_ROOT=${1:-${ZBROWSER_SRC:-$HOME/zbrowser-chromium}}
+SRC_ROOT=${1:-${ZWIRE_SRC:-$HOME/zwire-chromium}}
 DEPOT=$SRC_ROOT/depot_tools
 
 echo "fork/fetch: target Chromium $VERSION into $SRC_ROOT" >&2
@@ -34,10 +34,10 @@ fi
 (
   cd "$SRC_ROOT/src"
   git fetch --tags origin
-  git checkout "tags/$VERSION" -B "zbrowser-$VERSION"
+  git checkout "tags/$VERSION" -B "zwire-$VERSION"
   gclient sync --no-history --with_branch_heads --with_tags -D
   gclient runhooks
 )
 
-echo "fork/fetch: done. src at $SRC_ROOT/src (branch zbrowser-$VERSION)" >&2
+echo "fork/fetch: done. src at $SRC_ROOT/src (branch zwire-$VERSION)" >&2
 echo "fork/fetch: next -> fork/apply-patches.sh $SRC_ROOT/src" >&2

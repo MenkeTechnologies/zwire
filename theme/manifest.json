@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "zbrowser Cyberpunk",
-  "short_name": "zbrowser-theme",
+  "name": "zwire Cyberpunk",
+  "short_name": "zwire-theme",
   "version": "1.0.0",
-  "description": "Cyberpunk chrome theme for zbrowser — the strykelang HUD palette applied to frame, toolbar, tabs and NTP.",
+  "description": "Cyberpunk chrome theme for zwire — the strykelang HUD palette applied to frame, toolbar, tabs and NTP.",
   "theme": {
     "colors": {
       "frame":             [24, 11, 46],

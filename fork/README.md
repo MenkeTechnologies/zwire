@@ -1,6 +1,6 @@
-# zbrowser fork — the full-HUD Chromium build
+# zwire fork — the full-HUD Chromium build
 
-The runtime rebrand (top-level `bin/zbrowser` + a Chromium snapshot base) gives
+The runtime rebrand (top-level `bin/zwire` + a Chromium snapshot base) gives
 you HUD **colors** + a HUD **new-tab** + your extensions, with zero build. It
 cannot reshape the browser chrome — tab shape, UI fonts, toolbar borders are
 native C++, not themeable.
@@ -9,7 +9,7 @@ This `fork/` directory is the **source-build path** that restyles the chrome
 itself: sharp cyberpunk tabs, Share Tech Mono / Monaco UI type, neon toolbar,
 HUD-colored frame, and the 8 HUD schemes wired into the DevTools Theme dropdown.
 It compiles a patched Chromium and installs it as the
-zbrowser base, which the same `bin/zbrowser` launcher then runs with the
+zwire base, which the same `bin/zwire` launcher then runs with the
 extensions preloaded.
 
 ## Cost (be sure you want this)
@@ -24,10 +24,10 @@ extensions preloaded.
 
 ```sh
 fork/fetch.sh                 # depot_tools + fetch pinned Chromium (long)
-fork/apply-patches.sh  ~/zbrowser-chromium/src
-fork/build.sh          ~/zbrowser-chromium/src      # the long compile
-fork/package.sh        ~/zbrowser-chromium/src/out/zbrowser
-zbrowser                                            # runs the HUD-chromed fork
+fork/apply-patches.sh  ~/zwire-chromium/src
+fork/build.sh          ~/zwire-chromium/src      # the long compile
+fork/package.sh        ~/zwire-chromium/src/out/zwire
+zwire                                            # runs the HUD-chromed fork
 ```
 
 | File | Role |
@@ -37,7 +37,7 @@ zbrowser                                            # runs the HUD-chromed fork
 | `fetch.sh` | install depot_tools, fetch + checkout the pinned tag, sync deps |
 | `apply-patches.sh` | apply / reverse the HUD patch series over `src/` |
 | `build.sh` | `gn gen` + `autoninja chrome` |
-| `package.sh` | install the built app as the zbrowser base + rebrand |
+| `package.sh` | install the built app as the zwire base + rebrand |
 | `patches/` | the HUD patch series + `patches/README.md` target-file map |
 
 ## Status
@@ -53,7 +53,7 @@ against each target file read at that exact tag):
 | 0003 UI font | Share Tech Mono / Monaco UI type (`resource_bundle.cc`) | authored · apply-clean |
 | 0004 toolbar border | 2px neon cyan line under the toolbar | authored · apply-clean |
 | 0005 omnibox | sharp 2px omnibox field | authored · apply-clean |
-| 0006 branding | `zbrowser` product strings | authored · apply-clean |
+| 0006 branding | `zwire` product strings | authored · apply-clean |
 | 0007 DevTools theme | 8 HUD schemes in the DevTools Theme dropdown (3 front_end files) | authored · apply-clean |
 
 Apply-clean proves the diff context matches the pinned source; it does **not**

@@ -38,5 +38,5 @@
   <!-- wordmark strip, width-pinned -->
   <text x="512" y="782" font-family="Orbitron" font-weight="700" font-size="92"
         textLength="600" lengthAdjust="spacingAndGlyphs"
-        fill="#00b0ff" text-anchor="middle" opacity="0.9">ZBROWSER</text>
+        fill="#00b0ff" text-anchor="middle" opacity="0.9">ZWIRE</text>
 </svg>

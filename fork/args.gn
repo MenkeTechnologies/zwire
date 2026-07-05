@@ -1,4 +1,4 @@
-# GN build args for the zbrowser Chromium fork.
+# GN build args for the zwire Chromium fork.
 #
 # Unbranded (Chromium, not Google Chrome), release, optimized for a reasonable
 # build time on a workstation. Copied into out/<dir>/args.gn by build.sh.

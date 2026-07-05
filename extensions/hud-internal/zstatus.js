@@ -1,7 +1,7 @@
-/* zbrowser HUD — tmux-style statusbar, pinned to the bottom of every page.
+/* zwire HUD — tmux-style statusbar, pinned to the bottom of every page.
  * Segments (left→right): ZB sigil · active scheme · host · [flex] · CI dot ·
  * tab count · vim indicator · ⌘K · clock. Themed by the active scheme (same
- * source as zpalette/zvim: window.ZBROWSER_HUD + chrome.storage 'zb_scheme').
+ * source as zpalette/zvim: window.ZWIRE_HUD + chrome.storage 'zb_scheme').
  * Toggle from the ⌘K palette ("Toggle HUD statusbar", stored as zb_status).
  * Data comes from storage buses the worker already maintains: zb_tabs,
  * zb_ci_status, zb_scheme. Top frame only; never shown in iframes. */
@@ -10,7 +10,7 @@
   if (window.top !== window) return;           // top frame only
   if (window.__zbStatusLoaded) return;
   window.__zbStatusLoaded = true;
-  var HUD = window.ZBROWSER_HUD || {};
+  var HUD = window.ZWIRE_HUD || {};
   var SCHEMES = HUD.SCHEMES || {};
   var VAR_KEYS = HUD.VAR_KEYS || [];
 

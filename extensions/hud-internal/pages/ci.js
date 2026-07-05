@@ -1,4 +1,4 @@
-/* zbrowser HUD — CI runs dashboard. Aggregates GitHub Actions workflow runs
+/* zwire HUD — CI runs dashboard. Aggregates GitHub Actions workflow runs
  * across your repos into one page (the thing chrome makes you click 20 times
  * for). Config (user + optional token) lives in chrome.storage.local 'zb_ci'.
  * All UI is ZGui.* per the zgui-core-only rule. */

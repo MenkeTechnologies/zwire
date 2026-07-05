@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # rebrand-macos.sh — rebrand the downloaded base browser bundle in place so the
-# Dock, ⌘-Tab switcher, and menu bar show "zbrowser" with the cyberpunk icon
+# Dock, ⌘-Tab switcher, and menu bar show "zwire" with the cyberpunk icon
 # instead of "Chromium".
 #
 # The base bundle is ad-hoc signed. Patching Info.plist / Resources invalidates
@@ -8,15 +8,15 @@
 # cached original icon. So after patching we MUST re-sign ad-hoc and re-register
 # the bundle with LaunchServices for the new icon to appear.
 #
-# This edits only the local base bundle under $ZBROWSER_STATE/base — it never
+# This edits only the local base bundle under $ZWIRE_STATE/base — it never
 # touches a system browser install. Re-run after fetch-base.sh upgrades the base.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-STATE=${ZBROWSER_STATE:-$HOME/.zbrowser}
+STATE=${ZWIRE_STATE:-$HOME/.zwire}
 BASE_PATH_FILE=$STATE/base.path
-ICON=$ROOT/branding/zbrowser.icns
-NAME=zbrowser
+ICON=$ROOT/branding/zwire.icns
+NAME=zwire
 
 [[ -f $BASE_PATH_FILE ]] || { echo "rebrand: no base installed — run fetch-base.sh" >&2; exit 1; }
 BIN=$(cat "$BASE_PATH_FILE")
@@ -39,7 +39,7 @@ if [[ -f $ICON ]]; then
   set_key CFBundleIconFile "$NAME"
   # Modern Chromium ships its icon as "AppIcon" in the compiled Assets.car and
   # references it via CFBundleIconName, which takes PRECEDENCE over the .icns in
-  # CFBundleIconFile. Delete that key so macOS falls back to our zbrowser.icns.
+  # CFBundleIconFile. Delete that key so macOS falls back to our zwire.icns.
   pb "Delete :CFBundleIconName" 2>/dev/null || true
 fi
 

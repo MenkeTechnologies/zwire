@@ -1,17 +1,17 @@
-/* zbrowser HUD background worker.
+/* zwire HUD background worker.
  *
  * Two jobs:
  *  1. Relay the picked scheme from content scripts / pages to the native host,
- *     which writes ~/.zbrowser/hud-scheme so the compiled color mixer follows.
+ *     which writes ~/.zwire/hud-scheme so the compiled color mixer follows.
  *  2. Mirror the current scheme into chrome.storage.local ('zb_scheme') so the
  *     chrome:// theme content scripts have a reliable, push-based source they
  *     can read + observe (an async sendResponse across the native host is
  *     unreliable — an MV3 worker can suspend mid-round-trip).
  */
-var HOST = 'com.zbrowser.hud';
+var HOST = 'com.zwire.hud';
 // zpwrchrome extension — kept in colorscheme sync with the global HUD/native
 // scheme over runtime messaging (separate extensions can't share storage).
-var ZPWR_ID = 'inklnobllidodhdpkocpafooegnklheo';
+var ZPWR_ID = 'hpppdchpnphmiijdeanibpcadgknmaja';
 var lastPushed = null;
 
 function pushToZpwr(scheme) {

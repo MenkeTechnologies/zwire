@@ -1,4 +1,4 @@
-/* zbrowser HUD Downloads (replaces chrome://downloads) — ZGui.dataTable. */
+/* zwire HUD Downloads (replaces chrome://downloads) — ZGui.dataTable. */
 (function () {
   'use strict';
   function base(p) { return String(p || '').split(/[\\/]/).pop(); }

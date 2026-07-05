@@ -1,4 +1,4 @@
-/* zbrowser HUD Bookmarks (replaces chrome://bookmarks) — ZGui.dataTable. */
+/* zwire HUD Bookmarks (replaces chrome://bookmarks) — ZGui.dataTable. */
 (function () {
   'use strict';
   function walk(nodes, path, out) {

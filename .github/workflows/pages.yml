@@ -1,7 +1,7 @@
 name: pages
 
 # Publishes docs/ to GitHub Pages — the site the README "docs · online" badge
-# points at (https://menketechnologies.github.io/zbrowser/).
+# points at (https://menketechnologies.github.io/zwire/).
 # Requires repo Settings → Pages → Source = "GitHub Actions".
 
 on:

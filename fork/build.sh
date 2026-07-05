@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# fork/build.sh — configure + compile the zbrowser Chromium fork.
+# fork/build.sh — configure + compile the zwire Chromium fork.
 #
 #   fork/build.sh SRC [OUT]
 #
 # SRC is the Chromium src/ dir. OUT is the build subdir under src/out
-# (default: zbrowser). First compile is 1–4 hours; incremental rebuilds after a
+# (default: zwire). First compile is 1–4 hours; incremental rebuilds after a
 # patch are minutes. Uses fork/args.gn.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SRC=${1:?usage: build.sh SRC [OUT]}
-OUT=${2:-zbrowser}
-DEPOT=${ZBROWSER_SRC:-$(dirname "$SRC")}/depot_tools
+OUT=${2:-zwire}
+DEPOT=${ZWIRE_SRC:-$(dirname "$SRC")}/depot_tools
 
 [[ -d $SRC ]] || { echo "build: no src dir at $SRC" >&2; exit 1; }
 [[ -d $DEPOT ]] && export PATH="$DEPOT:$PATH"

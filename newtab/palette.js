@@ -1,14 +1,14 @@
-/* zbrowser new-tab command palette (⌘K / :). The new tab is a separate
+/* zwire new-tab command palette (⌘K / :). The new tab is a separate
  * extension's page, so hud-internal's global palette content script can't reach
  * it — this adds the same ZGui.palette here. Being an extension page (with the
  * tabs permission) it can use chrome.tabs directly, no worker round-trip. */
 (function () {
   'use strict';
-  var HUD = window.ZBROWSER_HUD || {};
+  var HUD = window.ZWIRE_HUD || {};
   var SCHEMES = HUD.SCHEMES || {};
   var ORDER = HUD.ORDER || Object.keys(SCHEMES);
   var VAR_KEYS = HUD.VAR_KEYS || [];
-  var HOST = 'com.zbrowser.hud';
+  var HOST = 'com.zwire.hud';
   if (!window.ZGui || !ZGui.palette || !ZGui.fzf) return;
   var styleEl;
 
@@ -53,7 +53,7 @@
     ['⊛', 'Components', 'chrome://components'], ['≡', 'All chrome:// pages', 'chrome://about'],
     ['⚡', 'CI runs', 'chrome-extension://omcgnnjfmbmpdlofklbpddkhnfibfhgg/pages/ci.html'],
     ['◈', 'Chrome Web Store', 'https://chromewebstore.google.com/'],
-    ['⌂', 'zbrowser app store', 'https://menketechnologies.github.io/app-store/']];
+    ['⌂', 'zwire app store', 'https://menketechnologies.github.io/app-store/']];
 
   function items() {
     var out = [];

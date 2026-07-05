@@ -1,4 +1,4 @@
-/* zbrowser HUD — shared filtered-list page on ZGui.appShell + ZGui.dataTable.
+/* zwire HUD — shared filtered-list page on ZGui.appShell + ZGui.dataTable.
  * Each list page (history/downloads/bookmarks) is just a config passed to
  * ZBList(cfg). fzf filter via the shell search; rows via ZGui.dataTable. */
 (function () {

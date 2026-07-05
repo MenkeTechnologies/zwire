@@ -6,7 +6,7 @@ index f5874357cb..7cff07cc04 100644
  
  #include <string>
  
-+// zbrowser HUD: scheme-driven native palette (reads ~/.zbrowser/hud-scheme,
++// zwire HUD: scheme-driven native palette (reads ~/.zwire/hud-scheme,
 +// live-updates on change so the color-scheme picker drives the native chrome).
 +#include <atomic>
 +#include "base/base_paths.h"
@@ -28,10 +28,10 @@ index f5874357cb..7cff07cc04 100644
  
  namespace {
  
-+// ---- zbrowser HUD scheme system -------------------------------------------
++// ---- zwire HUD scheme system -------------------------------------------
 +// The 8 strykelang schemes, baked native. The active one is chosen by the
 +// color-scheme picker (a content-script extension), which writes the scheme
-+// name to ~/.zbrowser/hud-scheme; a FilePathWatcher live-repaints the chrome.
++// name to ~/.zwire/hud-scheme; a FilePathWatcher live-repaints the chrome.
 +struct HudScheme {
 +  const char* name;
 +  SkColor p, s, c, h;      // bg: primary, secondary, card, hover
@@ -58,7 +58,7 @@ index f5874357cb..7cff07cc04 100644
 +base::FilePath HudSchemeDir() {
 +  base::FilePath home;
 +  base::PathService::Get(base::DIR_HOME, &home);
-+  return home.Append(".zbrowser");
++  return home.Append(".zwire");
 +}
 +
 +void ReadHudSchemeFile() {

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="zbrowser — Engineering report. Chromium/Blink rebranded: a 7-patch HUD fork series (15 hunks, 26,862 bytes) authored against Chromium tag 150.0.7871.46, four in-tree extensions (three launcher-preloaded), and an 8-scheme runtime HUD skin.">
-  <title>zbrowser &mdash; Engineering Report</title>
+  <meta name="description" content="zwire — Engineering report. Chromium/Blink rebranded: a 7-patch HUD fork series (15 hunks, 26,862 bytes) authored against Chromium tag 150.0.7871.46, four in-tree extensions (three launcher-preloaded), and an 8-scheme runtime HUD skin.">
+  <title>zwire &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&amp;family=Share+Tech+Mono&amp;display=swap" rel="stylesheet">
@@ -50,15 +50,15 @@
     <header class="tutorial-header">
       <div class="tutorial-header-inner">
         <div>
-          <h1 class="tutorial-brand">// ZBROWSER &mdash; ENGINEERING REPORT</h1>
+          <h1 class="tutorial-brand">// ZWIRE &mdash; ENGINEERING REPORT</h1>
           <nav class="tutorial-crumbs" aria-label="Breadcrumb">
             <a href="index.html">Docs</a>
             <span class="sep">/</span>
             <span class="current">Engineering Report</span>
             <span class="sep">/</span>
-            <a href="https://github.com/MenkeTechnologies/zbrowser" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://github.com/MenkeTechnologies/zwire" target="_blank" rel="noopener noreferrer">GitHub</a>
             <span class="sep">/</span>
-            <a href="https://github.com/MenkeTechnologies/zbrowser/tree/main/fork" target="_blank" rel="noopener noreferrer">fork/</a>
+            <a href="https://github.com/MenkeTechnologies/zwire/tree/main/fork" target="_blank" rel="noopener noreferrer">fork/</a>
           </nav>
           <p style="margin:0.35rem 0 0;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);letter-spacing:0.03em;opacity:0.8;">
             Chromium/Blink rebranded &middot; runtime base = latest snapshot (revision-pinned) &middot; fork series targets tag <code>150.0.7871.46</code> &middot; repo <code>51fd82be09</code> &middot; 7 patches / 15 hunks &middot; 4 extensions &middot; 8-scheme HUD
@@ -69,7 +69,7 @@
           <button type="button" class="btn btn-secondary active" id="btnCrt" title="CRT scanline overlay">CRT</button>
           <button type="button" class="btn btn-secondary active" id="btnNeon" title="Neon border pulse">Neon</button>
           <a class="btn btn-secondary" href="index.html">Docs</a>
-          <a class="btn btn-secondary" href="https://github.com/MenkeTechnologies/zbrowser" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a class="btn btn-secondary" href="https://github.com/MenkeTechnologies/zwire" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
       </div>
     </header>
@@ -85,7 +85,7 @@
 
       <!-- ═══════════════ SUMMARY ═══════════════ -->
       <h2 class="tutorial-title"><span class="step-hash">&gt;_</span>SUMMARY</h2>
-      <p class="tutorial-subtitle">zbrowser is a Chromium/Blink browser, rebranded, in two composable layers. The default is a <strong>runtime rebrand</strong> &mdash; a cyberpunk new-tab page, an internal-HUD skin with an 8-scheme picker, and the zpwrchrome power-tool preloaded on a plain Chromium snapshot (revision-pinned, latest by default), nothing to compile. An optional <strong>source fork</strong> removes the theme-extension ceiling &mdash; a Chrome theme changes colors only, so the native tab shape, UI font, and toolbar can't be reached from an extension &mdash; by compiling a patched Chromium: a 7-patch series authored against tag <code>150.0.7871.46</code> and verified apply-clean. The counters below are read from the patch files and the tree at commit <code>51fd82be09</code>; each per-patch "approach" is condensed from <code>fork/patches/README.md</code>, whose anchors were verified against the target file at that exact tag. Apply-clean proves the diff context matches the pinned source; it does <strong>not</strong> prove the C++ compiles &mdash; <code>fork/build.sh</code> is that gate.</p>
+      <p class="tutorial-subtitle">zwire is a Chromium/Blink browser, rebranded, in two composable layers. The default is a <strong>runtime rebrand</strong> &mdash; a cyberpunk new-tab page, an internal-HUD skin with an 8-scheme picker, and the zpwrchrome power-tool preloaded on a plain Chromium snapshot (revision-pinned, latest by default), nothing to compile. An optional <strong>source fork</strong> removes the theme-extension ceiling &mdash; a Chrome theme changes colors only, so the native tab shape, UI font, and toolbar can't be reached from an extension &mdash; by compiling a patched Chromium: a 7-patch series authored against tag <code>150.0.7871.46</code> and verified apply-clean. The counters below are read from the patch files and the tree at commit <code>51fd82be09</code>; each per-patch "approach" is condensed from <code>fork/patches/README.md</code>, whose anchors were verified against the target file at that exact tag. Apply-clean proves the diff context matches the pinned source; it does <strong>not</strong> prove the C++ compiles &mdash; <code>fork/build.sh</code> is that gate.</p>
 
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-val">7</div><div class="stat-label">Fork Patches</div></div>
@@ -112,7 +112,7 @@
           <tr><td><code>0003-ui-font-mono-hud.patch</code></td><td>resource/resource_bundle.cc &middot; <code>InitDefaultFontList</code></td><td class="num">1</td><td class="num">935</td><td>Set <code>gfx::FontList::SetDefaultFontDescription("Share Tech Mono, Monaco, 13px")</code> so all native chrome UI text renders in the HUD mono face, Monaco as a guaranteed-present fallback.</td></tr>
           <tr><td><code>0004-toolbar-neon-border.patch</code></td><td>toolbar/toolbar_view.cc &middot; <code>Init</code></td><td class="num">2</td><td class="num">1,076</td><td>Add a 2px cyan bottom border via <code>views::CreateSolidSidedBorder(&hellip;, kColorToolbarContentAreaSeparator)</code>; the separator color itself is set neon cyan in 0002.</td></tr>
           <tr><td><code>0005-omnibox-hud.patch</code></td><td>location_bar/location_bar_view.cc &middot; <code>ComputeBorderRadius</code></td><td class="num">1</td><td class="num">772</td><td>Clamp the field radius to 2px so the omnibox is the sharp HUD field instead of the rounded pill; background + border come from 0002.</td></tr>
-          <tr><td><code>0006-branding-strings.patch</code></td><td>chrome/app/theme/chromium/BRANDING</td><td class="num">1</td><td class="num">918</td><td><code>Chromium</code> &rarr; <code>zbrowser</code> product names, <code>MenkeTechnologies</code> company, <code>com.menketechnologies.zbrowser</code> bundle id &mdash; the file the unbranded (<code>is_chrome_branded=false</code>) build reads.</td></tr>
+          <tr><td><code>0006-branding-strings.patch</code></td><td>chrome/app/theme/chromium/BRANDING</td><td class="num">1</td><td class="num">918</td><td><code>Chromium</code> &rarr; <code>zwire</code> product names, <code>MenkeTechnologies</code> company, <code>com.menketechnologies.zwire</code> bundle id &mdash; the file the unbranded (<code>is_chrome_branded=false</code>) build reads.</td></tr>
           <tr><td><code>0007-devtools-hud-theme.patch</code></td><td>front_end: design_system_tokens.css<br>entrypoints/main/main-meta.ts<br>ui/legacy/theme_support/ThemeSupport.ts</td><td class="num">4</td><td class="num">7,279</td><td>Add the 8 HUD schemes to the DevTools <strong>Theme</strong> dropdown (default <code>zbhud-cyberpunk</code>). <code>ThemeSupport</code> maps <code>zbhud-&lt;scheme&gt;</code> onto the dark base and stamps <code>[data-zbhud]</code>; without it, stock Light/Dark/Auto are untouched.</td></tr>
         </tbody>
         <tfoot><tr class="total-row"><td>SERIES TOTAL</td><td>9 unique Chromium files</td><td class="num">15</td><td class="num">26,862</td><td>All 7 authored &amp; apply-clean at tag 150.0.7871.46. Compile-verify via <code>fork/build.sh</code> (~100&nbsp;GB checkout, 1&ndash;4&nbsp;hr first build).</td></tr></tfoot>
@@ -122,15 +122,15 @@
 
       <!-- ═══════════════ RUNTIME EXTENSIONS ═══════════════ -->
       <h2 class="tutorial-title"><span class="step-hash">$</span>RUNTIME EXTENSIONS</h2>
-      <p class="tutorial-subtitle"><code>bin/zbrowser</code> starts the base against a dedicated <code>~/.zbrowser/profile</code> with <code>--load-extension</code> pointing at newtab + zpwrchrome + hud-internal, and <code>--extensions-on-chrome-urls</code> set (the internal-HUD skin runs on <code>chrome://*/*</code>). Only directories that contain a <code>manifest.json</code> are included, so a missing submodule degrades gracefully. "manifest present" is read from disk; "loaded by launcher" is <code>bin/zbrowser:40</code>. The <code>theme</code> extension ships in-tree but is deliberately <strong>not</strong> launcher-loaded &mdash; a static Chrome theme applies last and would override the fork's native color mixer (patch 0002) and the internal-HUD skin, so the launcher leaves it out. The internal-HUD 8-scheme picker persists via <code>chrome.storage</code> and bridges to a native host (<code>native/hud_host.py</code>).</p>
+      <p class="tutorial-subtitle"><code>bin/zwire</code> starts the base against a dedicated <code>~/.zwire/profile</code> with <code>--load-extension</code> pointing at newtab + zpwrchrome + hud-internal, and <code>--extensions-on-chrome-urls</code> set (the internal-HUD skin runs on <code>chrome://*/*</code>). Only directories that contain a <code>manifest.json</code> are included, so a missing submodule degrades gracefully. "manifest present" is read from disk; "loaded by launcher" is <code>bin/zwire:40</code>. The <code>theme</code> extension ships in-tree but is deliberately <strong>not</strong> launcher-loaded &mdash; a static Chrome theme applies last and would override the fork's native color mixer (patch 0002) and the internal-HUD skin, so the launcher leaves it out. The internal-HUD 8-scheme picker persists via <code>chrome.storage</code> and bridges to a native host (<code>native/hud_host.py</code>).</p>
 
       <table class="file-table">
         <thead><tr><th>Directory</th><th>Manifest name</th><th class="num">manifest present</th><th class="num">loaded by launcher</th></tr></thead>
         <tbody>
-          <tr><td><code>newtab</code></td><td>zbrowser New Tab</td><td class="num yes">yes</td><td class="num yes">yes</td></tr>
+          <tr><td><code>newtab</code></td><td>zwire New Tab</td><td class="num yes">yes</td><td class="num yes">yes</td></tr>
           <tr><td><code>extensions/zpwrchrome</code></td><td>zpwrchrome</td><td class="num yes">yes</td><td class="num yes">yes</td></tr>
-          <tr><td><code>extensions/hud-internal</code></td><td>zbrowser HUD Internal</td><td class="num yes">yes</td><td class="num yes">yes</td></tr>
-          <tr><td><code>theme</code></td><td>zbrowser Cyberpunk</td><td class="num yes">yes</td><td class="num no">no</td></tr>
+          <tr><td><code>extensions/hud-internal</code></td><td>zwire HUD Internal</td><td class="num yes">yes</td><td class="num yes">yes</td></tr>
+          <tr><td><code>theme</code></td><td>zwire Cyberpunk</td><td class="num yes">yes</td><td class="num no">no</td></tr>
         </tbody>
       </table>
 
@@ -143,13 +143,13 @@
       <div class="doc-card">
         <h2>Runtime rebrand vs. source fork</h2>
         <p>A solo-maintained Chromium <strong>source</strong> fork means re-merging security patches against a codebase that changes daily &mdash; the maintenance trap that keeps Brave and ungoogled-chromium team-sized. So the default is the runtime rebrand: HUD new-tab + internal-HUD skin + your extensions on a prebuilt snapshot, upgraded by swapping one binary. The optional <code>fork/</code> path pays for whole-chrome restyling with a ~100&nbsp;GB checkout, ~150&nbsp;GB disk, a 1&ndash;4&nbsp;hr first build, and rebasing <code>fork/patches/</code> onto each tracked Chromium release.</p>
-        <p class="meta">Fork pipeline: <code>fork/fetch.sh</code> (depot_tools + checkout pinned tag) &rarr; <code>fork/apply-patches.sh SRC</code> &rarr; <code>fork/build.sh SRC</code> (<code>gn gen</code> + <code>autoninja chrome</code>, unbranded release via <code>args.gn</code>) &rarr; <code>fork/package.sh</code> (install as the zbrowser base + rebrand). Runtime state lives under <code>~/.zbrowser/</code>: <code>base/</code> (the Chromium binary), <code>base.path</code> / <code>base.version</code> (resolved binary + revision), <code>profile/</code> (dedicated user-data-dir &mdash; bookmarks, history, sessions).</p>
+        <p class="meta">Fork pipeline: <code>fork/fetch.sh</code> (depot_tools + checkout pinned tag) &rarr; <code>fork/apply-patches.sh SRC</code> &rarr; <code>fork/build.sh SRC</code> (<code>gn gen</code> + <code>autoninja chrome</code>, unbranded release via <code>args.gn</code>) &rarr; <code>fork/package.sh</code> (install as the zwire base + rebrand). Runtime state lives under <code>~/.zwire/</code>: <code>base/</code> (the Chromium binary), <code>base.path</code> / <code>base.version</code> (resolved binary + revision), <code>profile/</code> (dedicated user-data-dir &mdash; bookmarks, history, sessions).</p>
       </div>
 
     </main>
 
     <footer class="tutorial-main doc-footer" style="padding-top:0;">
-      MenkeTechnologies &middot; zbrowser engineering report &middot; Built with the stryke HUD design system
+      MenkeTechnologies &middot; zwire engineering report &middot; Built with the stryke HUD design system
     </footer>
   </div>
 

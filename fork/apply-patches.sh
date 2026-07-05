@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fork/apply-patches.sh — apply the zbrowser HUD patch series over a checked-out
+# fork/apply-patches.sh — apply the zwire HUD patch series over a checked-out
 # Chromium tree.
 #
 #   fork/apply-patches.sh SRC   [--reverse]

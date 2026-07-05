@@ -1,4 +1,4 @@
-/* zbrowser HUD Extensions manager — full chrome://extensions parity on
+/* zwire HUD Extensions manager — full chrome://extensions parity on
  * chrome.developerPrivate, built entirely from zgui-core widgets (ZGui.appShell
  * shell, ZGui.card, ZGui.button, ZGui.toggle, ZGui.fzf). */
 (function () {

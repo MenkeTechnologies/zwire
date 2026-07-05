@@ -1,4 +1,4 @@
-/* zbrowser HUD Settings — full chrome://settings reimplementation on
+/* zwire HUD Settings — full chrome://settings reimplementation on
  * chrome.settingsPrivate (allowlisted for our extension): every real pref is
  * rendered from getAllPrefs, grouped + filterable, with a zgui-core control per
  * type. Appearance hosts the 8-scheme picker (bridged to the native palette).

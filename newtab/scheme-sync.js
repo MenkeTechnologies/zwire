@@ -1,13 +1,13 @@
-/* zbrowser newtab scheme-follower — makes the new-tab page follow the shared
+/* zwire newtab scheme-follower — makes the new-tab page follow the shared
  * 8-scheme picker. Reads the active scheme from the native host (the single
- * source of truth, ~/.zbrowser/hud-scheme) and applies that palette's HUD vars
+ * source of truth, ~/.zwire/hud-scheme) and applies that palette's HUD vars
  * to :root, polling so it live-follows changes made on any chrome:// page. */
 (function () {
   'use strict';
-  var HUD = window.ZBROWSER_HUD || {};
+  var HUD = window.ZWIRE_HUD || {};
   var SCHEMES = HUD.SCHEMES || {};
   var VAR_KEYS = HUD.VAR_KEYS || [];
-  var HOST = 'com.zbrowser.hud';
+  var HOST = 'com.zwire.hud';
   var applied = null;
 
   function apply(name) {

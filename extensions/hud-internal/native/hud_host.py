@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""zbrowser HUD native-messaging host: writes the picked scheme to
-~/.zbrowser/hud-scheme so the native color mixer (compiled) can follow the
+"""zwire HUD native-messaging host: writes the picked scheme to
+~/.zwire/hud-scheme so the native color mixer (compiled) can follow the
 in-page 8-scheme picker live."""
 import sys, os, struct, json
 
@@ -26,7 +26,7 @@ def current_scheme(d):
         return 'cyberpunk'
 
 def main():
-    d = os.path.expanduser('~/.zbrowser')
+    d = os.path.expanduser('~/.zwire')
     os.makedirs(d, exist_ok=True)
     allowed = {'cyberpunk','midnight','matrix','ember','arctic','crimson','toxic','vapor'}
     while True:

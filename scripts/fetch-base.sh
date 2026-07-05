@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fetch-base.sh — download the base browser for zbrowser.
+# fetch-base.sh — download the base browser for zwire.
 #
 # Uses a plain Chromium continuous-build snapshot (Google-hosted): a real
 # Chromium/Blink build with NO "Google Chrome" product branding and NO "for
@@ -10,11 +10,11 @@
 #   scripts/fetch-base.sh [REVISION]
 #
 # REVISION defaults to the latest snapshot (LAST_CHANGE). The resolved binary
-# path is written to $ZBROWSER_STATE/base.path (read by bin/zbrowser); the
+# path is written to $ZWIRE_STATE/base.path (read by bin/zwire); the
 # revision is recorded in base.version for reproducibility.
 set -euo pipefail
 
-STATE=${ZBROWSER_STATE:-$HOME/.zbrowser}
+STATE=${ZWIRE_STATE:-$HOME/.zwire}
 BASE_DIR=$STATE/base
 mkdir -p "$BASE_DIR"
 

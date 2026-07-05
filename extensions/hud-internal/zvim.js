@@ -1,4 +1,4 @@
-/* zbrowser HUD — real-vim keybindings on every page.
+/* zwire HUD — real-vim keybindings on every page.
  * Normal mode by default; suppressed while typing in an editable field.
  *   scroll   j/k/d/u  h/l(horizontal)  gg/G(top/bottom)
  *   screen   H/M/L -> top/middle/bottom of the document (vim High/Mid/Low)

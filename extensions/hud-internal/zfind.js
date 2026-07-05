@@ -1,4 +1,4 @@
-/* zbrowser HUD — hijack Cmd/Ctrl+F on any page and show our own fzf filter bar
+/* zwire HUD — hijack Cmd/Ctrl+F on any page and show our own fzf filter bar
  * instead of Chrome's native find. Substring find-in-page (all occurrences,
  * navigable) with an fzf fuzzy fallback when there's no substring hit — the
  * same fzf engine as the sibling apps. Highlighting uses the CSS Custom
@@ -9,7 +9,7 @@
   if (window.__zbFindLoaded) return;            // guard against double-inject
   window.__zbFindLoaded = true;
 
-  var HUD = window.ZBROWSER_HUD || {};
+  var HUD = window.ZWIRE_HUD || {};
   var SCHEMES = HUD.SCHEMES || {};
   var VAR_KEYS = HUD.VAR_KEYS || [];
   var FZ = window.ZBFzf;

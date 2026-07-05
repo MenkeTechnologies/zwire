@@ -13,7 +13,7 @@ diff --git a/chrome/browser/ui/views/toolbar/toolbar_view.cc b/chrome/browser/ui
          *this, *browser_view_,
          /*primary_color=*/CustomCornersBackground::ToolbarTheme(),
          /*corner_color=*/CustomCornersBackground::FrameTheme()));
-+    // zbrowser HUD: neon cyan line under the toolbar.
++    // zwire HUD: neon cyan line under the toolbar.
 +    SetBorder(views::CreateSolidSidedBorder(
 +        gfx::Insets::TLBR(0, 0, 2, 0), kColorToolbarContentAreaSeparator));
    } else if (display_mode_ == DisplayMode::kCustomTab) {

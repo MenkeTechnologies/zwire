@@ -1,4 +1,4 @@
-/* zbrowser HUD — fzf-style fuzzy match + per-char highlight, shared by our
+/* zwire HUD — fzf-style fuzzy match + per-char highlight, shared by our
  * HUD pages and the Cmd+F filter bar. Algorithm/constants identical to
  * audio-haxor/frontend/js/utils.js (a.k.a. "ahxor") and zpwrchrome/lib/fzf.js,
  * so matching + highlighting behave the same across MenkeTechnologies tools.

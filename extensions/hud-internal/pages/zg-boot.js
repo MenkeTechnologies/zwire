@@ -1,12 +1,12 @@
-/* zbrowser HUD — shared zgui-core boot for every internal page.
+/* zwire HUD — shared zgui-core boot for every internal page.
  * Mounts ZGui.appShell (brand · filter · ⌘K palette · settings w/ colorscheme +
  * CRT/neon · shortcuts), wires the cross-page nav into the shell, and bridges
  * the zgui colorscheme picker to the native host so a pick repaints the whole
- * browser (~/.zbrowser/hud-scheme) + mirrors to storage for the content-script
+ * browser (~/.zwire/hud-scheme) + mirrors to storage for the content-script
  * theme. All UI comes from ZGui.* per the zgui-core-only rule. */
 (function () {
   'use strict';
-  var HOST = 'com.zbrowser.hud';
+  var HOST = 'com.zwire.hud';
 
   // Our own HUD pages (extension URLs) + the native chrome pages we can't rewrite.
   // DOWNLOADS points at the native page — zpwrchrome owns the download manager
@@ -23,7 +23,7 @@
     ['Inspect devices', 'chrome://inspect'], ['Net export', 'chrome://net-export'], ['Policy', 'chrome://policy'],
     ['Components', 'chrome://components'], ['All chrome:// pages', 'chrome://about'],
     ['Site settings', 'chrome://settings/content'], ['Chrome Web Store', 'https://chromewebstore.google.com/'],
-    ['zbrowser app store', 'https://menketechnologies.github.io/app-store/']];
+    ['zwire app store', 'https://menketechnologies.github.io/app-store/']];
 
   function isChromeUrl(t) { return t.indexOf('chrome://') === 0; }
   function isWebUrl(t) { return /^https?:\/\//.test(t); }
@@ -139,7 +139,7 @@
     // header: ZB // TITLE  +  ZGui.searchBox filter
     var header = el('header', 'zb-header');
     var inner = el('div', 'zb-header-inner');
-    inner.appendChild(el('div', 'zb-logo', '<span class="zb">ZB</span> <span class="ti">// ' + (opts.title || 'ZBROWSER') + '</span>'));
+    inner.appendChild(el('div', 'zb-logo', '<span class="zb">ZB</span> <span class="ti">// ' + (opts.title || 'ZWIRE') + '</span>'));
     var filterHost = el('div', 'zb-filter'); inner.appendChild(filterHost);
     header.appendChild(inner);
     // cross-page nav row

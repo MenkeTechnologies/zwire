@@ -1,17 +1,17 @@
-/* zbrowser HUD Internal — GLOBAL-THEME color for the chrome:// pages we can't
+/* zwire HUD Internal — GLOBAL-THEME color for the chrome:// pages we can't
  * rewrite (flags, discards, dns, password-manager, …).
  *
  * This is NOT the old HUD skin: it deliberately drops all the HUD decoration
  * (grid lattice, CRT scanlines, neon glow, floating picker). It only maps the
  * ACTIVE scheme's palette onto Chrome's WebUI color tokens + applies the mono
  * font, so these pages simply inherit the same theme the rest of the browser
- * uses — no HUD chrome on top. Scheme = ~/.zbrowser/hud-scheme (native source
+ * uses — no HUD chrome on top. Scheme = ~/.zwire/hud-scheme (native source
  * of truth), read via the background worker since content scripts can't call
  * sendNativeMessage.
  */
 (function () {
   'use strict';
-  var HUD = window.ZBROWSER_HUD || {};
+  var HUD = window.ZWIRE_HUD || {};
   var SCHEMES = HUD.SCHEMES || {};
   var VAR_KEYS = HUD.VAR_KEYS || [];
   var current = null;

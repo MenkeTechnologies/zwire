@@ -1,4 +1,4 @@
-/* zbrowser HUD: intercept Chrome's internal pages and swap in our own HUD pages.
+/* zwire HUD: intercept Chrome's internal pages and swap in our own HUD pages.
  * Runs at document_start so Chrome's WebUI never renders. Extend MAP to add pages. */
 (function () {
   // Only replace pages we can make FUNCTIONAL. Pages with no extension API

@@ -1,7 +1,7 @@
 /**
- * zbrowser docs — theme / CRT / neon / 8-scheme color toggles.
+ * zwire docs — theme / CRT / neon / 8-scheme color toggles.
  * Vendored from app-store/hud-theme.js (the shared HUD design system).
- * Storage keys live under the `zbrowser-hud-*` namespace so the zbrowser docs
+ * Storage keys live under the `zwire-hud-*` namespace so the zwire docs
  * and the other MenkeTechnologies Pages sites can't clobber each other on the
  * shared `menketechnologies.github.io` origin.
  */
@@ -9,10 +9,10 @@
   'use strict';
 
   var STORAGE = {
-    theme: 'zbrowser-hud-theme',
-    crt: 'zbrowser-hud-crt',
-    neon: 'zbrowser-hud-neon',
-    scheme: 'zbrowser-hud-scheme',
+    theme: 'zwire-hud-theme',
+    crt: 'zwire-hud-crt',
+    neon: 'zwire-hud-neon',
+    scheme: 'zwire-hud-scheme',
   };
 
   var SCHEME_VAR_KEYS = [

@@ -7,9 +7,9 @@ index de3f89a652..0f3be3fa00 100644
    --ref-palette-indigo100: rgb(255 255 255 / 100%);
  }
 +
-+/* zbrowser HUD: force the strykelang cyberpunk palette onto DevTools, overriding
++/* zwire HUD: force the strykelang cyberpunk palette onto DevTools, overriding
 + * the default grey dark theme. Appended last so these win the cascade. */
-+/* Scheme key-colors — active only when a zbrowser scheme is chosen in the
++/* Scheme key-colors — active only when a zwire scheme is chosen in the
 + * DevTools Theme dropdown (ThemeSupport sets data-zbhud on <html>). Default
 + * (cyberpunk) key-colors; only ~9 vars change per scheme. Without data-zbhud,
 + * DevTools' normal Light/Dark/Auto themes are untouched. */
@@ -77,7 +77,7 @@ index 35820fa4d6..2db05792d8 100644
        text: i18nLazyString(UIStrings.darkCapital),
        value: 'dark',
      },
-+    // zbrowser HUD cyberpunk schemes.
++    // zwire HUD cyberpunk schemes.
 +    {title: i18n.i18n.lockedLazyString('HUD · Cyberpunk'), text: i18n.i18n.lockedLazyString('HUD · Cyberpunk'), value: 'zbhud-cyberpunk'},
 +    {title: i18n.i18n.lockedLazyString('HUD · Midnight'), text: i18n.i18n.lockedLazyString('HUD · Midnight'), value: 'zbhud-midnight'},
 +    {title: i18n.i18n.lockedLazyString('HUD · Matrix'), text: i18n.i18n.lockedLazyString('HUD · Matrix'), value: 'zbhud-matrix'},
@@ -97,7 +97,7 @@ index 85bda316b0..840d4059d9 100644
  
      const useSystemPreferred = this.setting.get() === 'systemPreferred' || isForcedColorsMode;
      this.#themeName = useSystemPreferred ? systemPreferredTheme : this.setting.get();
-+    // zbrowser HUD: values like 'zbhud-matrix' are dark themes whose palette is
++    // zwire HUD: values like 'zbhud-matrix' are dark themes whose palette is
 +    // driven by [data-zbhud] in design_system_tokens.css.
 +    const zbMatch = /^zbhud-(.+)$/.exec(this.#themeName);
 +    if (zbMatch) {

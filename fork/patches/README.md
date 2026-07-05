@@ -1,4 +1,4 @@
-# zbrowser HUD patch map
+# zwire HUD patch map
 
 The whole-browser cyberpunk HUD look requires patching Chromium's native C++
 (Views) UI and recompiling — a Chrome theme extension cannot change tab shape,
@@ -22,7 +22,7 @@ running `fork/build.sh` — that is the gate for the native (Views) patches.
 | 0003 | **UI font** | `ui/base/resource/resource_bundle.cc` (`ResourceBundle::InitDefaultFontList`, the non-`SetDefaultFontDescription` `#else` branch) | Set `gfx::FontList::SetDefaultFontDescription("Share Tech Mono, Monaco, 13px")` so all native chrome UI text renders in the HUD mono face, with Monaco as a guaranteed-present fallback before Share Tech Mono is installed. | authored · apply-clean |
 | 0004 | **Toolbar neon border** | `chrome/browser/ui/views/toolbar/toolbar_view.cc` (`Init`, `kNormal` branch) | Add a 2px cyan bottom border via `views::CreateSolidSidedBorder(…, kColorToolbarContentAreaSeparator)`; the separator color itself is set neon cyan in 0002. | authored · apply-clean |
 | 0005 | **Omnibox field** | `chrome/browser/ui/views/location_bar/location_bar_view.cc` (`ComputeBorderRadius`) | Clamp the field radius to 2px so the omnibox is the sharp HUD field instead of the rounded pill. Background + border colors come from 0002. | authored · apply-clean |
-| 0006 | **Product strings** | `chrome/app/theme/chromium/BRANDING` | `Chromium` → `zbrowser` product names, `MenkeTechnologies` company, `com.menketechnologies.zbrowser` bundle id. This is the file the unbranded (`is_chrome_branded=false`) build reads. | authored · apply-clean |
+| 0006 | **Product strings** | `chrome/app/theme/chromium/BRANDING` | `Chromium` → `zwire` product names, `MenkeTechnologies` company, `com.menketechnologies.zwire` bundle id. This is the file the unbranded (`is_chrome_branded=false`) build reads. | authored · apply-clean |
 | 0007 | **DevTools theme** | DevTools front-end tree, 3 files: `front_end/design_system_tokens.css` (append), `front_end/entrypoints/main/main-meta.ts` (`ui-theme` setting), `front_end/ui/legacy/theme_support/ThemeSupport.ts` (`applyTheme`) | Add the 8 HUD schemes (cyberpunk · midnight · matrix · ember · arctic · crimson · toxic · vapor) to the DevTools **Theme** dropdown, default `zbhud-cyberpunk`. `ThemeSupport` maps `zbhud-<scheme>` onto the `dark` base and stamps `[data-zbhud=<scheme>]` on `<html>`; the appended CSS maps `--sys-color-*` onto per-scheme `--zb-*` key-colors. Without `data-zbhud`, stock Light/Dark/Auto are untouched. | authored · apply-clean |
 
 ## Rebasing onto a new Chromium release
