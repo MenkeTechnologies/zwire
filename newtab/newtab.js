@@ -73,6 +73,18 @@ function renderTiles() {
   }
 }
 
+// Chrome parks the cursor in the omnibox on the new tab and defeats the
+// <input autofocus>, so the page never receives keystrokes — the ⌘K palette
+// and typing both die until you click in. A JS .focus() reclaims focus where
+// the attribute can't (verified: it moves activeElement to #q), which routes
+// keys to the page again. Retried across the first frames + when the tab is
+// re-shown, with preventScroll so it never jumps the layout.
+function reclaimFocus() {
+  const q = document.getElementById("q");
+  if (!q) return;
+  try { q.focus({ preventScroll: true }); } catch (e) { try { q.focus(); } catch (e2) {} }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   tick();
   setInterval(tick, 1000);
@@ -81,4 +93,24 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     navigate(document.getElementById("q").value);
   });
+  // ⌘K / Ctrl+K while the search bar is focused must open the command palette,
+  // not beep. The document-level palette handler doesn't win when the input has
+  // focus here, so bind directly on the input in the CAPTURE phase and consume
+  // the key (preventDefault kills the macOS unhandled-key beep;
+  // stopImmediatePropagation stops the field seeing it).
+  const qEl = document.getElementById("q");
+  if (qEl) {
+    qEl.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key || "").toLowerCase() === "k") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (typeof window.__zbPaletteOpen === "function") window.__zbPaletteOpen();
+      }
+    }, true);
+  }
+  reclaimFocus();
+  requestAnimationFrame(reclaimFocus);
+  setTimeout(reclaimFocus, 60);
+  setTimeout(reclaimFocus, 200);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) reclaimFocus(); });
 });

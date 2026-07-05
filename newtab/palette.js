@@ -95,6 +95,16 @@
   }
   window.__zbPaletteOpen = openPalette;
 
+  // The new tab reserves ⌘K at the browser level, so no page keydown listener
+  // can catch it here. The hud-internal background worker owns ⌘K as a
+  // chrome.commands shortcut and, when this NTP is the active tab, sends us this
+  // message (allowed via externally_connectable) to open the palette.
+  try {
+    chrome.runtime.onMessageExternal.addListener(function (msg) {
+      if (msg && msg.type === 'zwireOpenPalette') { try { ZGui.palette.isOpen() ? ZGui.palette.close() : openPalette(); } catch (e) {} }
+    });
+  } catch (e) {}
+
   document.addEventListener('keydown', function (e) {
     var ae = document.activeElement || {};
     var inField = /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '') || ae.isContentEditable;

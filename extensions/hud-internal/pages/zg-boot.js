@@ -15,7 +15,7 @@
   var PAGES = [['EXTENSIONS', 'extensions.html'], ['SETTINGS', 'settings.html'],
     ['HISTORY', 'history.html'], ['DOWNLOADS', 'chrome://downloads'], ['BOOKMARKS', 'bookmarks.html'],
     ['CI', 'ci.html'], ['SHORTCUTS', 'keys.html'], ['EXT KEYS', 'extshortcuts.html'],
-    ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
+    ['COMMANDS', 'commands.html'], ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
   var NATIVE_PAGES = [['FLAGS', 'chrome://flags'], ['DISCARDS', 'chrome://discards'],
     ['DNS', 'chrome://net-internals/#dns'], ['GPU', 'chrome://gpu'], ['NET', 'chrome://net-internals']];
   // Extra palette-only destinations (not shown as nav buttons): more chrome://
@@ -25,6 +25,32 @@
     ['Components', 'chrome://components'], ['All chrome:// pages', 'chrome://about'],
     ['Site settings', 'chrome://settings/content'], ['Chrome Web Store', 'https://chromewebstore.google.com/'],
     ['zwire app store', 'https://menketechnologies.github.io/app-store/']];
+
+  // Custom ⌘K commands (zb_custom_cmds, managed on commands.html) also run from
+  // the internal HUD pages. Internal pages have chrome.tabs directly; browser
+  // actions route through the same zb_cmd storage bus the worker listens on.
+  function runCustomBoot(e, arg) {
+    var v = e.value || '';
+    if (e.type === 'shell') {
+      var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      try { if (window.zwireTermRun) window.zwireTermRun(c); else if (ZGui.toast) ZGui.toast('Open a web page to run shell commands'); } catch (x) {}
+      return;
+    }
+    if (e.type === 'js') { try { (new Function('q', v))(arg || ''); } catch (x) {} return; }
+    if (e.type === 'action') { try { chrome.storage.local.set({ zb_cmd: { a: v, n: 'boot' + Date.now() } }); } catch (x) {} return; }
+    if (e.type === 'scheme') {
+      try { chrome.runtime.sendNativeMessage(HOST, { scheme: v }, function () { void chrome.runtime.lastError; }); } catch (x) {}
+      try { chrome.storage.local.set({ zb_scheme: v }); if (ZGui.colorscheme) ZGui.colorscheme.apply(v); } catch (x) {}
+      return;
+    }
+    var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;
+    if (url) { try { chrome.tabs.create({ url: url }); } catch (x) { try { location.href = url; } catch (y) {} } }
+  }
+  function bootCustomItems(list) {
+    return (list || []).map(function (e) {
+      return { icon: e.icon || '✦', label: e.label, hint: e.keyword || e.type, run: function () { runCustomBoot(e, ''); } };
+    });
+  }
 
   function isChromeUrl(t) { return t.indexOf('chrome://') === 0; }
   function isWebUrl(t) { return /^https?:\/\//.test(t); }
@@ -183,6 +209,7 @@
       var openPal = function () {
         // open synchronously with nav commands (nav always works); append tabs after.
         try { ZGui.palette.clear(); ZGui.palette.register(pageItems); ZGui.palette.open(); } catch (e) {}
+        try { chrome.storage.local.get('zb_custom_cmds', function (o) { void chrome.runtime.lastError; try { ZGui.palette.register(bootCustomItems((o && o.zb_custom_cmds) || [])); var ipc = document.querySelector('.palette-input'); if (ipc) ipc.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
         try { frecentItems(function (fi) { try { ZGui.palette.register(fi); var inp2 = document.querySelector('.palette-input'); if (inp2) inp2.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
         try {
           chrome.tabs.query({}, function (tabs) {
@@ -211,6 +238,15 @@
         } catch (e) {}
       };
       window.__zbPaletteOpen = openPal;
+      // ⌘K arrives as a browser command routed by background.js (page keydown is
+      // consumed once the command owns the key). Open on the visible HUD page.
+      try {
+        chrome.runtime.onMessage.addListener(function (msg) {
+          if (msg && msg.type === 'zwireOpenPalette' && !document.hidden) {
+            try { ZGui.palette.isOpen() ? ZGui.palette.close() : openPal(); } catch (e) {}
+          }
+        });
+      } catch (e) {}
       document.addEventListener('keydown', function (e) {
         var ae = document.activeElement || {};
         var inField = /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '') || ae.isContentEditable;

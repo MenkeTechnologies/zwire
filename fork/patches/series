@@ -14,3 +14,5 @@
 #   side-by-side split was "fake" tmux; real N-pane tiling is the JS overlay
 #   (extensions/hud-internal/ztmux.js), which owns Ctrl-b. The old patch consumed
 #   the prefix + the next key before the page saw them (the "C-b %%" double-tap).
+0008-allow-framing.patch          # ancestor_throttle.cc -> allow framing any site (tmux iframes)
+0009-ext-command-focus-webcontents.patch  # extension_keybinding_registry_views.cc -> when an extension command fires while chrome UI (the omnibox/search bar) has focus, hand focus to the page web contents so the ⌘K palette overlay is typeable (VERIFIED @150.0.7871.46)

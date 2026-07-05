@@ -51,7 +51,12 @@
   // the value changes so onChanged always fires.
   var cmdN = 0;
   function cmd(obj) { try { obj.n = ++cmdN + '.' + (window.__zbTick = (window.__zbTick || 0) + 1); chrome.storage.local.set({ zb_cmd: obj }); } catch (e) {} }
-  function open(url) { cmd({ a: 'openTab', url: url }); }   // palette opens pages in a NEW tab
+  // When the tmux overlay is open, navigate the ACTIVE PANE (ztmux shares this
+  // top-frame world) instead of breaking out into a new browser tab.
+  function open(url) {
+    try { if (window.__zbTmuxIsOpen && window.__zbTmuxIsOpen() && window.__zbTmuxGo && window.__zbTmuxGo(url)) return; } catch (e) {}
+    cmd({ a: 'openTab', url: url });
+  }
   function extUrl(p) { return chrome.runtime.getURL('pages/' + p); }
   function setScheme(name) {
     try { chrome.runtime.sendMessage({ type: 'zbhud-scheme', scheme: name }); } catch (e) {}
@@ -61,7 +66,7 @@
   var PAGES = [['◈', 'Extensions', 'extensions.html'], ['⚙', 'Settings', 'settings.html'],
     ['◷', 'History', 'history.html'], ['★', 'Bookmarks', 'bookmarks.html'],
     ['⚡', 'CI runs', 'ci.html'], ['⌨', 'Shortcuts', 'keys.html'], ['⌨', 'Extension shortcuts', 'extshortcuts.html'],
-    ['⚉', 'System info', 'version.html']];
+    ['✦', 'Custom commands', 'commands.html'], ['⚉', 'System info', 'version.html']];
   var CHROME = [['+', 'New tab', 'chrome://newtab'], ['▼', 'Downloads', 'chrome://downloads'],
     ['⚑', 'Flags', 'chrome://flags'], ['✧', 'Discards', 'chrome://discards'],
     ['⌗', 'DNS', 'chrome://net-internals/#dns'], ['▤', 'GPU', 'chrome://gpu'],
@@ -177,6 +182,59 @@
     return out;
   }
 
+  /* ---- user-defined custom commands (zb_custom_cmds, managed on commands.html) --
+   * Each entry: { icon, label, detail, keyword, type, value }. type is one of
+   * url | shell | js | action | scheme. A keyword makes it arg-taking in the
+   * palette: typing `<keyword> <arg>` runs it with {q}=<arg>. */
+  var customCache = [];
+  function typeLabel(t) { return ({ url: 'open url', shell: 'shell', js: 'javascript', action: 'action', scheme: 'scheme' })[t] || 'custom'; }
+  function runAction(id) {
+    switch (id) {
+      case 'reload': try { location.reload(); } catch (e) {} break;
+      case 'copyUrl': clip(location.href); break;
+      case 'cycleScheme': cycleScheme(); break;
+      case 'toggleTerminal': try { if (window.toggleTerminalPopup) window.toggleTerminalPopup(); } catch (e) {} break;
+      case 'toggleStatusbar': try { chrome.storage.local.get('zb_status', function (o) { var on = !(o && o.zb_status === false); chrome.storage.local.set({ zb_status: !on }); }); } catch (e) {} break;
+      default: cmd({ a: id });   // newTab/newWindow/duplicateTab/reopenTab/closeTab/closeOthers/nextTab/prevTab/pinTab/muteTab
+    }
+  }
+  function runCustom(e, arg) {
+    var v = e.value || '';
+    if (e.type === 'shell') {
+      var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      try { if (window.zwireTermRun) window.zwireTermRun(c); } catch (x) {}
+      return;
+    }
+    if (e.type === 'js') {
+      try { (new Function('q', v))(arg || ''); } catch (err) { try { console.error('zwire custom js:', err); } catch (x) {} }
+      return;
+    }
+    if (e.type === 'action') { runAction(v); return; }
+    if (e.type === 'scheme') { setScheme(v); return; }
+    var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
+    if (url) open(url);
+  }
+  function customItems(list) {
+    return (list || []).map(function (e) {
+      return { icon: e.icon || '✦', label: e.label, detail: e.detail || (e.keyword ? e.keyword + ' …' : typeLabel(e.type)),
+        run: function () { runCustom(e, ''); } };
+    });
+  }
+  function customProvider(q) {
+    if (!q) return [];
+    var sp = q.indexOf(' ');
+    var kw = (sp > 0 ? q.slice(0, sp) : q).toLowerCase();
+    var rest = sp > 0 ? q.slice(sp + 1).trim() : '';
+    var out = [];
+    customCache.forEach(function (e) {
+      if (e.keyword && e.keyword.toLowerCase() === kw) {
+        out.push({ icon: e.icon || '✦', label: e.label + (rest ? ': ' + rest : ''), detail: e.detail || typeLabel(e.type),
+          run: function () { runCustom(e, rest); } });
+      }
+    });
+    return out;
+  }
+
   function tabItems(tabs) {
     return (tabs || []).map(function (t) {
       return { icon: '▣', label: 'Tab: ' + (t.title || t.url || '(tab)'), detail: t.url,
@@ -248,10 +306,11 @@
     schemeVars(injectStyle);
     // Open SYNCHRONOUSLY with the static commands so it never depends on an
     // async read — nav always works. Tabs (storage bus) are appended after.
-    try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(searchProvider); } ZGui.palette.open(); } catch (ex) {}
+    try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); } ZGui.palette.open(); } catch (ex) {}
     try {
-      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts'], function (o) {
+      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {
         void chrome.runtime.lastError;
+        try { customCache = (o && o.zb_custom_cmds) || []; ZGui.palette.register(customItems(customCache)); } catch (e) {}
         try { ZGui.palette.register(frecentItems(o && o.zb_frecent)); } catch (e) {}
         try { shortcutsCache = (o && o.zb_shortcuts) || []; } catch (e) {}
         try { ZGui.palette.register(extItems(o && o.zb_exts)); } catch (e) {}
@@ -261,6 +320,15 @@
     } catch (e) {}
   }
   window.__zbPaletteOpen = openPalette;   // vim mode ('o'/':') calls this
+
+  // ⌘K is a browser-level command (background.js) because pages like the new
+  // tab reserve it before page JS. The background worker routes it here for
+  // normal web pages via a message, since the page keydown may be consumed.
+  try {
+    chrome.runtime.onMessage.addListener(function (msg) {
+      if (msg && msg.type === 'zwireOpenPalette') { try { ZGui.palette.isOpen() ? ZGui.palette.close() : openPalette(); } catch (e) {} }
+    });
+  } catch (e) {}
 
   var paletteKey = 'k';   // ⌘/Ctrl + <key>, remappable via the Keyboard page (zb_keys.openPalette)
   try { chrome.storage.local.get('zb_keys', function (o) { void chrome.runtime.lastError; if (o && o.zb_keys && o.zb_keys.openPalette) paletteKey = o.zb_keys.openPalette; }); } catch (e) {}

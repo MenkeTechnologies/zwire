@@ -1,0 +1,31 @@
+diff --git a/content/browser/renderer_host/ancestor_throttle.cc b/content/browser/renderer_host/ancestor_throttle.cc
+index d007b254c4..5c37910a71 100644
+--- a/content/browser/renderer_host/ancestor_throttle.cc
++++ b/content/browser/renderer_host/ancestor_throttle.cc
+@@ -142,17 +142,22 @@ NavigationThrottle::ThrottleCheckResult AncestorThrottle::ProcessResponseImpl(
+       content_security_policies =
+           request->response()->parsed_headers->content_security_policy;
+ 
+-  // CSP: frame-ancestors is checked only for the final response.
++  // zwire: allow ANY site to be framed — the in-page tmux overlay tiles
++  // arbitrary pages in iframes, so X-Frame-Options / CSP frame-ancestors /
++  // embedding opt-in must not block sub-frames or the user hits Chrome's
++  // "This content is blocked" interstitial. The checks still run (console
++  // logging) but never block. Reliable where the extension DNR header-stripper
++  // misses (cached / service-worker / redirected responses).
+   if (is_response_check &&
+       EvaluateFrameAncestors(content_security_policies) == CheckResult::BLOCK) {
+-    return NavigationThrottle::BLOCK_RESPONSE;
++    return NavigationThrottle::PROCEED;
+   }
+ 
+   if (EvaluateXFrameOptions(logging) == CheckResult::BLOCK)
+-    return NavigationThrottle::BLOCK_RESPONSE;
++    return NavigationThrottle::PROCEED;
+ 
+   if (EvaluateEmbeddingOptIn(logging) == CheckResult::BLOCK)
+-    return NavigationThrottle::BLOCK_RESPONSE;
++    return NavigationThrottle::PROCEED;
+ 
+   return NavigationThrottle::PROCEED;
+ }

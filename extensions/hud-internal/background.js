@@ -58,6 +58,36 @@ seedFromNative();
 try { chrome.runtime.onStartup.addListener(seedFromNative); } catch (e) {}
 try { chrome.runtime.onInstalled.addListener(seedFromNative); } catch (e) {}
 
+// ⌘K command palette. The new-tab page reserves ⌘K at the browser level before
+// any page JS sees it (native + chrome.commands shortcuts fire there, page
+// keydown listeners don't), so a page-level listener can never open the palette
+// on the NTP. A chrome.commands shortcut DOES fire regardless of focus — but it
+// fires browser-wide and consumes ⌘K on every tab, so this becomes the single
+// owner of ⌘K and routes to whichever palette matches the active tab:
+//   normal web page   -> the zpalette content script (tabs.sendMessage)
+//   the new-tab page   -> the newtab extension's palette (cross-ext sendMessage)
+//   a HUD page         -> that page's zg-boot palette (runtime broadcast)
+var ZB_NEWTAB_ID = 'gpoepnekoiplhkegjpocnpeijiefgieb';
+try {
+  chrome.commands.onCommand.addListener(function (command) {
+    if (command !== 'open-palette') return;
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      void chrome.runtime.lastError;
+      var tab = tabs && tabs[0];
+      if (!tab) return;
+      var url = tab.url || tab.pendingUrl || '';
+      var selfPages = 'chrome-extension://' + chrome.runtime.id + '/pages/';
+      if (url.indexOf('chrome://newtab') === 0 || url.indexOf('chrome-extension://' + ZB_NEWTAB_ID + '/') === 0) {
+        try { chrome.runtime.sendMessage(ZB_NEWTAB_ID, { type: 'zwireOpenPalette' }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      } else if (url.indexOf(selfPages) === 0) {
+        try { chrome.runtime.sendMessage({ type: 'zwireOpenPalette' }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      } else if (tab.id != null) {
+        try { chrome.tabs.sendMessage(tab.id, { type: 'zwireOpenPalette' }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      }
+    });
+  });
+} catch (e) {}
+
 // System-stats stream: a persistent native-messaging port to hud_host.py, which
 // streams real machine stats (cpu/mem/net/…) every 2s into zb_sys for the
 // statusbar. The open port also keeps this MV3 worker alive.

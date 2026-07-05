@@ -664,3 +664,20 @@ window.toggleTerminalPopup = toggleTerminalPopup;
 window.showTerminal = showTerminal;
 window.hideTerminal = hideTerminal;
 window.killTerminal = killTerminal;
+// zwire — open the popup terminal (spawning the PTY if needed) and run a shell
+// command. Used by custom ⌘K commands (type "shell"). Polls for the session to
+// come alive so the very first run isn't dropped before the PTY exists.
+window.zwireTermRun = function (cmd) {
+    if (typeof cmd !== 'string' || !cmd) return;
+    showTerminal();
+    let tries = 0;
+    (function pump() {
+        if (_termSessionAlive && _termInstance) {
+            try { _termInstance.focus(); } catch (e) {}
+            Promise.resolve(TT.write(cmd + '\r')).catch(() => {});
+            return;
+        }
+        if (tries++ > 200) return;   // ~10s ceiling
+        setTimeout(pump, 50);
+    })();
+};

@@ -1,0 +1,50 @@
+diff --git a/chrome/browser/ui/views/extensions/extension_keybinding_registry_views.cc b/chrome/browser/ui/views/extensions/extension_keybinding_registry_views.cc
+index 2941e7f809..f1fdb2d11c 100644
+--- a/chrome/browser/ui/views/extensions/extension_keybinding_registry_views.cc
++++ b/chrome/browser/ui/views/extensions/extension_keybinding_registry_views.cc
+@@ -9,9 +9,12 @@
+ #include "chrome/browser/extensions/extension_keybinding_registry.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/extensions/accelerator_priority.h"
++#include "chrome/browser/ui/views/frame/browser_view.h"
++#include "content/public/browser/web_contents.h"
+ #include "extensions/common/extension.h"
+ #include "ui/base/accelerators/command.h"
+ #include "ui/views/focus/focus_manager.h"
++#include "ui/views/widget/widget.h"
+ 
+ ExtensionKeybindingRegistryViews::ExtensionKeybindingRegistryViews(
+     Profile* profile,
+@@ -70,7 +73,31 @@ void ExtensionKeybindingRegistryViews::OnShortcutHandlingSuspended(
+ 
+ bool ExtensionKeybindingRegistryViews::AcceleratorPressed(
+     const ui::Accelerator& accelerator) {
+-  return ExtensionKeybindingRegistry::NotifyEventTargets(accelerator);
++  const bool handled =
++      ExtensionKeybindingRegistry::NotifyEventTargets(accelerator);
++
++  // zwire: if an extension command fired while browser chrome (the omnibox /
++  // search bar) held keyboard focus, hand focus to the page's web contents.
++  // Otherwise an in-page overlay opened by the command — e.g. the ⌘K command
++  // palette — can't receive typing, because focus stays in the chrome UI.
++  // WebContents::Focus() is a no-op when the page already has focus, so the
++  // normal in-page shortcut path is unaffected.
++  if (handled) {
++    if (views::View* focused = focus_manager_->GetFocusedView()) {
++      if (views::Widget* widget = focused->GetWidget()) {
++        if (BrowserView* browser_view =
++                BrowserView::GetBrowserViewForNativeWindow(
++                    widget->GetNativeWindow())) {
++          if (content::WebContents* web_contents =
++                  browser_view->GetActiveWebContents()) {
++            web_contents->Focus();
++          }
++        }
++      }
++    }
++  }
++
++  return handled;
+ }
+ 
+ bool ExtensionKeybindingRegistryViews::CanHandleAccelerators() const {
