@@ -175,6 +175,16 @@ EOF
 cyber_ok "Info.plist // v${VERSION}"
 echo
 
+# Run-as-any-user: the .app lives in a shared /Applications but a SECOND user
+# must be able to read + execute every embedded file (the browser bundle, its
+# helpers, the native host, the extensions). rsync/cp can carry over restrictive
+# source modes (e.g. the extensions' `_metadata` dirs were drwx------), which
+# silently break a non-owner launch. Normalize: a+rX = world-read for files,
+# world-traverse for dirs, world-exec for anything already executable. Done
+# BEFORE codesign so the signature covers the final modes.
+chmod -R a+rX "$DEST"
+cyber_ok "perms // world-readable (runs as any user)"
+
 cyber_section "SEAL + REGISTER"
 codesign --force --sign - "$DEST" 2>/dev/null && cyber_ok "ad-hoc signed" \
   || cyber_warn "ad-hoc sign failed (icon may lag)"
