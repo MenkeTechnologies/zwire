@@ -123,9 +123,66 @@
     });
   }
 
+  /* ---- shared custom commands + keyword web-search (ZWIRE_PALETTE_CMDS) --------
+   * SAME source of truth as the HUD palette (extensions/hud-internal), so the two
+   * palettes list identical commands + rank them identically. newtab runs it with
+   * a direct-chrome backend (no worker): open = new tab; runCustom handles the
+   * page-doable command types (url/scheme/js + the local actions). Worker/native-
+   * only types (shell, tab-verb actions) are inert here — HUD-only by nature. */
+  var PC = window.ZWIRE_PALETTE_CMDS || {};
+  var customCache = [];
+  function typeLabel(t) { return PC.typeLabel ? PC.typeLabel(t) : 'custom'; }
+  function isDefaultCmd(e) { return PC.isDefaultCmd ? PC.isDefaultCmd(e) : false; }
+  function cycleScheme() {
+    var cur = document.documentElement.getAttribute('data-hud-scheme') || 'cyberpunk';
+    var i = ORDER.indexOf(cur); setScheme(ORDER[(i + 1 + ORDER.length) % ORDER.length] || ORDER[0]);
+  }
+  function runCustom(e, arg) {
+    var v = e.value || '';
+    if (e.type === 'scheme') { setScheme(v); return; }
+    if (e.type === 'js') { try { (new Function('q', v))(arg || ''); } catch (err) { try { console.error('zwire custom js:', err); } catch (x) {} } return; }
+    if (e.type === 'action') {
+      if (v === 'reload') { try { location.reload(); } catch (x) {} }
+      else if (v === 'copyUrl') { try { navigator.clipboard.writeText(location.href); } catch (x) {} }
+      else if (v === 'cycleScheme') { cycleScheme(); }
+      return;   // worker-backed tab verbs (newTab/closeTab/…) are HUD-only; inert here
+    }
+    if (e.type === 'shell') return;   // no terminal on the new tab page
+    var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
+    if (url) goCurrent(url);
+  }
+  var CMDCTX = { runCustom: runCustom, typeLabel: typeLabel, isDefaultCmd: isDefaultCmd };
+  var searchProvider = PC.makeSearchProvider ? PC.makeSearchProvider(goCurrent) : function () { return []; };
+  var customProvider = PC.makeCustomProvider ? PC.makeCustomProvider(function () { return customCache; }, CMDCTX) : function () { return []; };
+  function customItems(list) { return PC.makeCustomItems ? PC.makeCustomItems(list, CMDCTX) : []; }
+  // Seed the shipped defaults into THIS extension's storage (page-side, reliable)
+  // and hand back the full list — same seeder the HUD/Commands page uses.
+  function seedCustom(cb) {
+    try { if (window.zwireSeedCmds) { window.zwireSeedCmds(function (list) { customCache = list || []; cb(); }); return; } } catch (e) {}
+    customCache = []; cb();
+  }
+
   function openPalette() {
     ensureStyle();
-    try { ZGui.palette.clear(); ZGui.palette.register(items()); ZGui.palette.open(); } catch (e) {}
+    try {
+      ZGui.palette.clear();
+      ZGui.palette.register(items());
+      if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); }
+      ZGui.palette.open();
+    } catch (e) {}
+    // custom commands (personal + shipped defaults), tiered like the HUD palette
+    try {
+      seedCustom(function () {
+        try {
+          var userCmds = [], defCmds = [];
+          customCache.forEach(function (e) { (isDefaultCmd(e) ? defCmds : userCmds).push(e); });
+          if (ZGui.palette.setUserItems) ZGui.palette.setUserItems(customItems(userCmds));
+          else ZGui.palette.register(customItems(userCmds));
+          ZGui.palette.register(customItems(defCmds));
+          var inpc = document.querySelector('.palette-input'); if (inpc) inpc.dispatchEvent(new Event('input'));
+        } catch (e) {}
+      });
+    } catch (e) {}
     try { frecentItems(function (fi) { try { ZGui.palette.register(fi); var inpf = document.querySelector('.palette-input'); if (inpf) inpf.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
     try { tabItems(function (ti) { try { ZGui.palette.register(ti); var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {} }); } catch (e) {}
   }

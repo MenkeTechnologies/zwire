@@ -157,67 +157,9 @@
     ];
   }
 
-  // Keyword search (from zgo BUILTINS) + package registries. Each entry is
-  // [aliases, label, urlTemplate]. Typing a keyword (even alone) surfaces that
-  // destination FIRST: `crate`->crates.io, `crate serde`->crates.io/serde.
-  var SEARCH = [
-    [['g', 'google'], 'Google', 'https://www.google.com/search?q={q}'],
-    [['ddg'], 'DuckDuckGo', 'https://duckduckgo.com/?q={q}'],
-    [['gh', 'github'], 'GitHub', 'https://github.com/search?q={q}'],
-    [['yt', 'youtube'], 'YouTube', 'https://www.youtube.com/results?search_query={q}'],
-    [['mdn'], 'MDN', 'https://developer.mozilla.org/en-US/search?q={q}'],
-    [['so', 'stackoverflow'], 'Stack Overflow', 'https://stackoverflow.com/search?q={q}'],
-    [['wiki'], 'Wikipedia', 'https://en.wikipedia.org/w/index.php?search={q}'],
-    [['maps'], 'Google Maps', 'https://www.google.com/maps/search/{q}'],
-    // package registries
-    [['crate', 'crates', 'cargo', 'rust'], 'crates.io', 'https://crates.io/search?q={q}'],
-    [['npm', 'node'], 'npm', 'https://www.npmjs.com/search?q={q}'],
-    [['pip', 'pypi', 'python'], 'PyPI', 'https://pypi.org/search/?q={q}'],
-    [['gem', 'gems', 'ruby'], 'RubyGems', 'https://rubygems.org/search?query={q}'],
-    [['go', 'golang'], 'pkg.go.dev', 'https://pkg.go.dev/search?q={q}'],
-    [['hex', 'elixir'], 'Hex.pm', 'https://hex.pm/packages?search={q}'],
-    [['brew', 'formula'], 'Homebrew', 'https://formulae.brew.sh/formula/{q}'],
-    [['docker', 'hub'], 'Docker Hub', 'https://hub.docker.com/search?q={q}'],
-    [['am', 'amazon', 'amzn', 'ama'], 'Amazon', 'https://www.amazon.com/s?k={q}'],
-    [['reddit'], 'Reddit', 'https://www.reddit.com/search/?q={q}'],
-    [['twitter', 'x'], 'X / Twitter', 'https://twitter.com/search?q={q}'],
-    [['imdb'], 'IMDb', 'https://www.imdb.com/find/?q={q}'],
-    [['maps'], 'Google Maps', 'https://www.google.com/maps/search/{q}']
-  ];
-  function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
-  function searchProvider(q) {
-    if (!q) return [];
-    var out = [];
-    var sp = q.indexOf(' ');
-    var kw = (sp > 0 ? q.slice(0, sp) : q).toLowerCase();
-    var rest = sp > 0 ? q.slice(sp + 1).trim() : '';
-    // exact alias first; else prefix-match an alias or the destination name, so
-    // `git`->GitHub, `ama`->Amazon, `you`->YouTube, `cra`->crates.io — a known
-    // destination beats a raw web search.
-    var exact = SEARCH.filter(function (s) { return s[0].indexOf(kw) >= 0; })[0];
-    var hit = exact;
-    if (!hit && kw.length >= 2) {
-      hit = SEARCH.filter(function (s) {
-        return s[0].some(function (a) { return a.indexOf(kw) === 0; }) || slug(s[1]).indexOf(kw) === 0;
-      })[0];
-    }
-    if (hit) {
-      var url;
-      if (rest) url = hit[2].replace('{q}', encodeURIComponent(rest));
-      else { try { url = new URL(hit[2]).origin + '/'; } catch (e) { url = hit[2].replace('{q}', ''); } }
-      out.push({ icon: '⌕', label: hit[1] + (rest ? ': ' + rest : ''), detail: rest ? 'search' : 'open', top: !!exact, run: function () { open(url); } });
-      return out;   // exact keyword (am/gh/wa) pins to the very top; prefix stays strong
-    }
-    // url / domain? offer to open it directly.
-    if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(q) && q.indexOf(' ') < 0) {
-      out.push({ icon: '↗', label: 'Open ' + q, detail: 'go to site', run: function () { open(/^https?:\/\//.test(q) ? q : 'https://' + q); } });
-    }
-    // generic web fallback (Alfred-style) — Google + DDG for the raw query.
-    // fallback:true sinks these below any real command/tab/shortcut match.
-    out.push({ icon: '⌕', label: 'Google: ' + q, detail: 'web search', fallback: true, run: function () { open('https://www.google.com/search?q=' + encodeURIComponent(q)); } });
-    out.push({ icon: '⌕', label: 'DuckDuckGo: ' + q, detail: 'web search', fallback: true, run: function () { open('https://duckduckgo.com/?q=' + encodeURIComponent(q)); } });
-    return out;
-  }
+  // Keyword web-search registry + provider now live in the SHARED palette-cmds.js
+  // (ZWIRE_PALETTE_CMDS) so the HUD palette and the New Tab palette stay identical.
+  // searchProvider is wired below (after runCustom), bound to this page's open().
 
   /* ---- user-defined custom commands (zb_custom_cmds, managed on commands.html) --
    * Each entry: { icon, label, detail, keyword, type, value }. type is one of
@@ -256,26 +198,14 @@
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
     if (url) open(url);
   }
-  function customItems(list) {
-    return (list || []).map(function (e) {
-      return { icon: e.icon || '✦', label: e.label, detail: e.detail || (e.keyword ? e.keyword + ' …' : typeLabel(e.type)),
-        keyword: e.keyword || '', user: !isDefaultCmd(e), run: function () { runCustom(e, ''); } };
-    });
-  }
-  function customProvider(q) {
-    if (!q) return [];
-    var sp = q.indexOf(' ');
-    var kw = (sp > 0 ? q.slice(0, sp) : q).toLowerCase();
-    var rest = sp > 0 ? q.slice(sp + 1).trim() : '';
-    var out = [];
-    customCache.forEach(function (e) {
-      if (e.keyword && e.keyword.toLowerCase() === kw) {
-        out.push({ icon: e.icon || '✦', label: e.label + (rest ? ': ' + rest : ''), detail: e.detail || typeLabel(e.type), user: !isDefaultCmd(e), top: true,
-          run: function () { runCustom(e, rest); } });
-      }
-    });
-    return out;
-  }
+  // Custom-command rows, the exact-keyword provider, and the web-search provider
+  // all come from the SHARED palette-cmds.js (ZWIRE_PALETTE_CMDS), bound to this
+  // page's backend: open() (worker openTab bus) + runCustom() (worker/native).
+  var PC = window.ZWIRE_PALETTE_CMDS || {};
+  var CMDCTX = { runCustom: runCustom, typeLabel: typeLabel, isDefaultCmd: isDefaultCmd };
+  var searchProvider = PC.makeSearchProvider ? PC.makeSearchProvider(open) : function () { return []; };
+  function customItems(list) { return PC.makeCustomItems ? PC.makeCustomItems(list, CMDCTX) : []; }
+  var customProvider = PC.makeCustomProvider ? PC.makeCustomProvider(function () { return customCache; }, CMDCTX) : function () { return []; };
 
   function tabItems(tabs) {
     return (tabs || []).map(function (t) {
