@@ -15,6 +15,20 @@
   var view = 'list', detailId = null, query = '';
   var STORE_URL = 'https://chromewebstore.google.com/';
 
+  // zwire's own HUD extensions — the browser IS these. Disabling hud-internal
+  // kills the tiling overlay, ⌘K palette, and this very page; newtab and
+  // zpwrchrome are equally load-bearing. Each id is the deterministic
+  // SHA-256(DER public key) → first 16 bytes → a–p of the pinned `key` in that
+  // extension's manifest (extensions/hud-internal, newtab, extensions/zpwrchrome);
+  // it changes only if the manifest key changes. These are hidden from disable
+  // and remove so the workspace can't be bricked from its own manager.
+  var ZWIRE_INTERNAL = {
+    omcgnnjfmbmpdlofklbpddkhnfibfhgg: 1, // zwire HUD Internal
+    gpoepnekoiplhkegjpocnpeijiefgieb: 1, // zwire New Tab
+    hpppdchpnphmiijdeanibpcadgknmaja: 1  // zpwrchrome
+  };
+  function isInternal(e) { return !!ZWIRE_INTERNAL[e.id]; }
+
   function isExt(e) { return ['EXTENSION', 'LEGACY_PACKAGED_APP', 'HOSTED_APP', 'PLATFORM_APP'].indexOf(e.type) !== -1; }
   function enabled(e) { return e.state === 'ENABLED'; }
   function locLabel(e) { return { UNPACKED: 'Unpacked', FROM_STORE: 'Chrome Web Store', THIRD_PARTY: 'Third-party', INSTALLED_BY_DEFAULT: 'Default', UNKNOWN: 'Unknown' }[e.location] || e.location; }
@@ -103,8 +117,12 @@
       onClick: function () { dp.updateExtensionConfiguration({ extensionId: e.id, pinnedToToolbar: !e.pinnedToToolbar }, function () { void chrome.runtime.lastError; refresh(); }); } }));
     if (e.optionsPage) actions.push(ZGui.button({ label: 'OPTIONS', variant: 'mini', onClick: function () { openOptions(e); } }));
     if (profile.inDeveloperMode && e.location === 'UNPACKED') actions.push(ZGui.button({ label: 'RELOAD', variant: 'mini', onClick: function () { reload(e); } }));
-    if (e.userMayModify && !e.mustRemainInstalled) actions.push(ZGui.button({ label: 'REMOVE', variant: 'danger', onClick: function () { remove(e); } }));
-    if (e.userMayModify) actions.push(ZGui.toggle({ checked: enabled(e), onChange: function (on) { setEnabled(e, on); } }).el);
+    if (isInternal(e)) {
+      actions.push(el('span', 'xt-core-lock', '🔒 CORE'));
+    } else {
+      if (e.userMayModify && !e.mustRemainInstalled) actions.push(ZGui.button({ label: 'REMOVE', variant: 'danger', onClick: function () { remove(e); } }));
+      if (e.userMayModify) actions.push(ZGui.toggle({ checked: enabled(e), onChange: function (on) { setEnabled(e, on); } }).el);
+    }
     // app-store style card (ZGui.productCard)
     var pc = ZGui.productCard({
       thumb: e.iconUrl || null,
@@ -137,7 +155,8 @@
       '<div class="xt-dtitle"><div class="xt-dname">' + esc(e.name) + ' <span class="card-chip">v' + esc(e.version) + '</span></div>' +
       '<div class="p-cat">' + (enabled(e) ? 'ENABLED' : 'DISABLED') + ' · ' + esc(locLabel(e)) + '</div></div>';
     head.appendChild(el('span', 'grow'));
-    if (e.userMayModify) { var ht = ZGui.toggle({ checked: enabled(e), onChange: function (on) { setEnabled(e, on); } }); head.appendChild(ht.el); }
+    if (isInternal(e)) head.appendChild(el('span', 'xt-core-lock', '🔒 CORE'));
+    else if (e.userMayModify) { var ht = ZGui.toggle({ checked: enabled(e), onChange: function (on) { setEnabled(e, on); } }); head.appendChild(ht.el); }
     wrap.appendChild(cardSect(null, head));
 
     var perms = (e.permissions && e.permissions.simplePermissions) || [];
@@ -312,8 +331,8 @@
   }
 
   /* -------------------------------------------------------------- actions */
-  function setEnabled(e, on) { chrome.management.setEnabled(e.id, on, function () { void chrome.runtime.lastError; refresh(); }); }
-  function remove(e) { chrome.management.uninstall(e.id, { showConfirmDialog: true }, function () { void chrome.runtime.lastError; refresh(); }); }
+  function setEnabled(e, on) { if (isInternal(e)) return; chrome.management.setEnabled(e.id, on, function () { void chrome.runtime.lastError; refresh(); }); }
+  function remove(e) { if (isInternal(e)) return; chrome.management.uninstall(e.id, { showConfirmDialog: true }, function () { void chrome.runtime.lastError; refresh(); }); }
   function openOptions(e) { if (dp.showOptions) dp.showOptions(e.id); else if (e.optionsPage) chrome.tabs.create({ url: e.optionsPage.url }); }
   function reload(e) { dp.reload(e.id, { failQuietly: false, populateErrorForUnpacked: true }, function () { void chrome.runtime.lastError; refresh(); }); }
   function loadUnpacked() { dp.loadUnpacked({ failQuietly: true }, function () { void chrome.runtime.lastError; refresh(); }); }

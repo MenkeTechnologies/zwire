@@ -125,6 +125,9 @@
   color:var(--text-dim); background:var(--bg-secondary); text-decoration:none; }
 .xt-chip.link { border-color:var(--cyan); color:var(--cyan); }
 .xt-chip.warn { border-color:var(--accent); color:var(--accent); }
+.xt-core-lock { font-size:10px; letter-spacing:.5px; padding:2px 8px; border-radius:2px;
+  border:1px solid var(--cyan); color:var(--cyan); background:var(--bg-secondary); white-space:nowrap;
+  cursor:default; user-select:none; }
 .xt-perms { color:var(--text-dim); font-size:10.5px; opacity:.7; margin:2px 0 4px; word-break:break-word; }
 
 /* extension detail view */
