@@ -155,11 +155,28 @@
   var searchProvider = PC.makeSearchProvider ? PC.makeSearchProvider(goCurrent) : function () { return []; };
   var customProvider = PC.makeCustomProvider ? PC.makeCustomProvider(function () { return customCache; }, CMDCTX) : function () { return []; };
   function customItems(list) { return PC.makeCustomItems ? PC.makeCustomItems(list, CMDCTX) : []; }
-  // Seed the shipped defaults into THIS extension's storage (page-side, reliable)
-  // and hand back the full list — same seeder the HUD/Commands page uses.
+  // Custom commands live in hud-internal's storage (the Commands page writes
+  // there) and storage is per-extension, so pull the AUTHORITATIVE list from hud
+  // over cross-extension messaging — that includes user-added commands (e.g. a
+  // freshly added "aa"), not just the shipped defaults. Fall back to seeding the
+  // defaults into THIS extension's storage if hud's worker is unreachable (older
+  // hud without the bridge, or a suspended MV3 worker that never answers).
+  var HUD_ID = 'omcgnnjfmbmpdlofklbpddkhnfibfhgg';
   function seedCustom(cb) {
-    try { if (window.zwireSeedCmds) { window.zwireSeedCmds(function (list) { customCache = list || []; cb(); }); return; } } catch (e) {}
-    customCache = []; cb();
+    var done = false;
+    function local() {
+      if (done) return; done = true;
+      try { if (window.zwireSeedCmds) { window.zwireSeedCmds(function (list) { customCache = list || []; cb(); }); return; } } catch (e) {}
+      customCache = []; cb();
+    }
+    try {
+      chrome.runtime.sendMessage(HUD_ID, { type: 'zwireGetCmds' }, function (resp) {
+        if (done) return;
+        if (chrome.runtime.lastError || !resp || !Array.isArray(resp.cmds)) { local(); return; }
+        done = true; customCache = resp.cmds; cb();
+      });
+      setTimeout(local, 500);   // no reply (not allowed / worker asleep) -> local defaults
+    } catch (e) { local(); }
   }
 
   function openPalette() {

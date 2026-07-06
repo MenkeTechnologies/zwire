@@ -81,18 +81,38 @@
 
   function field(label, ctlEl, req) { return Z.field({ label: label, control: ctlEl, required: !!req }).el; }
 
+  // Icon field = the text input plus a "pick" button that opens zgui-core's
+  // emoji icon library (ZGui.iconPicker). Typing a glyph directly still works,
+  // so it degrades gracefully if the picker script isn't present.
+  function iconControl() {
+    if (!(Z.iconPicker && typeof Z.iconPicker.open === 'function')) return iconF.el;
+    var pick = el('button', 'zs-btn zb-cmd-iconpick', '▾'); pick.type = 'button'; pick.title = 'Choose icon';
+    pick.addEventListener('click', function () {
+      Z.iconPicker.open({ current: (iconF.get() || '').trim(), onPick: function (g) { iconF.set(g); } });
+    });
+    var wrap = el('div', 'zb-cmd-iconwrap'); wrap.appendChild(iconF.el); wrap.appendChild(pick);
+    return wrap;
+  }
+
+  function row(cells) { var r = el('div', 'zb-cmd-row'); cells.forEach(function (c) { r.appendChild(c); }); return r; }
+
   function buildForm() {
     rebuildValue('');
     var grid = el('div', 'zb-cmd-form');
-    grid.appendChild(field('Label', labelF.el, true));
-    grid.appendChild(field('Icon', iconF.el));
-    grid.appendChild(field('Type', typeSel.el, true));
-    grid.appendChild(field('Keyword', keywordF.el));
-    var valWrap = el('div', 'zb-cmd-full');
+    // Label grows, Icon is a narrow fixed field (it holds one glyph + picker).
+    var labelWrap = field('Label', labelF.el, true); labelWrap.className += ' zb-cmd-grow';
+    var iconWrap = field('Icon', iconControl()); iconWrap.className += ' zb-cmd-iconfield';
+    grid.appendChild(row([labelWrap, iconWrap]));
+    // Type + Keyword: two equal halves.
+    var typeWrap = field('Type', typeSel.el, true); typeWrap.className += ' zb-cmd-grow';
+    var kwWrap = field('Keyword', keywordF.el); kwWrap.className += ' zb-cmd-grow';
+    grid.appendChild(row([typeWrap, kwWrap]));
+    // Value + Detail: full width (a URL/command needs the room).
+    var valWrap = el('div');
     valWrap.appendChild(Z.field({ label: 'Value', control: valueHost, required: true }).el);
     valWrap.appendChild(valueHint);
     grid.appendChild(valWrap);
-    var detWrap = el('div', 'zb-cmd-full');
+    var detWrap = el('div');
     detWrap.appendChild(field('Detail', detailF.el));
     grid.appendChild(detWrap);
     var bar = el('div', 'zb-cmd-actions');
@@ -206,14 +226,21 @@
     if (document.getElementById('zb-cmd-css')) return;
     var s = el('style'); s.id = 'zb-cmd-css';
     s.textContent = [
-      '.zb-cmd-form{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin:8px 0 14px;}',
-      '.zb-cmd-full{grid-column:1 / -1;}',
+      '.zb-cmd-form{display:flex;flex-direction:column;gap:14px;margin:8px 0 14px;}',
+      '.zb-cmd-row{display:flex;gap:18px;align-items:flex-start;}',
+      '.zb-cmd-grow{flex:1 1 0;min-width:0;}',
+      '.zb-cmd-iconfield{flex:0 0 150px;}',
+      // zgui inputs default to the browser field width; make every control fill its field.
+      '.zb-cmd-form input,.zb-cmd-form select,.zb-cmd-form textarea{width:100%;box-sizing:border-box;}',
       '.zb-cmd-hint{font-size:11px;color:var(--text-muted,var(--text-dim));margin-top:6px;line-height:1.5;}',
+      '.zb-cmd-iconwrap{display:flex;gap:6px;align-items:stretch;}',
+      '.zb-cmd-iconwrap>*:first-child{flex:1 1 auto;min-width:0;text-align:center;}',
+      '.zb-cmd-iconpick{flex:0 0 36px;width:36px;padding:0;cursor:pointer;text-align:center;}',
       '.zb-cmd-actions{display:flex;gap:10px;}',
       '.zb-cmd-rowact{display:inline-flex;gap:6px;}',
       '.zb-cmd-val{font-family:"Share Tech Mono",Monaco,monospace;font-size:12px;color:var(--text);}',
       '.zb-cmd-empty{padding:14px 4px;}',
-      '@media(max-width:640px){.zb-cmd-form{grid-template-columns:1fr;}}'
+      '@media(max-width:640px){.zb-cmd-row{flex-direction:column;}.zb-cmd-iconfield{flex-basis:auto;}}'
     ].join('');
     (document.head || document.documentElement).appendChild(s);
   }

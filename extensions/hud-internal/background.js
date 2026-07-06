@@ -44,6 +44,19 @@ try {
   });
 } catch (e) {}
 
+// The New Tab page is a separate extension with isolated storage, but custom
+// commands (the Commands page) are written HERE. Serve the authoritative
+// zb_custom_cmds list on request so user-added commands appear in its palette
+// too — otherwise newtab only sees its own locally-seeded shipped defaults.
+try {
+  chrome.runtime.onMessageExternal.addListener(function (msg, sender, sendResponse) {
+    if (!sender || sender.id !== ZB_NEWTAB_ID || !msg || msg.type !== 'zwireGetCmds') return;
+    try { chrome.storage.local.get('zb_custom_cmds', function (o) { void chrome.runtime.lastError; sendResponse({ cmds: (o && o.zb_custom_cmds) || [] }); }); }
+    catch (e) { sendResponse({ cmds: [] }); }
+    return true; // async sendResponse
+  });
+} catch (e) {}
+
 // Seed storage from the native source of truth (the file may already hold a
 // scheme picked in a prior session or written before launch).
 function seedFromNative() {
