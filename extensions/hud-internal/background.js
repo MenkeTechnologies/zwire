@@ -65,6 +65,16 @@ function zbClearTermOpen() { try { chrome.storage.local.set({ zb_term_open: fals
 try { chrome.runtime.onStartup.addListener(zbClearTermOpen); } catch (e) {}
 try { chrome.runtime.onInstalled.addListener(zbClearTermOpen); } catch (e) {}
 
+// First run: open the HUD App Store page once and let it pop the welcome modal,
+// so the MenkeTechnologies app store is shown up front. reason 'install' only —
+// never on update or browser restart — so it fires just the first time.
+try {
+  chrome.runtime.onInstalled.addListener(function (d) {
+    if (!d || d.reason !== 'install') return;
+    try { chrome.tabs.create({ url: chrome.runtime.getURL('pages/store.html') + '?welcome=1' }); } catch (e) {}
+  });
+} catch (e) {}
+
 // Seed the ⌘K custom-command registry with a default rule set on FIRST RUN only.
 // `zb_custom_cmds` is a user-editable array (commands.html); seed it just when
 // the key has never been set, so we never clobber a user's edits/deletions.

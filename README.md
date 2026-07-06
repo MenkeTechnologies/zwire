@@ -31,7 +31,7 @@ workspace layered on top:
   never touches your system Chrome.
 
 The HUD layer (`extensions/hud-internal`) is ~5,400 lines of extension code
-across 11 subsystems and 12 pages. On top of it, an optional **9-patch C++
+across 11 subsystems and 13 pages. On top of it, an optional **9-patch C++
 fork** restyles the *native* chrome the extension layer can't reach.
 
 **Two build paths, same HUD workspace:**
@@ -91,15 +91,22 @@ the current layout with `Ctrl-b S`, attach a saved one with `Ctrl-b s`.
 (`zkeys` — jump / scroll / tabs / launch categories), a **find bar** (`zfind`),
 a **powerline status bar** (`zstatus`), and **HUD reimplementations** of
 `chrome://{extensions,settings,history,bookmarks,version}` plus Keyboard,
-Commands, Sessions, and CI pages — 12 in all. Every shortcut, and the tmux
-prefix itself, is remappable on the Keyboard page.
+Commands, Sessions, CI, and an **App Store** page — 13 in all. Every shortcut,
+and the tmux prefix itself, is remappable on the Keyboard page.
+
+**App Store (`pages/store.html`).** A HUD storefront tab for the
+**MenkeTechnologies app store** — the paid Rust desktop apps and audio plugins,
+each a `ZGui.productCard` linking to its live product page to buy. zwire is free
+and open source; this is its shop window. On **first run** (`onInstalled`),
+`background.js` opens this page once with a welcome modal, so the store is shown
+up front — the new-tab page stays untouched.
 
 ## `[0x02] ARCHITECTURE`
 
 | Layer | What it is |
 |---|---|
 | **Base** | Plain Chromium snapshot (pinned rev), downloaded by `scripts/fetch-base.sh` — or the compiled `fork/` build |
-| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zstatus`), the 8-scheme picker, and 12 HUD pages (incl. the Sessions manager + Keyboard remapper). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
+| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zstatus`), the 8-scheme picker, and 13 HUD pages (incl. the Sessions manager, Keyboard remapper + App Store). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension: the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |
 | **Theme** | `theme/` — a colors-only Chrome theme. Present but **not** launcher-loaded — the fork's native color mixer (patch 0002) and the HUD skin own the palette, and a static theme applies last and would override them |

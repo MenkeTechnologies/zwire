@@ -13,6 +13,7 @@
   // (its takeover cancels + reissues Chrome downloads), so a HUD downloads page
   // built on chrome.downloads.search would only show the cancelled stubs.
   var PAGES = [['EXTENSIONS', 'extensions.html'], ['SETTINGS', 'settings.html'],
+    ['APP STORE', 'store.html'],
     ['HISTORY', 'history.html'], ['DOWNLOADS', 'chrome://downloads'], ['BOOKMARKS', 'bookmarks.html'],
     ['CI', 'ci.html'], ['SHORTCUTS', 'keys.html'], ['EXT KEYS', 'extshortcuts.html'],
     ['COMMANDS', 'commands.html'], ['SESSIONS', 'sessions.html'], ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
