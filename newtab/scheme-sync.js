@@ -51,6 +51,17 @@
     } catch (e) {}
   }
 
+  // Instant path: the HUD pushes zb-scheme / zb-ui the moment they change, so we
+  // don't wait up to 1.5s for the next poll. The poll stays as a fallback.
+  var HUD_ID = 'omcgnnjfmbmpdlofklbpddkhnfibfhgg';
+  try {
+    chrome.runtime.onMessageExternal.addListener(function (msg, sender) {
+      if (!sender || sender.id !== HUD_ID || !msg) return;
+      if (msg.type === 'zb-scheme' && msg.scheme) apply(msg.scheme);
+      if (msg.type === 'zb-ui' && msg.ui) applyUi(msg.ui);
+    });
+  } catch (e) {}
+
   poll();
   setInterval(poll, 1500);
 })();

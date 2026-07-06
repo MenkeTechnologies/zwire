@@ -46,6 +46,11 @@ try {
       try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; sendResponse({ ui: (o && o.zb_ui) || {} }); }); } catch (e) { sendResponse({ ui: {} }); }
       return true; // async
     }
+    // zpwrchrome's own light toggle → set it globally (propagates to every surface
+    // via the zb_ui listener + native mirror + push back to zpwr).
+    if (msg.type === 'zb-ui-set' && typeof msg.light === 'boolean') {
+      try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui.light = msg.light; chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {}
+    }
   });
 } catch (e) {}
 
@@ -55,10 +60,17 @@ try {
 // too — otherwise newtab only sees its own locally-seeded shipped defaults.
 try {
   chrome.runtime.onMessageExternal.addListener(function (msg, sender, sendResponse) {
-    if (!sender || sender.id !== ZB_NEWTAB_ID || !msg || msg.type !== 'zwireGetCmds') return;
-    try { chrome.storage.local.get('zb_custom_cmds', function (o) { void chrome.runtime.lastError; sendResponse({ cmds: (o && o.zb_custom_cmds) || [] }); }); }
-    catch (e) { sendResponse({ cmds: [] }); }
-    return true; // async sendResponse
+    if (!sender || sender.id !== ZB_NEWTAB_ID || !msg) return;
+    if (msg.type === 'zwireGetCmds') {
+      try { chrome.storage.local.get('zb_custom_cmds', function (o) { void chrome.runtime.lastError; sendResponse({ cmds: (o && o.zb_custom_cmds) || [] }); }); }
+      catch (e) { sendResponse({ cmds: [] }); }
+      return true; // async sendResponse
+    }
+    // newtab palette flips a light/fx setting — newtab's storage is isolated, so
+    // it toggles HERE (the source of truth), which fans out to every surface.
+    if (msg.type === 'zb-ui-toggle' && msg.key) {
+      try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui[msg.key] = !ui[msg.key]; chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {}
+    }
   });
 } catch (e) {}
 
@@ -236,8 +248,22 @@ try {
   chrome.storage.onChanged.addListener(function (ch, area) {
     if (area === 'local' && ch.zb_ui && ch.zb_ui.newValue) {
       try { chrome.runtime.sendNativeMessage(HOST, { ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-      // Push to zpwrchrome (isolated storage) so its pages follow light mode too.
+      // Push to zpwrchrome + newtab (both isolated) so they flip INSTANTLY
+      // rather than waiting for zpwr's message / newtab's 1.5s native poll.
       try { chrome.runtime.sendMessage(ZPWR_ID, { type: 'zb-ui', ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      try { chrome.runtime.sendMessage(ZB_NEWTAB_ID, { type: 'zb-ui', ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    }
+  });
+} catch (e) {}
+// On worker start (e.g. after a browser relaunch) push the CURRENT light/fx state
+// to zpwrchrome — otherwise it only learns of a change, so an already-on light
+// mode never reaches it until the next toggle.
+try {
+  chrome.storage.local.get('zb_ui', function (o) {
+    void chrome.runtime.lastError;
+    if (o && o.zb_ui) {
+      try { chrome.runtime.sendMessage(ZPWR_ID, { type: 'zb-ui', ui: o.zb_ui }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      try { chrome.runtime.sendMessage(ZB_NEWTAB_ID, { type: 'zb-ui', ui: o.zb_ui }, function () { void chrome.runtime.lastError; }); } catch (e) {}
     }
   });
 } catch (e) {}

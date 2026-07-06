@@ -29,13 +29,18 @@
     'mark.fzf-hl{background:transparent;color:var(--cyan);font-weight:700;}'
   ].join('');
 
+  // Light-mode neutral overrides — the palette scopes the scheme vars to
+  // .palette-overlay, so merge these in when light mode is on (data-theme set by
+  // scheme-sync.js from the native ui) or the scoped dark neutrals stay dark.
+  var LIGHT_VARS = { '--bg-primary': '#f0f2f5', '--bg-secondary': '#e4e7ec', '--bg-card': '#ffffff', '--bg-hover': '#f7f8fa', '--text': '#1e293b', '--text-dim': '#475569', '--text-muted': '#94a3b8', '--border': '#cbd5e1', '--border-glow': '#a5b4c8' };
   function ensureStyle() {
-    if (styleEl) return;
-    styleEl = document.createElement('style');
+    if (!styleEl) { styleEl = document.createElement('style'); document.head.appendChild(styleEl); }
     var s = SCHEMES[(document.documentElement.getAttribute('data-hud-scheme')) || 'cyberpunk'] || SCHEMES.cyberpunk || { vars: {} };
-    var vars = ''; VAR_KEYS.forEach(function (k) { if (s.vars && s.vars[k]) vars += k + ':' + s.vars[k] + ';'; });
-    styleEl.textContent = '.palette-overlay{' + vars + '}' + PALETTE_CSS;
-    document.head.appendChild(styleEl);
+    var merged = {}, sv = s.vars || {}, k;
+    for (k in sv) merged[k] = sv[k];
+    if (document.documentElement.getAttribute('data-theme') === 'light') for (k in LIGHT_VARS) merged[k] = LIGHT_VARS[k];
+    var vars = ''; VAR_KEYS.forEach(function (kk) { if (merged[kk]) vars += kk + ':' + merged[kk] + ';'; });
+    styleEl.textContent = '.palette-overlay{' + vars + '}' + PALETTE_CSS;   // rebuilt each open → follows light toggles
   }
 
   function goCurrent(url) { chrome.tabs.create({ url: url }); }   // open in a NEW tab
@@ -90,9 +95,11 @@
     ['System', 'chrome://settings/system'],
     ['Reset settings', 'chrome://settings/reset']];
 
-  // HUD settings toggles live in chrome.storage 'zb_ui' (mirrored to the native
-  // file by the worker, so newtab/System follow). Flip them from here too.
-  function toggleUi(key) { try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui[key] = !ui[key]; chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {} }
+  // newtab's storage is isolated from the HUD, so flipping zb_ui here would be a
+  // no-op. Ask the HUD (the source of truth) to toggle it — it fans the change
+  // out to every surface (native file → our scheme-sync, content scripts, zpwr).
+  var HUD_ID_UI = 'omcgnnjfmbmpdlofklbpddkhnfibfhgg';
+  function toggleUi(key) { try { chrome.runtime.sendMessage(HUD_ID_UI, { type: 'zb-ui-toggle', key: key }, function () { void chrome.runtime.lastError; }); } catch (e) {} }
   var UI_TOGGLES = [['◐', 'Toggle light mode', 'light'], ['⌂', 'Toggle CRT scanlines', 'scanlines'],
     ['▣', 'Toggle bezel vignette', 'vignette'], ['✦', 'Toggle neon glow', 'glow'], ['⚡', 'Toggle animations', 'anim']];
 
