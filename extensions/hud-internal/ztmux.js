@@ -512,8 +512,8 @@
   }
 
   function normalizeUrl(v) {
-    v = (v || '').trim(); if (!v) return 'about:blank';
-    if (/^[a-z][a-z0-9+.\-]*:\/\//i.test(v) || v === 'about:blank') return v;   // any scheme incl. chrome-extension://
+    v = (v || '').trim(); if (!v || v === 'about:blank') return NEWTAB;   // fresh/blank pane => zwire new-tab, never about:blank
+    if (/^[a-z][a-z0-9+.\-]*:\/\//i.test(v)) return v;   // any scheme incl. chrome-extension://
     if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(v) && v.indexOf(' ') < 0) return 'https://' + v;
     return 'https://www.google.com/search?q=' + encodeURIComponent(v);
   }

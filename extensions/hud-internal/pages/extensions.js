@@ -15,19 +15,29 @@
   var view = 'list', detailId = null, query = '';
   var STORE_URL = 'https://chromewebstore.google.com/';
 
-  // zwire's own HUD extensions — the browser IS these. Disabling hud-internal
-  // kills the tiling overlay, ⌘K palette, and this very page; newtab and
-  // zpwrchrome are equally load-bearing. Each id is the deterministic
-  // SHA-256(DER public key) → first 16 bytes → a–p of the pinned `key` in that
-  // extension's manifest (extensions/hud-internal, newtab, extensions/zpwrchrome);
-  // it changes only if the manifest key changes. These are hidden from disable
-  // and remove so the workspace can't be bricked from its own manager.
+  // zwire's own HUD core — the browser IS these. Disabling hud-internal kills
+  // the tiling overlay, ⌘K palette, and this very page; newtab owns the start
+  // surface. These two are locked from disable/remove so the workspace can't be
+  // bricked from its own manager. zpwrchrome is a power-tool, not core — it is
+  // intentionally NOT here, so the user may disable/remove it like any add-on.
+  // Each id is the deterministic SHA-256(DER public key) → first 16 bytes → a–p
+  // of the pinned `key` in that extension's manifest (extensions/hud-internal,
+  // newtab); it changes only if the manifest key changes.
   var ZWIRE_INTERNAL = {
     omcgnnjfmbmpdlofklbpddkhnfibfhgg: 1, // zwire HUD Internal
-    gpoepnekoiplhkegjpocnpeijiefgieb: 1, // zwire New Tab
-    hpppdchpnphmiijdeanibpcadgknmaja: 1  // zpwrchrome
+    gpoepnekoiplhkegjpocnpeijiefgieb: 1  // zwire New Tab
   };
   function isInternal(e) { return !!ZWIRE_INTERNAL[e.id]; }
+
+  // zpwrchrome is a disable-able power-tool, but it is force-loaded via the
+  // launcher's --load-extension, which re-ENABLES it on every start. So a plain
+  // toggle wouldn't survive a restart; setEnabled() below also persists the
+  // choice in a kv marker (zwire/zpwr_off) that background.js re-applies on
+  // startup. REMOVE is pointless for it (it reappears next launch), so we offer
+  // only the disable toggle.
+  var HOST = 'com.zwire.hud';
+  var ZPWR_ID = 'hpppdchpnphmiijdeanibpcadgknmaja';
+  function isZpwr(e) { return e.id === ZPWR_ID; }
 
   function isExt(e) { return ['EXTENSION', 'LEGACY_PACKAGED_APP', 'HOSTED_APP', 'PLATFORM_APP'].indexOf(e.type) !== -1; }
   function enabled(e) { return e.state === 'ENABLED'; }
@@ -119,6 +129,10 @@
     if (profile.inDeveloperMode && e.location === 'UNPACKED') actions.push(ZGui.button({ label: 'RELOAD', variant: 'mini', onClick: function () { reload(e); } }));
     if (isInternal(e)) {
       actions.push(el('span', 'xt-core-lock', '🔒 CORE'));
+    } else if (isZpwr(e)) {
+      // Disable is allowed and persisted across restarts; REMOVE is not (it is
+      // reloaded by --load-extension every launch).
+      actions.push(ZGui.toggle({ checked: enabled(e), onChange: function (on) { setEnabled(e, on); } }).el);
     } else {
       if (e.userMayModify && !e.mustRemainInstalled) actions.push(ZGui.button({ label: 'REMOVE', variant: 'danger', onClick: function () { remove(e); } }));
       if (e.userMayModify) actions.push(ZGui.toggle({ checked: enabled(e), onChange: function (on) { setEnabled(e, on); } }).el);
@@ -331,7 +345,21 @@
   }
 
   /* -------------------------------------------------------------- actions */
-  function setEnabled(e, on) { if (isInternal(e)) return; chrome.management.setEnabled(e.id, on, function () { void chrome.runtime.lastError; refresh(); }); }
+  function setEnabled(e, on) {
+    if (isInternal(e)) return;
+    // Persist zpwrchrome's on/off across restarts (see the ZPWR_ID note): the
+    // launcher re-adds it enabled every start, so background.js re-applies this
+    // marker on startup. A missing marker == enabled.
+    if (isZpwr(e)) {
+      try {
+        chrome.runtime.sendNativeMessage(HOST, on
+          ? { cmd: 'kv_del', app: 'zwire', key: 'zpwr_off' }
+          : { cmd: 'kv_set', app: 'zwire', key: 'zpwr_off', value: true },
+          function () { void chrome.runtime.lastError; });
+      } catch (x) { void x; }
+    }
+    chrome.management.setEnabled(e.id, on, function () { void chrome.runtime.lastError; refresh(); });
+  }
   function remove(e) { if (isInternal(e)) return; chrome.management.uninstall(e.id, { showConfirmDialog: true }, function () { void chrome.runtime.lastError; refresh(); }); }
   function openOptions(e) { if (dp.showOptions) dp.showOptions(e.id); else if (e.optionsPage) chrome.tabs.create({ url: e.optionsPage.url }); }
   function reload(e) { dp.reload(e.id, { failQuietly: false, populateErrorForUnpacked: true }, function () { void chrome.runtime.lastError; refresh(); }); }

@@ -58,6 +58,25 @@ seedFromNative();
 try { chrome.runtime.onStartup.addListener(seedFromNative); } catch (e) {}
 try { chrome.runtime.onInstalled.addListener(seedFromNative); } catch (e) {}
 
+// zpwrchrome is force-loaded via the launcher's --load-extension, which
+// re-ENABLES it on every browser start. The extensions manager persists a user
+// disable as a kv marker (zwire/zpwr_off) in the native host's state dir; honour
+// it here on startup so the disable survives a restart, while zpwrchrome stays
+// visible + re-enable-able in the manager. Missing/false marker == leave enabled.
+function applyZpwrDisabled() {
+  try {
+    chrome.runtime.sendNativeMessage(HOST, { cmd: 'kv_get', app: 'zwire', key: 'zpwr_off' }, function (r) {
+      void chrome.runtime.lastError;
+      if (r && r.value === true) {
+        try { chrome.management.setEnabled(ZPWR_ID, false, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      }
+    });
+  } catch (e) {}
+}
+applyZpwrDisabled();
+try { chrome.runtime.onStartup.addListener(applyZpwrDisabled); } catch (e) {}
+try { chrome.runtime.onInstalled.addListener(applyZpwrDisabled); } catch (e) {}
+
 // The terminal's open state (zb_term_open) persists across navigation within a
 // session, but must NOT survive a browser restart / extension reload — a stale
 // "open" flag would re-pop the terminal on every page. Clear it on both.
