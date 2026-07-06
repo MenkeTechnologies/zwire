@@ -21,3 +21,4 @@
 0012-allow-frame-src.patch          # navigation_request.cc -> a host page CSP frame-src/child-src never blocks a sub-frame nav (tmux iframes embed any site) (VERIFIED @150.0.7871.46)
 0013-default-restore-last-session.patch  # session_startup_pref.cc -> default startup = restore last session (auto-restore tabs)
 0014-no-session-crashed-bubble.patch    # session_crashed_bubble_view.cc -> never show the "Restore pages?" crash bubble (auto-restore instead)
+0015-no-navigation-block.patch       # extension_navigation_throttle.cc -> never block a chrome-extension:// nav for a not-yet-registered extension (startup NTP-override page)

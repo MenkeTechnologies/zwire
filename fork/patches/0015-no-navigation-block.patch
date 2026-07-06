@@ -1,0 +1,23 @@
+diff --git a/extensions/browser/extension_navigation_throttle.cc b/extensions/browser/extension_navigation_throttle.cc
+index 2731b64294..21c0ed389e 100644
+--- a/extensions/browser/extension_navigation_throttle.cc
++++ b/extensions/browser/extension_navigation_throttle.cc
+@@ -218,11 +218,14 @@ ExtensionNavigationThrottle::WillStartOrRedirectRequest() {
+     return content::NavigationThrottle::PROCEED;
+   }
+ 
+-  // If the navigation is to an unknown or disabled extension, block it.
++  // zwire: never block a chrome-extension:// navigation just because the target
++  // extension isn't in the enabled set *yet*. At startup the newtab NTP-override
++  // page is navigated (first/restored tab) before the extension has finished
++  // registering; blocking it flashed "This content is blocked" / fell back to
++  // the Google NTP. Let it PROCEED — the extension protocol handler serves the
++  // page once the extension is ready.
+   if (!target_extension) {
+-    // TODO(nick): This yields an unsatisfying error page; use a different error
+-    // code once that's supported. https://crbug.com/40486262
+-    return content::NavigationThrottle::BLOCK_REQUEST;
++    return content::NavigationThrottle::PROCEED;
+   }
+   CHECK(target_extension);
+ 

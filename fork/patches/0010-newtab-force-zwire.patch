@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/search/search.cc b/chrome/browser/search/search.cc
-index 398e67f9cb..2adc007543 100644
+index 398e67f9cb..8eda8a2fe5 100644
 --- a/chrome/browser/search/search.cc
 +++ b/chrome/browser/search/search.cc
 @@ -14,6 +14,7 @@
@@ -10,45 +10,44 @@ index 398e67f9cb..2adc007543 100644
  #include "chrome/browser/search_engines/template_url_service_factory.h"
  #include "chrome/browser/search_engines/ui_thread_search_terms_data.h"
  #include "chrome/browser/supervised_user/supervised_user_url_filtering_service_factory.h"
-@@ -373,16 +374,33 @@ std::optional<GURL> GetEffectiveURLForInstant(const GURL& url,
+@@ -373,16 +374,32 @@ std::optional<GURL> GetEffectiveURLForInstant(const GURL& url,
  
  bool HandleNewTabURLRewrite(GURL* url,
                              content::BrowserContext* browser_context) {
 -  if (!IsInstantExtendedAPIEnabled()) {
--    return false;
--  }
--
-   if (!(url->SchemeIs(content::kChromeUIScheme) &&
-         url->GetHost() == chrome::kChromeUINewTabHost)) {
++  if (!(url->SchemeIs(content::kChromeUIScheme) &&
++        (url->GetHost() == chrome::kChromeUINewTabHost ||
++         url->GetHost() == chrome::kChromeUINewTabPageHost))) {
      return false;
    }
  
-   Profile* profile = Profile::FromBrowserContext(browser_context);
+-  if (!(url->SchemeIs(content::kChromeUIScheme) &&
+-        url->GetHost() == chrome::kChromeUINewTabHost)) {
++  Profile* profile = Profile::FromBrowserContext(browser_context);
 +
 +  // zbrowser: the New Tab page is ALWAYS the zwire newtab extension — never the
-+  // default WebUI/Google NTP. This kicks in when chrome://newtab reaches here
-+  // unhandled (the extension's own chrome_url_overrides didn't win, e.g. a
-+  // startup race). The ID is pinned by the newtab extension's manifest key. If
-+  // the extension isn't loaded yet, fall through to the stock behavior.
-+  {
-+    constexpr char kZwireNewTabId[] = "gpoepnekoiplhkegjpocnpeijiefgieb";
-+    extensions::ExtensionRegistry* registry =
-+        extensions::ExtensionRegistry::Get(profile);
-+    if (registry && registry->enabled_extensions().GetByID(kZwireNewTabId)) {
-+      *url = GURL(std::string("chrome-extension://") + kZwireNewTabId +
-+                  "/newtab.html");
-+      return true;
-+    }
++  // default WebUI/Google NTP. Redirect BOTH chrome://newtab and
++  // chrome://new-tab-page UNCONDITIONALLY (don't gate on an extension-registry
++  // snapshot: at startup it races the extension's registration, which leaked the
++  // Google NTP into the first/restored tab). The ID is pinned by the newtab
++  // extension's manifest key and its newtab.html is web-accessible; the
++  // reverse-rewrite keeps the omnibox showing chrome://newtab. Skip incognito,
++  // where the extension may not run.
++  if (profile && !profile->IsOffTheRecord()) {
++    *url = GURL(
++        "chrome-extension://gpoepnekoiplhkegjpocnpeijiefgieb/newtab.html");
++    return true;
 +  }
 +
 +  if (!IsInstantExtendedAPIEnabled()) {
-+    return false;
-+  }
-+
+     return false;
+   }
+ 
+-  Profile* profile = Profile::FromBrowserContext(browser_context);
    NewTabURLDetails details(NewTabURLDetails::ForProfile(profile));
    UMA_HISTOGRAM_ENUMERATION("NewTabPage.URLState", details.state,
                              NEW_TAB_URL_MAX);
-@@ -395,6 +413,14 @@ bool HandleNewTabURLRewrite(GURL* url,
+@@ -395,6 +412,14 @@ bool HandleNewTabURLRewrite(GURL* url,
  
  bool HandleNewTabURLReverseRewrite(GURL* url,
                                     content::BrowserContext* browser_context) {
