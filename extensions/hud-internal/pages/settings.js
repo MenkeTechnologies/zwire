@@ -20,6 +20,10 @@
     try { if (ZGui.colorscheme) ui.light = !!ZGui.colorscheme.isLight(); } catch (e) {}
     try { if (ZGui.fx) { var a = ZGui.fx.all(); ui.scanlines = a.scanlines; ui.vignette = a.vignette; ui.glow = a.glow; ui.anim = a.anim; } } catch (e) {}
     ZBHUD.publishUi(ui);
+    // Mirror to chrome.storage so CONTENT-SCRIPT surfaces (⌘K palette, statusbar,
+    // tmux on web pages) can honor light mode — localStorage doesn't cross into
+    // the page origin, but chrome.storage does.
+    try { chrome.storage.local.set({ zb_ui: ui }); } catch (e) {}
   }
   function labelOf(key) { var p = key.split('.'); return pretty(p.slice(-2).join(' ')); }
 
@@ -130,6 +134,18 @@
       render();
     });
     if (sp.onPrefsChanged) sp.onPrefsChanged.addListener(function (changed) { mergeChanged(changed); render(); });
+    // Keep the light/effect SWITCHES in sync when the state is changed elsewhere
+    // (⌘K palette command, another surface): reconcile ZGui state to zb_ui, then
+    // re-render so the toggles reflect it. Without this the switch went stale.
+    try {
+      chrome.storage.onChanged.addListener(function (ch, area) {
+        if (area !== 'local' || !ch.zb_ui) return;
+        var ui = ch.zb_ui.newValue || {};
+        try { if (ZGui.colorscheme && ZGui.colorscheme.setLight && typeof ui.light === 'boolean' && ZGui.colorscheme.isLight() !== ui.light) ZGui.colorscheme.setLight(ui.light); } catch (e) {}
+        try { if (ZGui.fx && ZGui.fx.set) ['scanlines', 'vignette', 'glow', 'anim'].forEach(function (n) { if (typeof ui[n] === 'boolean' && ZGui.fx.get(n) !== ui[n]) ZGui.fx.set(n, ui[n]); }); } catch (e) {}
+        render();
+      });
+    } catch (e) {}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

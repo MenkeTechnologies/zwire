@@ -78,6 +78,23 @@ cyber_status "COPY" "browser bundle (~$(du -sh "$BASE_APP" | awk '{print $1}')) 
 cp -R "$BASE_APP" "$RES/browser/"
 cyber_ok "browser -> Resources/browser/$APP_DIRNAME"
 
+# 1b) Rebrand the NESTED browser bundle. It — not the outer wrapper — is the
+# process macOS actually runs (the launcher exec's its binary), so the Dock,
+# ⌘-Tab switcher, and notification icon come from ITS name/icon. The fork build
+# ships as "zbrowser" with the stock Chromium icon; rename it to zwire and point
+# it at our icns. (The About/Quit MENU ITEMS come from the compiled product name
+# and still need a branded rebuild — this fixes everything the bundle controls.)
+NESTED="$RES/browser/$APP_DIRNAME"; NPL="$NESTED/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName zwire" "$NPL" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName zwire" "$NPL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string zwire" "$NPL" 2>/dev/null || true
+if [[ -f "$ICON" ]]; then
+  cp "$ICON" "$NESTED/Contents/Resources/zwire.icns"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile zwire" "$NPL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string zwire" "$NPL"
+  /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$NPL" 2>/dev/null || true
+fi
+codesign --force --sign - "$NESTED" >/dev/null 2>&1 || cyber_warn "nested rebrand re-sign failed"
+cyber_ok "rebrand // nested browser -> zwire (name + icon)"
+
 # 2) the extensions (skip node_modules/.git/tests to stay lean; skip _metadata —
 #    it's a dev-profile-specific compiled index Chromium regenerates per-user at
 #    launch, so bundling it is dead weight that never gets loaded).

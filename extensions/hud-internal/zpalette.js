@@ -35,9 +35,20 @@
     'mark.fzf-hl{background:transparent;color:var(--cyan);font-weight:700;}'
   ].join('');
 
+  // Light-mode neutral overrides (from cyberpunk.css [data-theme=light]). The
+  // palette scopes the scheme vars to .palette-overlay, so we must merge these in
+  // HERE — otherwise the scoped dark neutrals beat theme.js's document-level light.
+  var LIGHT_VARS = { '--bg-primary': '#f0f2f5', '--bg-secondary': '#e4e7ec', '--bg-card': '#ffffff', '--bg-hover': '#f7f8fa', '--text': '#1e293b', '--text-dim': '#475569', '--text-muted': '#94a3b8', '--border': '#cbd5e1', '--border-glow': '#a5b4c8' };
   function schemeVars(cb) {
-    try { chrome.storage.local.get('zb_scheme', function (o) { var s = SCHEMES[(o && o.zb_scheme) || 'cyberpunk'] || SCHEMES.cyberpunk || { vars: {} }; cb(s.vars || {}); }); }
-    catch (e) { cb((SCHEMES.cyberpunk || { vars: {} }).vars || {}); }
+    try {
+      chrome.storage.local.get(['zb_scheme', 'zb_ui'], function (o) {
+        var s = SCHEMES[(o && o.zb_scheme) || 'cyberpunk'] || SCHEMES.cyberpunk || { vars: {} };
+        var vars = {}, sv = s.vars || {}, k;
+        for (k in sv) vars[k] = sv[k];
+        if (o && o.zb_ui && o.zb_ui.light) for (k in LIGHT_VARS) vars[k] = LIGHT_VARS[k];
+        cb(vars);
+      });
+    } catch (e) { cb((SCHEMES.cyberpunk || { vars: {} }).vars || {}); }
   }
   function injectStyle(v) {
     var vars = '';
@@ -154,9 +165,17 @@
       { icon: '⤓', label: 'Copy as Markdown', detail: 'this page', run: function () { clip('[' + document.title + '](' + location.href + ')'); } },
       { icon: '⌥', label: 'Toggle terminal', detail: 'Ctrl+`', run: function () { try { if (window.toggleTerminalPopup) window.toggleTerminalPopup(); } catch (e) {} } },
       { icon: '◐', label: 'Cycle color scheme', run: cycleScheme },
+      { icon: '◐', label: 'Toggle light mode', detail: 'setting', run: function () { toggleUi('light'); } },
+      { icon: '⌂', label: 'Toggle CRT scanlines', detail: 'setting', run: function () { toggleUi('scanlines'); } },
+      { icon: '▣', label: 'Toggle bezel vignette', detail: 'setting', run: function () { toggleUi('vignette'); } },
+      { icon: '✦', label: 'Toggle neon glow', detail: 'setting', run: function () { toggleUi('glow'); } },
+      { icon: '⚡', label: 'Toggle animations', detail: 'setting', run: function () { toggleUi('anim'); } },
       { icon: '▭', label: 'Toggle HUD statusbar', run: function () { try { chrome.storage.local.get('zb_status', function (o) { var on = !(o && o.zb_status === false); chrome.storage.local.set({ zb_status: !on }); }); } catch (e) {} } }
     ];
   }
+  // Settings live in chrome.storage 'zb_ui' (mirrored from the HUD settings) so a
+  // content-script palette can flip them; theme.js/newtab react via onChanged.
+  function toggleUi(key) { try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui[key] = !ui[key]; chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {} }
 
   // Keyword web-search registry + provider now live in the SHARED palette-cmds.js
   // (ZWIRE_PALETTE_CMDS) so the HUD palette and the New Tab palette stay identical.

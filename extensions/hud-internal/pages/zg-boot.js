@@ -183,6 +183,27 @@
   function mount(opts) {
     opts = opts || {};
     var crtCtl = null;
+    // Restore the persisted light/dark preference (themeLight) BEFORE the scheme
+    // is applied — this custom mount (not ZGui.appShell) never called load(), so
+    // light mode was set, saved, then dropped on every reload. load() sets
+    // data-theme from themeLight; the native-scheme pull() below then re-applies
+    // the scheme respecting it, so light survives refresh.
+    try { if (window.ZGui && ZGui.colorscheme && ZGui.colorscheme.load) ZGui.colorscheme.load(); } catch (e) {}
+    // Reconcile with the cross-surface truth (zb_ui): a palette on ANY surface
+    // (web page, newtab) toggles zb_ui; honor it here so HUD pages follow, then
+    // mirror the reconciled state back out. This makes light + fx consistent
+    // everywhere regardless of where the toggle happened.
+    try {
+      chrome.storage.local.get('zb_ui', function (o) {
+        void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}, cs = window.ZGui && ZGui.colorscheme, fx = window.ZGui && ZGui.fx;
+        try { if (cs && cs.setLight && typeof ui.light === 'boolean' && cs.isLight() !== ui.light) cs.setLight(ui.light); } catch (e) {}
+        try { if (fx && fx.set) ['scanlines', 'vignette', 'glow', 'anim'].forEach(function (n) { if (typeof ui[n] === 'boolean' && fx.get(n) !== ui[n]) fx.set(n, ui[n]); }); } catch (e) {}
+        var out = {};
+        try { if (cs && cs.isLight) out.light = !!cs.isLight(); } catch (e) {}
+        try { if (fx && fx.all) { var a = fx.all(); out.scanlines = a.scanlines; out.vignette = a.vignette; out.glow = a.glow; out.anim = a.anim; } } catch (e) {}
+        try { chrome.storage.local.set({ zb_ui: out }); } catch (e) {}
+      });
+    } catch (e) {}
     injectCss();
     var root = document.getElementById('app') || document.body;
     var app = el('div', 'zb-app');
@@ -217,10 +238,32 @@
     // ⌘K / : command palette (ZGui.palette): cross-page nav + this page's
     // commands + every open tab (so it doubles as a tab switcher).
     if (ZGui.palette) {
+      // Mirror light + fx state to chrome.storage (content-script surfaces read it)
+      // and to the native file (newtab reads it), after any settings command.
+      function mirrorUi() {
+        try {
+          var ui = {};
+          if (ZGui.colorscheme && ZGui.colorscheme.isLight) ui.light = !!ZGui.colorscheme.isLight();
+          if (ZGui.fx && ZGui.fx.all) { var a = ZGui.fx.all(); ui.scanlines = a.scanlines; ui.vignette = a.vignette; ui.glow = a.glow; ui.anim = a.anim; }
+          chrome.storage.local.set({ zb_ui: ui });
+          if (window.ZBHUD && ZBHUD.publishUi) ZBHUD.publishUi(ui);
+        } catch (e) {}
+      }
+      function isLight() { try { return !!(ZGui.colorscheme && ZGui.colorscheme.isLight && ZGui.colorscheme.isLight()); } catch (e) { return false; } }
+      function fxState(n) { try { return !!(ZGui.fx && ZGui.fx.get && ZGui.fx.get(n)); } catch (e) { return false; } }
+      function fxCmd(name, label, icon) { return { icon: icon, label: label + '  (' + (fxState(name) ? 'on' : 'off') + ')', hint: 'setting', run: function () { try { if (ZGui.fx) ZGui.fx.toggle(name); mirrorUi(); } catch (e) {} } }; }
+      var SCHEMES = [['cyberpunk', 'Cyberpunk'], ['midnight', 'Midnight'], ['matrix', 'Matrix'], ['ember', 'Ember'], ['arctic', 'Arctic'], ['crimson', 'Crimson'], ['toxic', 'Toxic'], ['vapor', 'Vapor']];
       var hudCmds = [
-        { icon: '⌂', label: 'Toggle CRT scanlines', hint: 'HUD', run: function () { try { var on = ZGui.fx ? ZGui.fx.toggle('scanlines') : (crtCtl ? crtCtl.toggle() : false); if (crtCtl && ZGui.fx) crtCtl.set(on); } catch (e) {} } },
-        { icon: '✦', label: 'Toggle neon glow', hint: 'HUD', run: function () { try { var on = ZGui.fx ? ZGui.fx.toggle('glow') : (ZGui.neonGlow ? ZGui.neonGlow.toggle() : false); if (ZGui.neonGlow && ZGui.fx) ZGui.neonGlow.set(on); } catch (e) {} } }
-      ];
+        { icon: '◐', label: 'Toggle light mode  (' + (isLight() ? 'on' : 'off') + ')', hint: 'setting', run: function () { try { if (ZGui.colorscheme && ZGui.colorscheme.setLight) { ZGui.colorscheme.setLight(!isLight()); mirrorUi(); } } catch (e) {} } },
+        fxCmd('scanlines', 'Toggle CRT scanlines', '⌂'),
+        fxCmd('vignette', 'Toggle bezel vignette', '▣'),
+        fxCmd('glow', 'Toggle neon glow', '✦'),
+        fxCmd('anim', 'Toggle animations', '⚡'),
+        { icon: '▭', label: 'Toggle HUD statusbar', hint: 'setting', run: function () { try { chrome.storage.local.get('zb_status', function (o) { void chrome.runtime.lastError; chrome.storage.local.set({ zb_status: !!(o && o.zb_status === false) }); }); } catch (e) {} } },
+        { icon: '⚙', label: 'Open Settings page', hint: 'setting', run: function () { go('settings.html'); } }
+      ].concat(SCHEMES.map(function (s) {
+        return { icon: '◈', label: 'Scheme: ' + s[1], hint: 'theme', run: function () { try { if (ZGui.colorscheme && ZGui.colorscheme.apply) ZGui.colorscheme.apply(s[0]); } catch (e) {} } };
+      }));
       var pageItems = hudCmds.concat(paletteNav()).concat(opts.palette || []);
       var openPal = function () {
         // open synchronously with nav commands (nav always works); append tabs after.

@@ -90,8 +90,15 @@
     ['System', 'chrome://settings/system'],
     ['Reset settings', 'chrome://settings/reset']];
 
+  // HUD settings toggles live in chrome.storage 'zb_ui' (mirrored to the native
+  // file by the worker, so newtab/System follow). Flip them from here too.
+  function toggleUi(key) { try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui[key] = !ui[key]; chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {} }
+  var UI_TOGGLES = [['◐', 'Toggle light mode', 'light'], ['⌂', 'Toggle CRT scanlines', 'scanlines'],
+    ['▣', 'Toggle bezel vignette', 'vignette'], ['✦', 'Toggle neon glow', 'glow'], ['⚡', 'Toggle animations', 'anim']];
+
   function items() {
     var out = [];
+    UI_TOGGLES.forEach(function (t) { out.push({ icon: t[0], label: t[1], detail: 'setting', run: function () { toggleUi(t[2]); } }); });
     PAGES.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { goCurrent(p[2]); } }); });
     SETTINGS.forEach(function (p) { out.push({ icon: '⚙', label: 'Settings: ' + p[0], detail: p[1], run: function () { goCurrent(p[1]); } }); });
     ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the browser', run: function () { setScheme(n); } }); });

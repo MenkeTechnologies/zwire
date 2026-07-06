@@ -114,14 +114,27 @@
     for (var i = 0; i < all.length; i++) walkShadows(all[i]);
   }
 
+  // Light-mode neutral vars (from cyberpunk.css [data-theme="light"]). Applied on
+  // TOP of the scheme's colored accents so content-script HUD surfaces (the ⌘K
+  // palette etc.) flip to a light surface, matching the HUD pages' light mode.
+  var LIGHT_VARS = {
+    '--bg-primary': '#f0f2f5', '--bg-secondary': '#e4e7ec', '--bg-card': '#ffffff', '--bg-hover': '#f7f8fa',
+    '--text': '#1e293b', '--text-dim': '#475569', '--text-muted': '#94a3b8',
+    '--border': '#cbd5e1', '--border-glow': '#a5b4c8'
+  };
+  var light = false;
+
   function applyScheme(name) {
     var s = SCHEMES[name] || SCHEMES.cyberpunk;
     if (!s) return;
     var vars = s.vars || {}, root = document.documentElement;
     for (var i = 0; i < VAR_KEYS.length; i++) if (vars[VAR_KEYS[i]]) root.style.setProperty(VAR_KEYS[i], vars[VAR_KEYS[i]]);
+    if (light) { for (var k in LIGHT_VARS) root.style.setProperty(k, LIGHT_VARS[k]); root.setAttribute('data-theme', 'light'); }
+    else { root.removeAttribute('data-theme'); }
     root.setAttribute('data-hud-scheme', name);
     current = name;
   }
+  function setLight(on) { on = !!on; if (on === light) return; light = on; applyScheme(current || 'cyberpunk'); }
 
   // Primary source: chrome.storage.local['zb_scheme']. A content script reads
   // storage directly (no need to wake the lazy MV3 worker), and the picker
@@ -146,11 +159,15 @@
   function boot() {
     applyScheme('cyberpunk');  // avoid flash of stock theme
     reinject();
-    fetchScheme(applyScheme);
+    // read the persisted light flag (mirrored to chrome.storage as zb_ui.light)
+    // BEFORE the first real scheme apply, so the palette opens light immediately.
+    try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; if (o && o.zb_ui) light = !!o.zb_ui.light; fetchScheme(applyScheme); }); } catch (e) { fetchScheme(applyScheme); }
     // live updates: storage.onChanged fires the instant the picker writes.
     try {
       chrome.storage.onChanged.addListener(function (ch, area) {
-        if (area === 'local' && ch.zb_scheme && ch.zb_scheme.newValue) applyScheme(ch.zb_scheme.newValue);
+        if (area !== 'local') return;
+        if (ch.zb_scheme && ch.zb_scheme.newValue) applyScheme(ch.zb_scheme.newValue);
+        if (ch.zb_ui) setLight(!!(ch.zb_ui.newValue && ch.zb_ui.newValue.light));
       });
     } catch (e) {}
     var obs = new MutationObserver(function () { reinject(); });

@@ -224,6 +224,17 @@ function startSysStream() {
 }
 startSysStream();
 
+// Unify the light/fx prefs across surfaces: content-script palettes flip
+// `zb_ui` in chrome.storage (they can't reach the native host); mirror it to the
+// native file so the surfaces that read the file (newtab, System page) follow.
+try {
+  chrome.storage.onChanged.addListener(function (ch, area) {
+    if (area === 'local' && ch.zb_ui && ch.zb_ui.newValue) {
+      try { chrome.runtime.sendNativeMessage(HOST, { ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    }
+  });
+} catch (e) {}
+
 // PTY relay for the terminal overlay (a content script — can't connectNative).
 // Sessions are keyed by TAB so the shell SURVIVES page navigation: when the
 // tab's overlay re-injects on the next page it reconnects to the same host PTY.
