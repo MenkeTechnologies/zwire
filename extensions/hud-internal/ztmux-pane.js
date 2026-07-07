@@ -176,7 +176,7 @@
       // start, plus the macOS ⌥/⌘-Delete twins of each.
       if (editable(document.activeElement)) {
         var mod = e.ctrlKey || e.metaKey || e.altKey;
-        if (!mod && (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace')) up({ synckey: e.key });
+        if (!mod && (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace' || e.key === 'Delete')) up({ synckey: e.key });
         else if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'w' || e.key === 'W')) up({ synckey: 'C-w' });
         else if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'u' || e.key === 'U')) up({ synckey: 'C-u' });
         else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'Backspace') up({ synckey: 'C-w' });
@@ -219,6 +219,7 @@
       var el = targetField();
       if (!el) return; var hasVal = ('value' in el), focused = (document.activeElement === el);
       if (k === 'Backspace') { if (hasVal) { setNative(el, el.value.slice(0, -1)); el.dispatchEvent(new Event('input', { bubbles: true })); } else if (focused) { try { document.execCommand('delete'); } catch (e) {} } }
+      else if (k === 'Delete') { if (hasVal) { var ds = el.selectionStart, de = el.selectionEnd; if (ds == null) { setNative(el, el.value.slice(0, -1)); } else { if (ds === de && ds < el.value.length) de++; setNative(el, el.value.slice(0, ds) + el.value.slice(de)); try { el.selectionStart = el.selectionEnd = ds; } catch (x) {} } el.dispatchEvent(new Event('input', { bubbles: true })); } else if (focused) { try { document.execCommand('forwardDelete'); } catch (e) {} } }
       else if (k === 'Enter') { el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true })); if (el.form && typeof el.form.requestSubmit === 'function') { try { el.form.requestSubmit(); } catch (e) {} } }
       else if (k === 'C-w' || k === 'C-u') {
         // kill word (C-w) / kill to line start (C-u), cursor-aware. Deletes back

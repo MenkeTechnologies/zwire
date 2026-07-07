@@ -71,12 +71,16 @@
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault(); e.stopImmediatePropagation(); up({ palette: 1 }); return;
     }
-    // synchronize-panes: always forward printable typing in an editable to the top
-    // frame; the top decides whether to broadcast (only if THIS pane is in the sync
-    // group). No dependency on receiving setSync first — that link was unreliable.
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && editable(document.activeElement) &&
-        (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace')) {
-      up({ synckey: e.key });
+    // synchronize-panes: always forward editable typing to the top frame; the top
+    // decides whether to broadcast (only if THIS pane is in the sync group). No
+    // dependency on setSync. Printable + Enter + Backspace + Delete as-is; C-w / C-u
+    // (and the macOS ⌥/⌘-Delete twins) as semantic tokens.
+    if (editable(document.activeElement)) {
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace' || e.key === 'Delete')) up({ synckey: e.key });
+      else if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'w' || e.key === 'W')) up({ synckey: 'C-w' });
+      else if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'u' || e.key === 'U')) up({ synckey: 'C-u' });
+      else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'Backspace') up({ synckey: 'C-w' });
+      else if (e.metaKey && !e.ctrlKey && !e.altKey && e.key === 'Backspace') up({ synckey: 'C-u' });
     }
   }, true);
 
@@ -88,9 +92,15 @@
     if (d.syncapply) {
       var el = targetField();
       if (!el) return; var k = d.syncapply, hasVal = ('value' in el);
-      if (k === 'Backspace') { if (hasVal) { setNative(el, el.value.slice(0, -1)); el.dispatchEvent(new Event('input', { bubbles: true })); } }
+      var s = hasVal ? (el.selectionStart == null ? el.value.length : el.selectionStart) : 0;
+      var e2 = hasVal ? (el.selectionEnd == null ? s : el.selectionEnd) : 0;
+      function fire() { el.dispatchEvent(new Event('input', { bubbles: true })); }
+      function put(v, caret) { setNative(el, v); try { el.selectionStart = el.selectionEnd = caret; } catch (x) {} fire(); }
+      if (k === 'Backspace') { if (hasVal) { var bs = s; if (s === e2 && s > 0) bs--; put(el.value.slice(0, bs) + el.value.slice(e2), bs); } }
+      else if (k === 'Delete') { if (hasVal) { var de = e2; if (s === e2 && s < el.value.length) de++; put(el.value.slice(0, s) + el.value.slice(de), s); } }
       else if (k === 'Enter') { el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); if (el.form && typeof el.form.requestSubmit === 'function') { try { el.form.requestSubmit(); } catch (e) {} } }
-      else if (k.length === 1) { if (hasVal) { setNative(el, el.value + k); el.dispatchEvent(new Event('input', { bubbles: true })); } }
+      else if (k === 'C-w' || k === 'C-u') { if (hasVal) { var val = el.value, cut; if (k === 'C-w') { cut = s; while (cut > 0 && /\s/.test(val[cut - 1])) cut--; while (cut > 0 && !/\s/.test(val[cut - 1])) cut--; } else { cut = val.lastIndexOf('\n', s - 1) + 1; } put(val.slice(0, cut) + val.slice(e2), cut); } }
+      else if (k.length === 1) { if (hasVal) put(el.value.slice(0, s) + k + el.value.slice(e2), s + 1); }
     }
   });
 })();
