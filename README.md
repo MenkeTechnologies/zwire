@@ -8,7 +8,7 @@
 
 [![Base](https://img.shields.io/badge/base-chromium%20fork-05d9e8.svg)](#0x02-architecture)
 [![Workspace](https://img.shields.io/badge/HUD-tiling%20workspace-ff2a6d.svg)](#0x01-the-hud-workspace)
-[![Patches](https://img.shields.io/badge/native%20fork-9%20patches-d300c5.svg)](#0x05-full-hud-fork)
+[![Patches](https://img.shields.io/badge/native%20fork-15%20patches-d300c5.svg)](#0x05-full-hud-fork)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zwire/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -26,15 +26,17 @@ workspace layered on top:
 - durable, named **session management** with full CRUD + SVG layout previews;
 - **HUD reimplementations of Chrome's own internal pages** (extensions,
   settings, history, bookmarks, version) plus a keyboard-remap page;
-- **8 color schemes** that drive the browser chrome natively;
+- **8 color schemes** — each with a **light variant** — that drive the browser
+  chrome natively, with a light/dark toggle that syncs across the HUD, new-tab
+  page, and `zpwrchrome` instantly;
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 
 The HUD layer (`extensions/hud-internal`) is ~5,400 lines of extension code
-across 11 subsystems and 13 pages. Under it, a **9-patch C++ fork** restyles the
+across 11 subsystems and 14 pages. Under it, a **15-patch C++ fork** restyles the
 *native* chrome the extension layer can't reach.
 
-**zwire is the full fork.** The 9-patch series (`fork/`) compiles a patched
+**zwire is the full fork.** The 15-patch series (`fork/`) compiles a patched
 Chromium so the *native* chrome carries the HUD too — sharp tab shapes, the
 Share Tech Mono UI font, the neon toolbar, the omnibox, and the 8 HUD schemes
 wired into the color mixer + DevTools — the styling an extension can't reach.
@@ -83,12 +85,18 @@ A full CRUD page: create / rename / duplicate / delete / load / import-export,
 per-pane URL editing, and a **live SVG preview** of each window's tiling. Save
 the current layout with `Ctrl-b S`, attach a saved one with `Ctrl-b s`.
 
-**Around it:** a **⌘K command palette** (`zpalette`), **vim-style motions**
-(`zkeys` — jump / scroll / tabs / launch categories), a **find bar** (`zfind`),
-a **powerline status bar** (`zstatus`), and **HUD reimplementations** of
-`chrome://{extensions,settings,history,bookmarks,version}` plus Keyboard,
-Commands, Sessions, CI, and an **App Store** page — 13 in all. Every shortcut,
-and the tmux prefix itself, is remappable on the Keyboard page.
+**Around it:** a **⌘K command palette** (`zpalette`) — which also carries the
+scheme picker, the light/dark toggle, and the settings controls — **vim-style
+motions** (`zkeys` — jump / scroll / tabs / launch categories), a **find bar**
+(`zfind`), a **powerline status bar** (`zstatus`), and **HUD reimplementations**
+of `chrome://{extensions,settings,history,bookmarks,downloads,version}` plus
+Keyboard, Commands, Sessions, CI, a **Host** console, a **Terminal**, and an
+**App Store** page — 14 in all. Every shortcut, and the tmux prefix itself, is
+remappable on the Keyboard page.
+
+**Host console (`pages/host.html`).** A HUD tab that talks to the `zwire-host`
+native-messaging host directly — inspect and drive the native bridge from inside
+the browser.
 
 **App Store (`pages/store.html`).** A HUD storefront tab for the
 **MenkeTechnologies app store** — the paid Rust desktop apps and audio plugins,
@@ -102,12 +110,12 @@ up front — the new-tab page stays untouched.
 | Layer | What it is |
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
-| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zstatus`), the 8-scheme picker, and 13 HUD pages (incl. the Sessions manager, Keyboard remapper + App Store). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
+| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zstatus`), the 8-scheme picker (with light/dark toggle), and 14 HUD pages (incl. the Sessions manager, Keyboard remapper, Host console + App Store). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension: the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |
 | **Theme** | `theme/` — a colors-only Chrome theme. Present but **not** launcher-loaded — the fork's native color mixer (patch 0002) and the HUD skin own the palette, and a static theme applies last and would override them |
 | **Launcher** | `bin/zwire` — starts the base against `$ZWIRE_STATE/profile` with `newtab` + `zpwrchrome` + `hud-internal` loaded and `--extensions-on-chrome-urls` set (any dir missing a `manifest.json` is skipped, so a missing submodule degrades gracefully) |
-| **Fork** | `fork/` — the 9-patch source build that restyles the native chrome (tab shapes, fonts, borders, omnibox, DevTools schemes) the extension layer can't reach; this is what zwire ships as |
+| **Fork** | `fork/` — the 15-patch source build that restyles the native chrome (tab shapes, fonts, borders, omnibox, DevTools schemes) and tunes native behavior (forced zwire new-tab, session restore, framing) the extension layer can't reach; this is what zwire ships as |
 
 A Chrome theme extension changes **colors only** — it cannot reshape tabs, fonts,
 or toolbar (those are native C++), and it cannot add a tiling overlay or a
@@ -166,17 +174,25 @@ fork/build.sh          ~/zwire-chromium/src  # the long compile
 fork/package.sh        ~/zwire-chromium/src/out/zwire
 ```
 
-All **9** HUD patches are **authored** against the pinned tag (`150.0.7871.46`)
-and verified apply-clean: sharp 2px tabs (`tab_style_views.cc`), the cyberpunk
-palette + the 8 HUD schemes on frame/toolbar/tabs/omnibox
-(`chrome_color_mixer.cc`), the Share Tech Mono / Monaco UI font
-(`resource_bundle.cc`), a neon cyan under-toolbar line (`toolbar_view.cc`), a
-sharp omnibox field (`location_bar_view.cc`), `zwire` product strings
-(`BRANDING`), the 8 HUD schemes in the DevTools Theme dropdown
+All **15** HUD patches are **authored** against the pinned tag (`150.0.7871.46`)
+and verified apply-clean. The nine styling/behavior patches: sharp 2px tabs
+(`tab_style_views.cc`), the cyberpunk palette + the 8 HUD schemes on
+frame/toolbar/tabs/omnibox (`chrome_color_mixer.cc`), the Share Tech Mono /
+Monaco UI font (`resource_bundle.cc`), a neon cyan under-toolbar line
+(`toolbar_view.cc`), a sharp omnibox field (`location_bar_view.cc`), `zwire`
+product strings (`BRANDING`), the 8 HUD schemes in the DevTools Theme dropdown
 (`design_system_tokens.css` + `main-meta.ts` + `ThemeSupport.ts`), allow-framing
 any site so the `ztmux` overlay can iframe pages (`ancestor_throttle.cc`), and
 extension-command focus hand-off so the ⌘K palette is typeable from the omnibox
-(`extension_keybinding_registry_views.cc`). Apply-clean proves the diff context
+(`extension_keybinding_registry_views.cc`). Plus six patches that force zwire's
+behavior over Chromium's defaults: `chrome://newtab` always resolves to the
+zwire new-tab (`search.cc`), pinned extension actions never drop to the overflow
+puzzle (`toolbar_view.cc`), a host page's `frame-src`/`child-src` CSP never
+blocks a sub-frame nav so panes can embed any site (`navigation_request.cc`),
+startup restores the last session (`session_startup_pref.cc`), no "Restore
+pages?" crash bubble (`session_crashed_bubble_view.cc`), and no navigation block
+for a not-yet-registered extension so the new-tab override always loads
+(`extension_navigation_throttle.cc`). Apply-clean proves the diff context
 matches; `fork/build.sh` is the compile gate. See [`fork/README.md`](fork/README.md)
 and [`fork/patches/README.md`](fork/patches/README.md).
 

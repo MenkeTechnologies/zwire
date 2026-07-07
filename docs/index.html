@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="zwire is a Chromium/Blink browser forked into a keyboard-driven cyberpunk HUD: a tmux-style tiling overlay (windows, panes, each an embedded webview), a ⌘K command palette, vim navigation, durable session CRUD, an 8-scheme HUD, and the zpwrchrome power-tool preloaded. A ~5,400-line HUD extension layer compiled into a 9-patch native Chromium fork.">
+  <meta name="description" content="zwire is a Chromium/Blink browser forked into a keyboard-driven cyberpunk HUD: a tmux-style tiling overlay (windows, panes, each an embedded webview), a ⌘K command palette, vim navigation, durable session CRUD, an 8-scheme HUD, and the zpwrchrome power-tool preloaded. A ~5,400-line HUD extension layer compiled into a 15-patch native Chromium fork.">
   <title>zwire &mdash; Documentation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -65,7 +65,7 @@
             <a href="https://github.com/MenkeTechnologies/zpwrchrome" target="_blank" rel="noopener noreferrer">zpwrchrome</a>
           </nav>
           <p style="margin:0.35rem 0 0;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);letter-spacing:0.03em;opacity:0.8;">
-            Tmux-style tiling browser &middot; ⌘K palette &middot; vim nav &middot; session CRUD &middot; 8-scheme HUD &middot; on a real Blink engine &middot; 9-patch native fork (tag <code>150.0.7871.46</code>)
+            Tmux-style tiling browser &middot; ⌘K palette &middot; vim nav &middot; session CRUD &middot; 8-scheme HUD &middot; on a real Blink engine &middot; 15-patch native fork (tag <code>150.0.7871.46</code>)
           </p>
         </div>
         <div class="tutorial-toolbar">
@@ -87,7 +87,7 @@
 
     <main class="tutorial-main">
       <h2 class="tutorial-title"><span class="step-hash">&gt;_</span>ZWIRE REFERENCE</h2>
-      <p class="tutorial-subtitle">zwire is a Chromium/Blink browser forked into a cyberpunk HUD &mdash; a real engine running a keyboard-driven workspace: a tmux-style tiling overlay where every pane is an embedded webview, a ⌘K command palette, vim navigation, durable session management, and HUD reimplementations of Chrome's own internal pages. The <code>hud-internal</code> extension layer is ~5,400 lines across 11 subsystems and 13 pages; under it, a 9-patch native fork restyles the chrome the extension layer can't reach. For patch-by-patch numbers see the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
+      <p class="tutorial-subtitle">zwire is a Chromium/Blink browser forked into a cyberpunk HUD &mdash; a real engine running a keyboard-driven workspace: a tmux-style tiling overlay where every pane is an embedded webview, a ⌘K command palette, vim navigation, durable session management, and HUD reimplementations of Chrome's own internal pages. The <code>hud-internal</code> extension layer is ~5,400 lines across 11 subsystems and 14 pages; under it, a 15-patch native fork restyles the chrome the extension layer can't reach. For patch-by-patch numbers see the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
 
       <p class="motto">A TILING, PALETTE-DRIVEN BROWSER ON A REAL BLINK ENGINE.</p>
       <p class="motto sub">ZTMUX TILING &middot; ⌘K PALETTE &middot; SESSION CRUD &middot; 8-SCHEME HUD &middot; 9-PATCH NATIVE FORK</p>
@@ -108,8 +108,8 @@
       <p class="tutorial-subtitle">A keyboard-driven cyberpunk workspace on a genuine Blink engine &mdash; a HUD extension layer compiled into a native fork.</p>
       <div class="cat-grid">
         <div class="cat-card"><h4>Tiling HUD workspace</h4><p>The <code>ztmux</code> overlay: tmux-style tiling where every pane is an embedded webview &mdash; unlimited windows, recursive splits, zoom, layouts + preset grids, copy-mode, marks, and partial synchronize-panes. Rebindable prefix, 45 remappable actions.</p></div>
-        <div class="cat-card"><h4>Sessions &middot; palette &middot; vim</h4><p>Durable named sessions (windows/panes/webviews) with full CRUD + SVG layout previews. A ⌘K command palette, vim-style motions, a find bar, a powerline status bar, and HUD reimplementations of Chrome's internal pages &mdash; 13 pages in all.</p></div>
-        <div class="cat-card"><h4>Native 9-patch fork</h4><p>Optional. A C++ patch series restyles the native chrome the extension layer can't reach: tab shapes, UI font, neon toolbar, omnibox, product strings, the 8 HUD schemes in the color mixer + DevTools, plus allow-framing for the tiling overlay and ⌘K-palette focus hand-off.</p></div>
+        <div class="cat-card"><h4>Sessions &middot; palette &middot; vim</h4><p>Durable named sessions (windows/panes/webviews) with full CRUD + SVG layout previews. A ⌘K command palette, vim-style motions, a find bar, a powerline status bar, a light/dark toggle, and HUD reimplementations of Chrome's internal pages &mdash; 14 pages in all.</p></div>
+        <div class="cat-card"><h4>Native 15-patch fork</h4><p>The source build zwire ships as. A C++ patch series restyles the native chrome the extension layer can't reach: tab shapes, UI font, neon toolbar, omnibox, product strings, the 8 HUD schemes in the color mixer + DevTools &mdash; plus allow-framing for the tiling overlay, ⌘K-palette focus hand-off, a forced zwire new-tab, and session restore.</p></div>
         <div class="cat-card"><h4>Dedicated profile</h4><p>Everything runs against <code>$ZWIRE_STATE/profile</code> (default <code>~/Library/Application&nbsp;Support/zwire</code> on macOS) &mdash; bookmarks, history, sessions kept separate from system Chrome.</p></div>
       </div>
 
@@ -132,10 +132,10 @@
           <tr><td>Rebrand</td><td><code>scripts/rebrand-macos.sh</code> patches the base bundle's Dock name to <code>zwire</code> + a cyberpunk <code>.icns</code>, deletes <code>CFBundleIconName</code>, and re-signs ad-hoc so macOS honors it.</td></tr>
           <tr><td>Theme</td><td><code>theme/</code> &mdash; a Chrome theme mapping the HUD palette onto frame / toolbar / tabs (colors only). Present but <strong>not</strong> launcher-loaded: a static theme applies last and would override the fork's color mixer (0002) and the internal-HUD skin.</td></tr>
           <tr><td>New tab</td><td><code>newtab/</code> &mdash; a <code>chrome_url_overrides.newtab</code> extension: the full HUD (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally.</td></tr>
-          <tr><td>HUD workspace</td><td><code>extensions/hud-internal</code> (~5,400 LOC) &mdash; the tiling overlay <code>ztmux</code> (tmux-style panes/windows, each an embedded webview; rebindable prefix; partial synchronize-panes; durable session CRUD), the ⌘K palette (<code>zpalette</code>), vim nav + keymap (<code>zvim</code>/<code>zkeys</code>), find (<code>zfind</code>), a powerline status bar (<code>zstatus</code>), the 8-scheme picker, and 13 HUD pages (incl. Sessions, a Keyboard remapper + an App Store). MV3 content scripts on <code>chrome://*/*</code> + <code>http(s)</code>, bridged to a native host. Needs <code>--extensions-on-chrome-urls</code>.</td></tr>
+          <tr><td>HUD workspace</td><td><code>extensions/hud-internal</code> (~5,400 LOC) &mdash; the tiling overlay <code>ztmux</code> (tmux-style panes/windows, each an embedded webview; rebindable prefix; partial synchronize-panes; durable session CRUD), the ⌘K palette (<code>zpalette</code>), vim nav + keymap (<code>zvim</code>/<code>zkeys</code>), find (<code>zfind</code>), a powerline status bar (<code>zstatus</code>), the 8-scheme picker (with light/dark toggle), and 14 HUD pages (incl. Sessions, a Keyboard remapper, a Host console + an App Store). MV3 content scripts on <code>chrome://*/*</code> + <code>http(s)</code>, bridged to a native host. Needs <code>--extensions-on-chrome-urls</code>.</td></tr>
           <tr><td>Power-tool</td><td><code>extensions/zpwrchrome</code> &mdash; the MV3 extension, loaded as a submodule (reuse, not copy).</td></tr>
           <tr><td>Launcher</td><td><code>bin/zwire</code> starts the base against <code>$ZWIRE_STATE/profile</code> with newtab + zpwrchrome + hud-internal loaded and <code>--extensions-on-chrome-urls</code> set. Any dir missing a <code>manifest.json</code> is skipped, so a missing submodule degrades gracefully.</td></tr>
-          <tr><td>Fork</td><td><code>fork/</code> &mdash; the source build zwire ships as: a 9-patch series restyles native tabs, colors, UI font, toolbar, omnibox, and the DevTools Theme dropdown, plus allow-framing and ⌘K-palette focus.</td></tr>
+          <tr><td>Fork</td><td><code>fork/</code> &mdash; the source build zwire ships as: a 15-patch series restyles native tabs, colors, UI font, toolbar, omnibox, and the DevTools Theme dropdown, plus allow-framing, ⌘K-palette focus, a forced zwire new-tab, and session restore.</td></tr>
         </tbody>
       </table>
 
@@ -154,7 +154,7 @@
       <!-- ═══════════════ THE NATIVE FORK ═══════════════ -->
       <h2 class="tutorial-title"><span class="step-hash">~</span>THE NATIVE FORK</h2>
       <p class="tutorial-subtitle">The HUD workspace &mdash; tiling, palette, sessions, vim, the 8-scheme picker &mdash; is extension code. But a theme extension changes <strong>colors only</strong>; it can't reshape tabs, fonts, or the toolbar (native C++). To put the whole chrome in the HUD, zwire is compiled from a patched Chromium &mdash; this is what it ships as.</p>
-      <p style="font-size:12.5px;line-height:1.7;color:var(--text-dim);">The <code>fork/</code> build is a 9-patch series (sharp tabs, cyberpunk palette, mono UI font, neon toolbar, sharp omnibox, <code>zwire</code> strings, 8 HUD schemes in the color mixer + DevTools, allow-framing for the ztmux overlay, and ⌘K-palette focus hand-off) authored against the pinned tag and verified apply-clean. It costs a ~100&nbsp;GB checkout, a 1&ndash;4&nbsp;hr first build, and ongoing rebase maintenance &mdash; no paid infra needed, but it won't fit on stock GitHub-hosted runners (checkout &gt; disk, cold build &gt; the 6&nbsp;h job cap), so build it locally or on a self-hosted runner with a warm checkout. See <a href="https://github.com/MenkeTechnologies/zwire/tree/main/fork" target="_blank" rel="noopener noreferrer" style="color:var(--cyan);">fork/</a> and the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
+      <p style="font-size:12.5px;line-height:1.7;color:var(--text-dim);">The <code>fork/</code> build is a 15-patch series (sharp tabs, cyberpunk palette, mono UI font, neon toolbar, sharp omnibox, <code>zwire</code> strings, 8 HUD schemes in the color mixer + DevTools, allow-framing for the ztmux overlay, ⌘K-palette focus hand-off, a forced zwire new-tab, and session restore) authored against the pinned tag and verified apply-clean. It costs a ~100&nbsp;GB checkout, a 1&ndash;4&nbsp;hr first build, and ongoing rebase maintenance &mdash; no paid infra needed, but it won't fit on stock GitHub-hosted runners (checkout &gt; disk, cold build &gt; the 6&nbsp;h job cap), so build it locally or on a self-hosted runner with a warm checkout. See <a href="https://github.com/MenkeTechnologies/zwire/tree/main/fork" target="_blank" rel="noopener noreferrer" style="color:var(--cyan);">fork/</a> and the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
     </main>
 
     <footer class="tutorial-main doc-footer" style="padding-top:0;">
