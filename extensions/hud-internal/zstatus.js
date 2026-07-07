@@ -48,9 +48,22 @@
 
   var bar, styleEl, clockTimer;
 
+  // Light-mode neutral overrides (from cyberpunk.css [data-theme=light]). The bar
+  // scopes its vars to #zb-statusbar, so — like ztmux/zpalette — we merge these in
+  // HERE when light is on; otherwise the bar's own dark neutrals ignore light mode.
+  var LIGHT_VARS = { '--bg-primary': '#f0f2f5', '--bg-secondary': '#e4e7ec', '--bg-card': '#ffffff', '--bg-hover': '#f7f8fa', '--text': '#1e293b', '--text-dim': '#475569', '--text-muted': '#94a3b8', '--border': '#cbd5e1', '--border-glow': '#a5b4c8' };
+
   function schemeVars(cb) {
-    try { chrome.storage.local.get('zb_scheme', function (o) { var s = SCHEMES[(o && o.zb_scheme) || 'cyberpunk'] || SCHEMES.cyberpunk || { vars: {} }; cb(s.vars || {}, (o && o.zb_scheme) || 'cyberpunk'); }); }
-    catch (e) { cb((SCHEMES.cyberpunk || { vars: {} }).vars || {}, 'cyberpunk'); }
+    try {
+      chrome.storage.local.get(['zb_scheme', 'zb_ui'], function (o) {
+        var name = (o && o.zb_scheme) || 'cyberpunk';
+        var s = SCHEMES[name] || SCHEMES.cyberpunk || { vars: {} };
+        var vars = {}, sv = s.vars || {}, k;
+        for (k in sv) vars[k] = sv[k];
+        if (o && o.zb_ui && o.zb_ui.light) for (k in LIGHT_VARS) vars[k] = LIGHT_VARS[k];
+        cb(vars, name);
+      });
+    } catch (e) { cb((SCHEMES.cyberpunk || { vars: {} }).vars || {}, 'cyberpunk'); }
   }
   function applyStyle(vars) {
     var v = '';
@@ -179,7 +192,8 @@
       if (area !== 'local') return;
       if (changes.zb_status) syncBar();
       if (bar && changes.zb_sys) refreshSys(changes.zb_sys.newValue);
-      if (bar && (changes.zb_scheme || changes.zb_tmux)) refreshData();
+      // zb_ui carries the light-mode toggle — refresh so the bar re-styles light/dark.
+      if (bar && (changes.zb_scheme || changes.zb_tmux || changes.zb_ui)) refreshData();
     });
   } catch (e) {}
 

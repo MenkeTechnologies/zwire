@@ -605,14 +605,25 @@
     '#zbtmux .zt-ac-d{font-size:11px;color:var(--text-muted,#5a6b82);max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
   ].join('');
 
+  // Light-mode neutral overrides (from cyberpunk.css [data-theme=light]); the
+  // overlay scopes its vars to #zbtmux so light must be merged in HERE.
+  var TMUX_LIGHT_VARS = { '--bg-primary': '#f0f2f5', '--bg-secondary': '#e4e7ec', '--bg-card': '#ffffff', '--bg-hover': '#f7f8fa', '--text': '#1e293b', '--text-dim': '#475569', '--text-muted': '#94a3b8', '--border': '#cbd5e1', '--border-glow': '#a5b4c8' };
   function applyTheme() {
     if (!styleEl) return;
     var cb = function (vars) {
       var v = ''; for (var i = 0; i < VAR_KEYS.length; i++) if (vars[VAR_KEYS[i]]) v += VAR_KEYS[i] + ':' + vars[VAR_KEYS[i]] + ';';
       styleEl.textContent = '#zbtmux{' + v + '}' + CSS;
     };
-    try { chrome.storage.local.get('zb_scheme', function (o) { void chrome.runtime.lastError; var s = SCHEMES[(o && o.zb_scheme) || 'cyberpunk'] || SCHEMES.cyberpunk || { vars: {} }; cb(s.vars || {}); }); }
-    catch (e) { cb((SCHEMES.cyberpunk || { vars: {} }).vars || {}); }
+    try {
+      chrome.storage.local.get(['zb_scheme', 'zb_ui'], function (o) {
+        void chrome.runtime.lastError;
+        var s = SCHEMES[(o && o.zb_scheme) || 'cyberpunk'] || SCHEMES.cyberpunk || { vars: {} };
+        var vars = {}, sv = s.vars || {}, k;
+        for (k in sv) vars[k] = sv[k];
+        if (o && o.zb_ui && o.zb_ui.light) for (k in TMUX_LIGHT_VARS) vars[k] = TMUX_LIGHT_VARS[k];
+        cb(vars);
+      });
+    } catch (e) { cb((SCHEMES.cyberpunk || { vars: {} }).vars || {}); }
   }
 
   function ensureDom() {
@@ -1369,7 +1380,7 @@
   }
 
   // re-theme the overlay when the scheme changes (matches the rest of the HUD).
-  try { chrome.storage.onChanged.addListener(function (ch, area) { if (area !== 'local') return; if (ch.zb_scheme) applyTheme(); if (ch.zb_frecent || ch.zb_tabs) loadNav(); if (ch.zb_keys) buildKeys(ch.zb_keys.newValue || {}); if (ch.zb_tmux_load && ch.zb_tmux_load.newValue) loadSessionById(ch.zb_tmux_load.newValue.id); }); } catch (e) {}
+  try { chrome.storage.onChanged.addListener(function (ch, area) { if (area !== 'local') return; if (ch.zb_scheme || ch.zb_ui) applyTheme(); if (ch.zb_frecent || ch.zb_tabs) loadNav(); if (ch.zb_keys) buildKeys(ch.zb_keys.newValue || {}); if (ch.zb_tmux_load && ch.zb_tmux_load.newValue) loadSessionById(ch.zb_tmux_load.newValue.id); }); } catch (e) {}
 
   // restore any tmux session persisted before a reload (per-tab sessionStorage).
   restore();
