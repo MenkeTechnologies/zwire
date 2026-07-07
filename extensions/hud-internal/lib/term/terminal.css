@@ -8,7 +8,10 @@
 .terminal-pane {
     display: none;
     position: fixed;
-    z-index: 9998;
+    /* Above the tmux overlay (#zbtmux is z-index 2147483640) so the popup terminal
+       stays usable in tmux mode instead of hiding behind the panes; still below the
+       ⌘K palette overlay (2147483646). */
+    z-index: 2147483644;
     width: 680px;
     height: 420px;
     min-width: 320px;
@@ -31,6 +34,19 @@
     overflow: visible;
 }
 .terminal-pane.active { display: flex; }
+/* Resize-handle styles (from zgui-core modal.css) — needed because on web pages
+   the terminal loads WITHOUT modal.css, so initModalDragResize's edge handles
+   had no size/cursor and couldn't be grabbed. Resize worked in HUD pages / other
+   apps (Audio-Haxor) only because they ship modal.css. */
+.modal-resize { position: absolute; z-index: 10; }
+.modal-resize-n { top: -4px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.modal-resize-s { bottom: -4px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.modal-resize-e { top: 14px; right: -4px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.modal-resize-w { top: 14px; left: -4px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.modal-resize-ne { top: -4px; right: -4px; width: 18px; height: 18px; cursor: nesw-resize; }
+.modal-resize-nw { top: -4px; left: -4px; width: 18px; height: 18px; cursor: nwse-resize; }
+.modal-resize-se { bottom: -4px; right: -4px; width: 18px; height: 18px; cursor: nwse-resize; }
+.modal-resize-sw { bottom: -4px; left: -4px; width: 18px; height: 18px; cursor: nesw-resize; }
 .terminal-pane.dock-br { bottom: 24px !important; right: 24px !important; top: auto !important; left: auto !important; }
 .terminal-pane.dock-bl { bottom: 24px !important; left: 24px !important; top: auto !important; right: auto !important; }
 .terminal-pane.dock-tr { top: 24px !important; right: 24px !important; bottom: auto !important; left: auto !important; }

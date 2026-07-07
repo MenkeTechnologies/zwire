@@ -1,12 +1,14 @@
-/* zwire — keep the terminal overlay open across page navigation.
+/* zwire — keep the terminal overlay open across page navigation, PER TAB.
  * terminal.js persists visibility in per-origin localStorage, which does NOT
- * carry across different sites. This mirrors the open state into
- * chrome.storage.local ('zb_term_open') so when the overlay re-injects on the
- * next page it re-opens automatically — and the background worker reconnects the
- * same tab's PTY, so the shell session continues. */
+ * carry across different sites. This mirrors the open state to the background
+ * worker keyed by THIS tab (sender.tab.id) so when the overlay re-injects on the
+ * next page it re-opens automatically IN THE SAME TAB ONLY — the background also
+ * reconnects that tab's PTY so the shell continues. The old approach used a
+ * GLOBAL chrome.storage flag, which re-popped the terminal in every other tab /
+ * new tab the moment it was opened anywhere. */
 (function () {
   'use strict';
-  function setOpen(v) { try { chrome.storage.local.set({ zb_term_open: !!v }); } catch (e) {} }
+  function setOpen(v) { try { chrome.runtime.sendMessage({ type: 'zbTermOpen', open: !!v }, function () { void chrome.runtime.lastError; }); } catch (e) {} }
   function isActive() { var p = document.getElementById('terminalPane'); return !!(p && p.classList.contains('active')); }
   function watch() {
     var pane = document.getElementById('terminalPane');
@@ -18,11 +20,9 @@
       var obs = new MutationObserver(function () { setOpen(pane.classList.contains('active')); });
       obs.observe(pane, { attributes: true, attributeFilter: ['class'] });
     } catch (e) {}
-    // Auto-reopen ONLY if it was explicitly open when you left the last page —
-    // strict === true (not a stale/truthy value) and not already showing. The
-    // flag is reset on browser startup (background.js) so a stale "open" never
-    // re-pops the terminal on every page of a fresh session.
-    try { chrome.storage.local.get('zb_term_open', function (o) { if (o && o.zb_term_open === true && !isActive() && window.showTerminal) window.showTerminal(); }); } catch (e) {}
+    // Auto-reopen ONLY if THIS TAB had it open (per-tab state from the background),
+    // and not already showing — so it never pops on other tabs or new tabs.
+    try { chrome.runtime.sendMessage({ type: 'zbTermState' }, function (o) { void chrome.runtime.lastError; if (o && o.open === true && !isActive() && window.showTerminal) window.showTerminal(); }); } catch (e) {}
   }
   // Authoritative snapshot right before navigating away, in case a close in the
   // same tick as navigation didn't get mirrored yet.

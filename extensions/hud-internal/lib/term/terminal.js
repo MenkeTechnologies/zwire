@@ -603,13 +603,10 @@ document.addEventListener('mousedown', (e) => {
     _termOnDragStart(e);
 });
 
-// Init resize handles via shared modal-drag system (same pattern as audio player)
-{
-    const tp = document.getElementById('terminalPane');
-    if (tp && typeof initModalDragResize === 'function') {
-        initModalDragResize(tp);
-    }
-}
+// Resize handles are initialised inside wire() below — AFTER _ensureTerminalDom()
+// injects #terminalPane. Doing it here at top level found no pane on web pages
+// (where the host doesn't pre-provide it), so resize silently never wired; it
+// worked only in apps that ship the pane in HTML (Audio-Haxor) or on HUD pages.
 
 // ── Wiring: toolbar [data-action] buttons + Ctrl+` toggle + restore from prefs ──
 (function initTerminalWiring() {
@@ -623,6 +620,10 @@ document.addEventListener('mousedown', (e) => {
                     if (typeof fn === 'function') fn();
                 });
             });
+            // Wire resize handles now that the pane exists (idempotent — modal-drag
+            // guards with pane._dragInit). This is what makes the terminal resizable
+            // on web pages, where the pane is injected here rather than by the host.
+            if (typeof initModalDragResize === 'function') initModalDragResize(pane);
         }
         document.addEventListener('keydown', (e) => {
             // Ctrl+` (Backquote) toggles the embedded terminal. (Cmd/Ctrl+T is

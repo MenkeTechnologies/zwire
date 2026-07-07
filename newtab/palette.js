@@ -99,17 +99,28 @@
   // no-op. Ask the HUD (the source of truth) to toggle it — it fans the change
   // out to every surface (native file → our scheme-sync, content scripts, zpwr).
   var HUD_ID_UI = 'omcgnnjfmbmpdlofklbpddkhnfibfhgg';
+  var FX_CLASS = { scanlines: 'no-scanlines', vignette: 'no-vignette', glow: 'no-neon-glow', anim: 'no-anim' };
+  // Read the state currently rendered on THIS page (light via [data-theme]; each
+  // fx ON = class ABSENT) so a toggle computes the real target value.
+  function curUi(key) {
+    if (key === 'light') return document.documentElement.getAttribute('data-theme') === 'light';
+    var app = document.querySelector('.app') || document.body;
+    return !app.classList.contains(FX_CLASS[key]);
+  }
   function toggleUi(key) {
-    // Light mode renders on newtab purely via [data-theme]; flip it OPTIMISTICALLY
-    // for instant feedback, then tell the HUD the TARGET value (not a blind flip)
-    // so every surface converges to the same state and the HUD echo confirms it.
-    if (key === 'light') {
-      var nw = document.documentElement.getAttribute('data-theme') !== 'light';
-      document.documentElement.setAttribute('data-theme', nw ? 'light' : 'dark');
-      try { chrome.runtime.sendMessage(HUD_ID_UI, { type: 'zb-ui-set-key', key: 'light', value: nw }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-      return;
-    }
-    try { chrome.runtime.sendMessage(HUD_ID_UI, { type: 'zb-ui-toggle', key: key }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    var nw = !curUi(key);
+    // Optimistic apply for instant feedback.
+    if (key === 'light') document.documentElement.setAttribute('data-theme', nw ? 'light' : 'dark');
+    else { var app = document.querySelector('.app') || document.body; app.classList.toggle(FX_CLASS[key], !nw); }
+    // DURABLE: write the shared native file directly (newtab is in the host's
+    // allowed_origins). The host merges + publishes it, so the change survives a
+    // refresh even when the HUD service worker is asleep and misses the relay —
+    // Write the shared theme to the host — the single source of truth. The host
+    // persists it to ~/.zwire/global.toml and publishes it back to our scheme-sync
+    // subscription AND every other app in the fleet. No cross-extension relay,
+    // no chrome.storage mirror, no echo loop — one write, one authoritative value.
+    var patch = {}; patch[key] = nw;
+    try { chrome.runtime.sendNativeMessage(HOST, { ui: patch }, function () { void chrome.runtime.lastError; }); } catch (e) {}
   }
   var UI_TOGGLES = [['◐', 'Toggle light mode', 'light'], ['⌂', 'Toggle CRT scanlines', 'scanlines'],
     ['▣', 'Toggle bezel vignette', 'vignette'], ['✦', 'Toggle neon glow', 'glow'], ['⚡', 'Toggle animations', 'anim']];

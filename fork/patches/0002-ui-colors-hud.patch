@@ -6,8 +6,8 @@ index f5874357cb..7cff07cc04 100644
  
  #include <string>
  
-+// zwire HUD: scheme-driven native palette (reads <app-data>/zwire/hud-scheme,
-+// live-updates on change so the color-scheme picker drives the native chrome).
++// zwire HUD: scheme-driven native palette (reads ~/.zwire/hud-scheme, the shared
++// fleet theme; live-updates on change so the picker drives the native chrome).
 +#include <atomic>
 +#include <memory>
 +#include "base/base_paths.h"
@@ -28,14 +28,14 @@ index f5874357cb..7cff07cc04 100644
  #include "base/feature_list.h"
  #include "base/logging.h"
  #include "base/strings/string_number_conversions.h"
-@@ -29,6 +48,100 @@
+@@ -29,6 +48,97 @@
  
  namespace {
  
 +// ---- zwire HUD scheme system -------------------------------------------
 +// The 8 strykelang schemes, baked native. The active one is chosen by the
-+// color-scheme picker (a content-script extension), which writes the scheme
-+// name to <app-data>/zwire/hud-scheme; a FilePathWatcher live-repaints the chrome.
++// color-scheme picker (a content-script extension), which drives zwire-host to
++// write ~/.zwire/hud-scheme; a FilePathWatcher live-repaints the chrome.
 +struct HudScheme {
 +  const char* name;
 +  SkColor p, s, c, h;      // bg: primary, secondary, card, hover
@@ -60,16 +60,13 @@ index f5874357cb..7cff07cc04 100644
 +}
 +
 +base::FilePath HudSchemeDir() {
-+  base::FilePath dir;
-+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
-+  // macOS: ~/Library/Application Support ; Windows: %APPDATA%.
-+  base::PathService::Get(base::DIR_APP_DATA, &dir);
-+#else
-+  // Linux/other: ${XDG_CONFIG_HOME:-~/.config} per XDG Base Directory spec.
-+  std::unique_ptr<base::Environment> env(base::Environment::Create());
-+  dir = base::nix::GetXDGDirectory(env.get(), "XDG_CONFIG_HOME", ".config");
-+#endif
-+  return dir.Append("zwire");
++  // The shared, app-independent zwire theme dir: ~/.zwire — one location the
++  // whole fleet (every app + zwire-host) reads/writes, so the native chrome
++  // follows the same colour scheme as everything else. zwire-host writes a plain
++  // `hud-scheme` text projection here beside the canonical global.toml.
++  base::FilePath home;
++  base::PathService::Get(base::DIR_HOME, &home);
++  return home.Append(".zwire");
 +}
 +
 +void ReadHudSchemeFile() {
@@ -129,7 +126,7 @@ index f5874357cb..7cff07cc04 100644
  // This differs from ui::SelectColorBasedOnInput in that we're checking if the
  // input transform is *not* dark under the assumption that the background color
  // *is* dark from a potential custom theme. Additionally, if the mode is
-@@ -1122,26 +1235,87 @@ void AddChromeColorMixer(ui::ColorProvider* provider,
+@@ -1122,26 +1232,87 @@ void AddChromeColorMixer(ui::ColorProvider* provider,
    // high-contrast early-return above so it always applies. Palette mirrors
    // docs/hud-static.css / newtab.css (cyberpunk scheme).
    {

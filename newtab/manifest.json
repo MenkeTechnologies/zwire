@@ -3,7 +3,7 @@
   "name": "zwire New Tab",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApVyt/F5MGRL7QCrNl0lxc8oIJ5lAOE2e/VhSNy0qRoE60TUKLr7zcVH7H3q0OeItQ7vTkA7+cwblYhq8HQY8FhbK+MEBs/44U9X7lZFuVU0YiIF8FNUtldaeiGfaZbTvUQw3P1sIP2m0O5e7ROxeXBHsayJiPW5pw6jZliPwiZV9Eu994U1+J/A5d9cgNwhkfLIi4lw1wFO1/FOUfED1yGF+VO4Bhmw8O7veOLs8ZhKGJ8fYjfTEHn4NyGy0jwtP1Q0bTnEYZPJcneiO3JQF9PIsPtUbN1w8J+0AuNRM5zZAXZ5ec8la2RvS6xFtkZvN8BAmf3TSySjUjUIyavcXlQIDAQAB",
   "short_name": "zwire-newtab",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "description": "Cyberpunk new-tab page for zwire \u2014 neon clock, omnibox search, quick-launch tiles.",
   "icons": {
     "16": "icons/icon16.png",

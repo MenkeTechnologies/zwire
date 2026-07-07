@@ -12,52 +12,34 @@ var HOST = 'com.zwire.hud';
 // zpwrchrome extension — kept in colorscheme sync with the global HUD/native
 // scheme over runtime messaging (separate extensions can't share storage).
 var ZPWR_ID = 'hpppdchpnphmiijdeanibpcadgknmaja';
-var lastPushed = null;
-
-function pushToZpwr(scheme) {
-  if (!scheme || scheme === lastPushed) return;
-  lastPushed = scheme;
-  try { chrome.runtime.sendMessage(ZPWR_ID, { type: 'zb-scheme', scheme: scheme }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-  // newtab is isolated too — push the scheme so it flips INSTANTLY instead of
-  // waiting for its 1.5s native-file poll (which, on a fresh profile with no
-  // hud-scheme file, would just show cyberpunk). ZB_NEWTAB_ID is assigned later
-  // in this file but this runs from async callbacks, so it's set by then.
-  try { if (typeof ZB_NEWTAB_ID !== 'undefined' && ZB_NEWTAB_ID) chrome.runtime.sendMessage(ZB_NEWTAB_ID, { type: 'zb-scheme', scheme: scheme }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-}
+// Theme = colour scheme + light/fx. It is coordinated by zwire-host (the single
+// source of truth, ~/.zwire/global.toml). This worker holds ONE subscription
+// (folded into the sysinfo port) and bridges host <-> chrome.storage: content
+// scripts + HUD pages keep reading zb_scheme / zb_ui (reliable within one
+// extension), and this bridge keeps them equal to the host. `_lastHostScheme` /
+// `_lastHostUi` remember the value the HOST last pushed so our own echo (a
+// storage.set we made from a host push -> onChanged -> host write) never loops.
+// zpwrchrome + newtab no longer talk to us for theme — they subscribe the host
+// directly, so the old cross-extension push/pull/mirror mesh is gone.
+var _lastHostScheme = null, _lastHostUi = null;
 
 function mirror(scheme) {
   if (!scheme) return;
   try { chrome.storage.local.set({ zb_scheme: scheme }); } catch (e) {}
-  pushToZpwr(scheme);
 }
 
-// zpwrchrome side of the bridge: it can pull the current scheme on startup and
-// push a scheme the user picked in its own theme injector back to the browser
-// chrome (native file) + HUD.
-try {
-  chrome.runtime.onMessageExternal.addListener(function (msg, sender, sendResponse) {
-    if (!sender || sender.id !== ZPWR_ID || !msg) return;
-    if (msg.type === 'zb-scheme-get') {
-      try { chrome.storage.local.get('zb_scheme', function (o) { void chrome.runtime.lastError; sendResponse({ scheme: (o && o.zb_scheme) || 'cyberpunk' }); }); } catch (e) { sendResponse({ scheme: 'cyberpunk' }); }
-      return true; // async
-    }
-    if (msg.type === 'zb-scheme-set' && msg.scheme) {
-      lastPushed = msg.scheme;   // came FROM zpwr — don't echo it straight back
-      try { chrome.runtime.sendNativeMessage(HOST, { scheme: msg.scheme }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-      try { chrome.storage.local.set({ zb_scheme: msg.scheme }); } catch (e) {}
-    }
-    // Light/effects state for zpwrchrome (its storage is isolated from ours).
-    if (msg.type === 'zb-ui-get') {
-      try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; sendResponse({ ui: (o && o.zb_ui) || {} }); }); } catch (e) { sendResponse({ ui: {} }); }
-      return true; // async
-    }
-    // zpwrchrome's own light toggle → set it globally (propagates to every surface
-    // via the zb_ui listener + native mirror + push back to zpwr).
-    if (msg.type === 'zb-ui-set' && typeof msg.light === 'boolean') {
-      try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui.light = msg.light; chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {}
-    }
-  });
-} catch (e) {}
+// Apply a theme frame pushed by the host into chrome.storage (drives every
+// hud-internal surface via storage.onChanged). Tracked so the storage->host
+// writer below recognises the echo and skips it.
+function applyThemeFromHost(topic, data) {
+  if (topic === 'scheme' && data && data.scheme) {
+    _lastHostScheme = data.scheme;
+    try { chrome.storage.local.set({ zb_scheme: data.scheme }); } catch (e) {}
+  } else if (topic === 'ui' && data && typeof data === 'object') {
+    _lastHostUi = JSON.stringify(data);
+    try { chrome.storage.local.set({ zb_ui: data }); } catch (e) {}
+  }
+}
 
 // The New Tab page is a separate extension with isolated storage, but custom
 // commands (the Commands page) are written HERE. Serve the authoritative
@@ -71,48 +53,14 @@ try {
       catch (e) { sendResponse({ cmds: [] }); }
       return true; // async sendResponse
     }
-    // newtab palette flips a light/fx setting — newtab's storage is isolated, so
-    // it toggles HERE (the source of truth), which fans out to every surface.
-    if (msg.type === 'zb-ui-toggle' && msg.key) {
-      try {
-        chrome.storage.local.get('zb_ui', function (o) {
-          void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {};
-          // light defaults OFF (undefined ⇒ dark); fx default ON (undefined ⇒ effect
-          // present), so a fresh key must flip to the OPPOSITE of its default.
-          ui[msg.key] = (msg.key === 'light') ? !ui.light : (ui[msg.key] === false);
-          chrome.storage.local.set({ zb_ui: ui });
-        });
-      } catch (e) {}
-    }
-    // Value-based set (newtab flips light optimistically, then sets the target).
-    if (msg.type === 'zb-ui-set-key' && msg.key && typeof msg.value === 'boolean') {
-      try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui[msg.key] = msg.value; chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {}
-    }
+    // (theme toggles used to come through here from newtab; newtab now writes the
+    // host directly, so those handlers are gone.)
   });
 } catch (e) {}
 
-// Seed storage from the native source of truth (the file may already hold a
-// scheme picked in a prior session or written before launch).
-function seedFromNative() {
-  try {
-    chrome.runtime.sendNativeMessage(HOST, { cmd: 'get' }, function (r) {
-      void chrome.runtime.lastError;
-      if (r && r.scheme) mirror(r.scheme);
-      // Also seed light/fx from the native file (hud-ui.json). On a fresh profile
-      // chrome.storage has no zb_ui, but ~/.zwire may already carry light/fx state
-      // (synced dotfiles, a prior session). Adopt it ONLY when storage is empty —
-      // writing zb_ui fires the onChanged fan-out that mirrors + pushes to
-      // zpwr/newtab, so HUD pages and zpwr converge instead of staying dark while
-      // newtab (which polls the file directly) goes light.
-      if (r && r.ui && typeof r.ui === 'object' && Object.keys(r.ui).length) {
-        try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; if (!o || !o.zb_ui) chrome.storage.local.set({ zb_ui: r.ui }); }); } catch (e) {}
-      }
-    });
-  } catch (e) {}
-}
-seedFromNative();
-try { chrome.runtime.onStartup.addListener(seedFromNative); } catch (e) {}
-try { chrome.runtime.onInstalled.addListener(seedFromNative); } catch (e) {}
+// (Seeding storage from the native file on startup is no longer needed: the
+// theme subscription below receives a snapshot of the current scheme + ui the
+// instant it connects, and mirrors it into chrome.storage.)
 
 // zpwrchrome is force-loaded via the launcher's --load-extension, which
 // re-ENABLES it on every browser start. The extensions manager persists a user
@@ -133,12 +81,23 @@ applyZpwrDisabled();
 try { chrome.runtime.onStartup.addListener(applyZpwrDisabled); } catch (e) {}
 try { chrome.runtime.onInstalled.addListener(applyZpwrDisabled); } catch (e) {}
 
-// The terminal's open state (zb_term_open) persists across navigation within a
-// session, but must NOT survive a browser restart / extension reload — a stale
-// "open" flag would re-pop the terminal on every page. Clear it on both.
-function zbClearTermOpen() { try { chrome.storage.local.set({ zb_term_open: false }); } catch (e) {} }
-try { chrome.runtime.onStartup.addListener(zbClearTermOpen); } catch (e) {}
-try { chrome.runtime.onInstalled.addListener(zbClearTermOpen); } catch (e) {}
+// The terminal's open state persists across navigation, but PER TAB — it must not
+// re-pop in every OTHER tab / new tab. The old global zb_term_open flag (chrome
+// .storage) opened it everywhere once opened anywhere. Track it keyed by tab id
+// (from sender.tab, which content scripts can't forge) in worker memory: on a
+// worker restart the map is empty and we fail-CLOSED (don't reopen), which is the
+// safe direction. Terminal content scripts are top-frame only, so tmux pane
+// iframes never trigger this.
+var termOpenByTab = {};
+try {
+  chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+    if (!msg || !sender || !sender.tab || sender.tab.id == null) return;
+    var tid = sender.tab.id;
+    if (msg.type === 'zbTermOpen') { if (msg.open) termOpenByTab[tid] = true; else delete termOpenByTab[tid]; return; }
+    if (msg.type === 'zbTermState') { sendResponse({ open: termOpenByTab[tid] === true }); return true; }
+  });
+} catch (e) {}
+try { chrome.tabs.onRemoved.addListener(function (tid) { delete termOpenByTab[tid]; }); } catch (e) {}
 
 // First run: open the HUD App Store page and pop the welcome modal, so the
 // MenkeTechnologies app store is shown up front. Unpacked extensions loaded via
@@ -260,39 +219,40 @@ try {
 function startSysStream() {
   try {
     var port = chrome.runtime.connectNative(HOST);
-    port.onMessage.addListener(function (m) { if (m && m.sys) { try { chrome.storage.local.set({ zb_sys: m.sys }); } catch (e) {} } });
+    port.onMessage.addListener(function (m) {
+      if (!m) return;
+      if (m.sys) { try { chrome.storage.local.set({ zb_sys: m.sys }); } catch (e) {} }
+      // Theme bus frames: {ev:'pub', topic:'scheme'|'ui', data}. The host sends a
+      // snapshot (current value) on subscribe + every change after, from ANY app.
+      else if (m.ev === 'pub') applyThemeFromHost(m.topic, m.data);
+    });
     port.onDisconnect.addListener(function () { void chrome.runtime.lastError; setTimeout(startSysStream, 5000); });
     port.postMessage({ cmd: 'sysinfo_start' });
+    port.postMessage({ cmd: 'sub', topic: 'scheme' });
+    port.postMessage({ cmd: 'sub', topic: 'ui' });
   } catch (e) { setTimeout(startSysStream, 5000); }
 }
 startSysStream();
 
-// Unify the light/fx prefs across surfaces: content-script palettes flip
-// `zb_ui` in chrome.storage (they can't reach the native host); mirror it to the
-// native file so the surfaces that read the file (newtab, System page) follow.
+// A hud-internal surface changed the theme in chrome.storage (a content-script
+// palette or a HUD page flips zb_ui / zb_scheme). Write it to the host — the
+// single source of truth — which persists it to ~/.zwire/global.toml and
+// publishes it back to US (echo, skipped below) AND to every other app's
+// subscription (newtab, zpwrchrome, zemacs, the fleet). No cross-extension
+// messaging: the host fans it out.
 try {
   chrome.storage.onChanged.addListener(function (ch, area) {
-    if (area === 'local' && ch.zb_ui && ch.zb_ui.newValue) {
+    if (area !== 'local') return;
+    if (ch.zb_scheme && ch.zb_scheme.newValue && ch.zb_scheme.newValue !== _lastHostScheme) {
+      try { chrome.runtime.sendNativeMessage(HOST, { scheme: ch.zb_scheme.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    }
+    if (ch.zb_ui && ch.zb_ui.newValue && JSON.stringify(ch.zb_ui.newValue) !== _lastHostUi) {
       try { chrome.runtime.sendNativeMessage(HOST, { ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-      // Push to zpwrchrome + newtab (both isolated) so they flip INSTANTLY
-      // rather than waiting for zpwr's message / newtab's 1.5s native poll.
-      try { chrome.runtime.sendMessage(ZPWR_ID, { type: 'zb-ui', ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-      try { chrome.runtime.sendMessage(ZB_NEWTAB_ID, { type: 'zb-ui', ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
     }
   });
 } catch (e) {}
-// On worker start (e.g. after a browser relaunch) push the CURRENT light/fx state
-// to zpwrchrome — otherwise it only learns of a change, so an already-on light
-// mode never reaches it until the next toggle.
-try {
-  chrome.storage.local.get('zb_ui', function (o) {
-    void chrome.runtime.lastError;
-    if (o && o.zb_ui) {
-      try { chrome.runtime.sendMessage(ZPWR_ID, { type: 'zb-ui', ui: o.zb_ui }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-      try { chrome.runtime.sendMessage(ZB_NEWTAB_ID, { type: 'zb-ui', ui: o.zb_ui }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-    }
-  });
-} catch (e) {}
+// (Startup convergence is handled by the theme subscription's snapshot — no
+// cross-extension startup push is needed anymore.)
 
 // PTY relay for the terminal overlay (a content script — can't connectNative).
 // Sessions are keyed by TAB so the shell SURVIVES page navigation: when the
@@ -473,12 +433,6 @@ try {
 // navigation / tab-switching always executes.
 chrome.storage.onChanged.addListener(function (changes, area) {
   if (area !== 'local') return;
-  // A scheme written straight to storage (the Settings-page picker in zg-boot
-  // writes zb_scheme + the native file but never messages this worker) must
-  // still be fanned out to zpwrchrome — a separate extension that only learns of
-  // scheme changes over runtime messaging. Without this, picks made in Settings
-  // reach newtab (native-file poll) + HUD content scripts but never zpwrchrome.
-  if (changes.zb_scheme && changes.zb_scheme.newValue) pushToZpwr(changes.zb_scheme.newValue);
   if (!changes.zb_cmd || !changes.zb_cmd.newValue) return;
   var c = changes.zb_cmd.newValue;
   function active(cb) {
