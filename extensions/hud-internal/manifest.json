@@ -199,10 +199,33 @@
         "file:///*"
       ],
       "js": [
-        "ztmux.js"
+        "ztmux-pane.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*",
+        "file:///*"
+      ],
+      "css": [
+        "lib/zgui-core/webui/tmux.css",
+        "ztmux-config.css"
+      ],
+      "js": [
+        "schemes.js",
+        "lib/zgui-core/webui/util.js",
+        "lib/zgui-core/webui/split-pane.js",
+        "lib/zgui-core/webui/modal.js",
+        "lib/zgui-core/webui/toast.js",
+        "lib/zgui-core/webui/button-bar.js",
+        "lib/zgui-core/webui/tmux.js",
+        "ztmux-config.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
     },
     {
       "matches": [

@@ -1,0 +1,12 @@
+/* zwire — iframe web-page pane chrome for the shared ZGui.tmux overlay (the tiling
+ * geometry + pane borders come from zgui-core's tmux.css; this only styles the
+ * per-pane address bar + framed page). */
+#zg-tmux .ztx-pane { display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+#zg-tmux .ztx-addr {
+  flex: 0 0 auto; height: 22px; padding: 2px 8px; box-sizing: border-box;
+  background: var(--bg-card, #0a0d16); color: var(--text, #c8d2e0);
+  border: none; border-bottom: 1px solid var(--border, #1a2436); outline: none;
+  font: 12px "Share Tech Mono", Monaco, monospace;
+}
+#zg-tmux .ztx-addr::placeholder { color: var(--text-muted, #5a6b82); }
+#zg-tmux .ztx-fr { flex: 1 1 auto; width: 100%; border: 0; background: #fff; }
