@@ -96,7 +96,8 @@
   }
   clogInner.appendChild(clbar);
   clogInner.appendChild(clog);
-  card('COMMAND LOG', clogInner);
+  // NOTE: the card() call is deferred to the end of the file so COMMAND LOG
+  // renders LAST (at the bottom of the page), below STATUS / LIVE / REPL.
   var clogKeys = new Set();
   function fmtTime(ms) { var d = new Date(ms || 0); function p(n) { return (n < 10 ? '0' : '') + n; } return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); }
   function renderClog(entries) {
@@ -206,7 +207,7 @@
     group[1].forEach(function (tpl) {
       var cmd = (tpl.match(/"cmd":"([a-z_]+)"/) || [, tpl.match(/"scheme"/) ? 'scheme' : tpl])[1];
       var b = el('span', 'zh-chip', esc(cmd)); b.title = tpl;
-      b.addEventListener('click', function () { setEditor(tpl); });
+      b.addEventListener('click', function () { setEditor(pretty(tpl)); });   // load the template PRETTY-printed
       row.appendChild(b);
     });
     catBox.appendChild(row);
@@ -215,7 +216,9 @@
 
   // Full JSON editor (zgui-core codeEditor: line-gutter, Tab-indent, multi-line).
   var edHost = el('div', 'zh-ed'); replInner.appendChild(edHost);
-  var editor = (Z.codeEditor && Z.codeEditor(edHost, { value: '{"cmd":"hello"}' })) || null;
+  var editor = (Z.codeEditor && Z.codeEditor(edHost, { value: '{\n  "cmd": "hello"\n}' })) || null;
+  // Pretty-print a JSON template; fall back to the raw string if it doesn't parse.
+  function pretty(s) { try { return JSON.stringify(JSON.parse(s), null, 2); } catch (e) { return s; } }
   var taFallback = null;
   if (!editor) { taFallback = el('textarea', 'zh-in'); taFallback.value = '{"cmd":"hello"}'; edHost.appendChild(taFallback); }
   function getEditor() { return editor ? editor.get() : (taFallback ? taFallback.value : ''); }
@@ -272,6 +275,9 @@
   }
   function logErr(text) { var e2 = el('div', 'zh-entry err'); e2.textContent = '✕ ' + text; logEl.appendChild(e2); logEl.scrollTop = logEl.scrollHeight; }
   function applyLogFilter() { Array.prototype.forEach.call(logEl.children, function (en) { en.style.display = !curFilter || en.textContent.toLowerCase().indexOf(curFilter) >= 0 ? '' : 'none'; }); }
+
+  // COMMAND LOG card, appended last so it sits at the BOTTOM of the page.
+  card('COMMAND LOG', clogInner);
 
   /* --------------------------- native port ------------------------------- */
   var port = null, portOk = false, seq = 0;
