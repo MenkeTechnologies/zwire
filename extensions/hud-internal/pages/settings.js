@@ -77,7 +77,7 @@
   function setPref(p, v) {
     sp.setPref(p.key, v, '', function (ok) {
       void chrome.runtime.lastError;
-      if (!ok && window.ZGui.toast) ZGui.toast('Could not set ' + p.key);
+      if (!ok && window.ZGui.toast) ZGui.toast.show('Could not set ' + p.key);
       else p.value = v;
     });
   }

@@ -337,11 +337,11 @@
     try {
       dp.updateExtensionCommand({ extensionId: c.ext, commandName: c.cmd, keybinding: kb, scope: c.scope || 'CHROME' }, function () {
         var err = chrome.runtime.lastError;
-        if (err && window.ZGui.toast) ZGui.toast('Shortcut: ' + err.message);
-        else if (window.ZGui.toast) ZGui.toast(kb ? 'Set ' + kb : 'Cleared shortcut');
+        if (err && window.ZGui.toast) ZGui.toast.show('Shortcut: ' + err.message);
+        else if (window.ZGui.toast) ZGui.toast.show(kb ? 'Set ' + kb : 'Cleared shortcut');
         refresh();
       });
-    } catch (e) { if (window.ZGui.toast) ZGui.toast('Shortcut error'); refresh(); }
+    } catch (e) { if (window.ZGui.toast) ZGui.toast.show('Shortcut error'); refresh(); }
   }
 
   /* -------------------------------------------------------------- actions */
@@ -364,9 +364,9 @@
   function openOptions(e) { if (dp.showOptions) dp.showOptions(e.id); else if (e.optionsPage) chrome.tabs.create({ url: e.optionsPage.url }); }
   function reload(e) { dp.reload(e.id, { failQuietly: false, populateErrorForUnpacked: true }, function () { void chrome.runtime.lastError; refresh(); }); }
   function loadUnpacked() { dp.loadUnpacked({ failQuietly: true }, function () { void chrome.runtime.lastError; refresh(); }); }
-  function updateAll() { dp.autoUpdate(function () { void chrome.runtime.lastError; if (window.ZGui.toast) ZGui.toast('Checking for updates…'); refresh(); }); }
+  function updateAll() { dp.autoUpdate(function () { void chrome.runtime.lastError; if (window.ZGui.toast) ZGui.toast.show('Checking for updates…'); refresh(); }); }
   function pack() { dp.choosePath('FOLDER', 'LOAD', function (path) { void chrome.runtime.lastError; if (!path) return;
-    dp.packDirectory(path, '', 0, function (resp) { void chrome.runtime.lastError; if (resp && resp.message && window.ZGui.toast) ZGui.toast(resp.message); }); }); }
+    dp.packDirectory(path, '', 0, function (resp) { void chrome.runtime.lastError; if (resp && resp.message && window.ZGui.toast) ZGui.toast.show(resp.message); }); }); }
 
   /* ---------------------------------------------------------------- data */
   function loadProfile(cb) { dp.getProfileConfiguration(function (p) { void chrome.runtime.lastError; if (p) profile = p; (cb || function () {})(); }); }

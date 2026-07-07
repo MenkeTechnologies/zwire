@@ -71,7 +71,7 @@
     if (key === a.def) { delete overrides[a.name]; }   // back to default
     else { overrides[a.name] = key; }
     var c = conflict(a.name, key);
-    save(function () { if (c && Z.toast) Z.toast('⚠ "' + (key === ' ' ? 'Space' : key) + '" is also bound to "' + c + '" — both fire on that key'); render(); });
+    save(function () { if (c && Z.toast) Z.toast.show('⚠ "' + (key === ' ' ? 'Space' : key) + '" is also bound to "' + c + '" — both fire on that key'); render(); });
   }
 
   function chipFor(a) {

@@ -82,7 +82,7 @@
     return mods.concat([key]).join('+');
   }
   function suspend(on) { try { if (dp && dp.setShortcutHandlingSuspended) dp.setShortcutHandlingSuspended(on); } catch (e) {} }
-  function toast(m) { try { if (Z.toast) Z.toast(m); } catch (e) {} }
+  function toast(m) { try { if (Z.toast) Z.toast.show(m); } catch (e) {} }
 
   function startRecord(r) {
     if (!dp || !dp.updateExtensionCommandKeybinding || !r || !r.id || !r.cmd) {

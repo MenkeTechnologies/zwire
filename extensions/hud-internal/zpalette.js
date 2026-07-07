@@ -206,25 +206,58 @@
   // Small transient toast for host-command feedback (content script — may not
   // have ZGui.toast; fall back to a self-styled corner popup).
   function hostToast(text, bad) {
-    try { if (window.ZGui && ZGui.toast) { ZGui.toast(text); return; } } catch (e) {}
+    try { if (window.ZGui && ZGui.toast) { ZGui.toast.show(text); return; } } catch (e) {}
     var d = document.createElement('div'); d.textContent = text;
     d.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;background:#0a0d16;color:' + (bad ? '#ff2a6d' : '#05d9e8') + ';border:1px solid currentColor;padding:8px 12px;font:12px "Share Tech Mono",monospace;border-radius:4px;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     (document.body || document.documentElement).appendChild(d); setTimeout(function () { try { d.remove(); } catch (e) {} }, 3200);
   }
-  function runCustom(e, arg) {
-    var v = e.value || '';
-    if (e.type === 'shell') {
+  // Shell steps run through zwire-host `exec` — reliable everywhere, no popup
+  // terminal required. The program + args are chosen per-OS (cmd.exe on Windows,
+  // /bin/sh -c on macOS/Linux) and PATH widened so common tool dirs resolve. The
+  // reply's base64 stdout/stderr is decoded and shown as a toast.
+  function osKind() {
+    var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase();
+    if (p.indexOf('win') >= 0) return 'win';
+    if (p.indexOf('mac') >= 0 || p.indexOf('darwin') >= 0) return 'mac';
+    return 'nix';
+  }
+  function shellReq(cmd) {
+    var os = osKind();
+    if (os === 'win') return { cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', cmd] };
+    var path = (os === 'mac')
+      ? '/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+      : '/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin';
+    return { cmd: 'exec', program: '/bin/sh', args: ['-c', cmd], env: { PATH: path } };
+  }
+  function b64dec(s) { try { return s ? decodeURIComponent(escape(atob(s))) : ''; } catch (e) { try { return s ? atob(s) : ''; } catch (x) { return ''; } } }
+  function runShell(cmd) {
+    var req = shellReq(cmd);
+    try {
+      chrome.runtime.sendMessage({ type: 'zb-host', req: req }, function (res) {
+        void chrome.runtime.lastError;
+        if (!res || !res.ok) { hostToast('shell: ' + ((res && res.err) || 'no response'), true); return; }
+        var r = res.reply || {};
+        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
+        var bad = r.code != null && r.code !== 0;
+        var text = out || er;
+        hostToast('$ ' + cmd + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
+      });
+    } catch (err) { hostToast('shell: ' + err, true); }
+  }
+  function runStep(type, v, arg) {
+    v = v || '';
+    if (type === 'shell') {
       var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
-      try { if (window.zwireTermRun) window.zwireTermRun(c); } catch (x) {}
+      runShell(c);
       return;
     }
-    if (e.type === 'js') {
+    if (type === 'js') {
       try { (new Function('q', v))(arg || ''); } catch (err) { try { console.error('zwire custom js:', err); } catch (x) {} }
       return;
     }
-    if (e.type === 'action') { runAction(v); return; }
-    if (e.type === 'scheme') { setScheme(v); return; }
-    if (e.type === 'host') {
+    if (type === 'action') { runAction(v); return; }
+    if (type === 'scheme') { setScheme(v); return; }
+    if (type === 'host') {
       var raw = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
       var obj; try { obj = JSON.parse(raw); } catch (err) { hostToast('host: invalid JSON', true); return; }
       try {
@@ -238,6 +271,17 @@
     }
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
     if (url) open(url);
+  }
+  // A command is a CHAIN of typed steps run top-to-bottom (a small stagger keeps
+  // tab-opens and scheme swaps from stomping each other; {q} reaches every step).
+  // entrySteps() accepts the new steps[] array or a legacy single {type,value}.
+  function entrySteps(e) {
+    if (e && Array.isArray(e.steps)) return e.steps;
+    if (e && e.type) return [{ type: e.type, value: e.value }];
+    return [];
+  }
+  function runCustom(e, arg) {
+    entrySteps(e).forEach(function (s, i) { setTimeout(function () { try { runStep(s.type, s.value, arg); } catch (x) {} }, i * 140); });
   }
   // Custom-command rows, the exact-keyword provider, and the web-search provider
   // all come from the SHARED palette-cmds.js (ZWIRE_PALETTE_CMDS), bound to this

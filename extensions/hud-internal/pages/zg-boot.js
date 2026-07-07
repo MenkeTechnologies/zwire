@@ -31,33 +31,77 @@
   // Custom ⌘K commands (zb_custom_cmds, managed on commands.html) also run from
   // the internal HUD pages. Internal pages have chrome.tabs directly; browser
   // actions route through the same zb_cmd storage bus the worker listens on.
-  function runCustomBoot(e, arg) {
-    var v = e.value || '';
-    if (e.type === 'shell') {
+  // Shell steps run via zwire-host `exec` — extension pages talk to the native
+  // host directly. The program/args are chosen per-OS (cmd.exe on Windows, /bin/sh
+  // -c on macOS/Linux) with a widened PATH; output decoded to a toast.
+  function osKind() {
+    var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase();
+    if (p.indexOf('win') >= 0) return 'win';
+    if (p.indexOf('mac') >= 0 || p.indexOf('darwin') >= 0) return 'mac';
+    return 'nix';
+  }
+  function shellReq(cmd) {
+    var os = osKind();
+    if (os === 'win') return { cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', cmd] };
+    var path = (os === 'mac')
+      ? '/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+      : '/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin';
+    return { cmd: 'exec', program: '/bin/sh', args: ['-c', cmd], env: { PATH: path } };
+  }
+  function b64dec(s) { try { return s ? decodeURIComponent(escape(atob(s))) : ''; } catch (e) { try { return s ? atob(s) : ''; } catch (x) { return ''; } } }
+  function bootToast(m, type) { try { if (ZGui.toast && ZGui.toast.show) ZGui.toast.show(m, 3200, type || ''); } catch (x) {} }
+  function runShellBoot(cmd) {
+    var req = shellReq(cmd);
+    try {
+      chrome.runtime.sendNativeMessage(HOST, req, function (reply) {
+        var err = chrome.runtime.lastError;
+        if (err) { bootToast('shell: ' + err.message, 'error'); return; }
+        var r = reply || {};
+        if (r.ok === false) { bootToast('shell: ' + (r.err || 'failed'), 'error'); return; }
+        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
+        var bad = r.code != null && r.code !== 0;
+        var text = out || er;
+        bootToast('$ ' + cmd + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad ? 'error' : 'success');
+      });
+    } catch (e) { bootToast('shell: ' + e, 'error'); }
+  }
+  function runStepBoot(type, v, arg) {
+    v = v || '';
+    if (type === 'shell') {
       var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
-      try { if (window.zwireTermRun) window.zwireTermRun(c); else if (ZGui.toast) ZGui.toast('Open a web page to run shell commands'); } catch (x) {}
+      runShellBoot(c);
       return;
     }
-    if (e.type === 'js') { try { (new Function('q', v))(arg || ''); } catch (x) {} return; }
-    if (e.type === 'action') { try { chrome.storage.local.set({ zb_cmd: { a: v, n: 'boot' + Date.now() } }); } catch (x) {} return; }
-    if (e.type === 'scheme') {
+    if (type === 'js') { try { (new Function('q', v))(arg || ''); } catch (x) {} return; }
+    if (type === 'action') { try { chrome.storage.local.set({ zb_cmd: { a: v, n: 'boot' + Date.now() } }); } catch (x) {} return; }
+    if (type === 'scheme') {
       try { chrome.runtime.sendNativeMessage(HOST, { scheme: v }, function () { void chrome.runtime.lastError; }); } catch (x) {}
       try { chrome.storage.local.set({ zb_scheme: v }); if (ZGui.colorscheme) ZGui.colorscheme.apply(v); } catch (x) {}
       return;
     }
-    if (e.type === 'host') {   // extension page can talk to the native host directly
+    if (type === 'host') {   // extension page can talk to the native host directly
       var raw = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
-      var obj; try { obj = JSON.parse(raw); } catch (err) { if (ZGui.toast) ZGui.toast('host: invalid JSON'); return; }
+      var obj; try { obj = JSON.parse(raw); } catch (err) { if (ZGui.toast) ZGui.toast.show('host: invalid JSON'); return; }
       try {
         chrome.runtime.sendNativeMessage(HOST, obj, function (reply) {
           var err = chrome.runtime.lastError;
-          if (ZGui.toast) ZGui.toast('host ◂ ' + (err ? err.message : (reply && typeof reply === 'object' ? JSON.stringify(reply).slice(0, 140) : String(reply))));
+          if (ZGui.toast) ZGui.toast.show('host ◂ ' + (err ? err.message : (reply && typeof reply === 'object' ? JSON.stringify(reply).slice(0, 140) : String(reply))));
         });
-      } catch (err) { if (ZGui.toast) ZGui.toast('host: ' + err); }
+      } catch (err) { if (ZGui.toast) ZGui.toast.show('host: ' + err); }
       return;
     }
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;
     if (url) { try { chrome.tabs.create({ url: url }); } catch (x) { try { location.href = url; } catch (y) {} } }
+  }
+  // A command is a CHAIN of typed steps (new steps[] array, or a legacy single
+  // {type,value} for shipped defaults). Run them top-to-bottom with a small stagger.
+  function bootSteps(e) {
+    if (e && Array.isArray(e.steps)) return e.steps;
+    if (e && e.type) return [{ type: e.type, value: e.value }];
+    return [];
+  }
+  function runCustomBoot(e, arg) {
+    bootSteps(e).forEach(function (s, i) { setTimeout(function () { try { runStepBoot(s.type, s.value, arg); } catch (x) {} }, i * 140); });
   }
   // A user's own commands ('c…' id) are flagged user:true so zgui-core's palette
   // ranks them in the tier above the built-in + shipped-default ('def-…') rows.

@@ -162,19 +162,29 @@
     var cur = document.documentElement.getAttribute('data-hud-scheme') || 'cyberpunk';
     var i = ORDER.indexOf(cur); setScheme(ORDER[(i + 1 + ORDER.length) % ORDER.length] || ORDER[0]);
   }
-  function runCustom(e, arg) {
-    var v = e.value || '';
-    if (e.type === 'scheme') { setScheme(v); return; }
-    if (e.type === 'js') { try { (new Function('q', v))(arg || ''); } catch (err) { try { console.error('zwire custom js:', err); } catch (x) {} } return; }
-    if (e.type === 'action') {
+  function runStep(type, v, arg) {
+    v = v || '';
+    if (type === 'scheme') { setScheme(v); return; }
+    if (type === 'js') { try { (new Function('q', v))(arg || ''); } catch (err) { try { console.error('zwire custom js:', err); } catch (x) {} } return; }
+    if (type === 'action') {
       if (v === 'reload') { try { location.reload(); } catch (x) {} }
       else if (v === 'copyUrl') { try { navigator.clipboard.writeText(location.href); } catch (x) {} }
       else if (v === 'cycleScheme') { cycleScheme(); }
       return;   // worker-backed tab verbs (newTab/closeTab/…) are HUD-only; inert here
     }
-    if (e.type === 'shell') return;   // no terminal on the new tab page
+    if (type === 'shell' || type === 'host') return;   // no terminal / native host on the new tab page
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
     if (url) goCurrent(url);
+  }
+  // A command is a CHAIN of typed steps (new steps[] array, or a legacy single
+  // {type,value}). Run each with a small stagger; {q} reaches every step.
+  function entrySteps(e) {
+    if (e && Array.isArray(e.steps)) return e.steps;
+    if (e && e.type) return [{ type: e.type, value: e.value }];
+    return [];
+  }
+  function runCustom(e, arg) {
+    entrySteps(e).forEach(function (s, i) { setTimeout(function () { try { runStep(s.type, s.value, arg); } catch (x) {} }, i * 140); });
   }
   var CMDCTX = { runCustom: runCustom, typeLabel: typeLabel, isDefaultCmd: isDefaultCmd };
   var searchProvider = PC.makeSearchProvider ? PC.makeSearchProvider(goCurrent) : function () { return []; };

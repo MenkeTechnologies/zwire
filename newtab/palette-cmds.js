@@ -76,9 +76,17 @@
     };
   }
 
-  var TYPE_LABEL = { url: 'open url', shell: 'shell', js: 'javascript', action: 'action', scheme: 'scheme' };
+  var TYPE_LABEL = { url: 'open url', shell: 'shell', js: 'javascript', action: 'action', scheme: 'scheme', host: 'host' };
   function typeLabel(t) { return TYPE_LABEL[t] || 'custom'; }
   function isDefaultCmd(e) { return String((e && e.id) || '').indexOf('def-') === 0; }
+  // A command is a chain of typed steps (steps[]) or a legacy single {type,value};
+  // summarise it as "url → shell → scheme" for the palette sub-text.
+  function stepsSummary(e, tl) {
+    tl = tl || typeLabel;
+    var st = (e && Array.isArray(e.steps)) ? e.steps : (e && e.type ? [{ type: e.type }] : []);
+    if (!st.length) return 'custom';
+    return st.map(function (s) { return tl(s.type); }).join(' → ');
+  }
 
   // ctx: { runCustom(entry, arg), typeLabel?, isDefaultCmd? } — consumer supplies
   // runCustom (backend-specific: worker bus vs direct chrome.tabs).
@@ -89,7 +97,7 @@
   function makeCustomItems(list, ctx) {
     var tl = ctxTypeLabel(ctx), isDef = ctxIsDefault(ctx), run = ctx.runCustom;
     return (list || []).map(function (e) {
-      return { icon: e.icon || '✦', label: e.label, detail: e.detail || (e.keyword ? e.keyword + ' …' : tl(e.type)),
+      return { icon: e.icon || '✦', label: e.label, detail: e.detail || (e.keyword ? e.keyword + ' …' : stepsSummary(e, tl)),
         keyword: e.keyword || '', user: !isDef(e), run: function () { run(e, ''); } };
     });
   }
@@ -109,7 +117,7 @@
       var out = [];
       (getCache() || []).forEach(function (e) {
         if (e.keyword && e.keyword.toLowerCase() === kw) {
-          out.push({ icon: e.icon || '✦', label: e.label + ': ' + rest, detail: e.detail || tl(e.type), user: !isDef(e), top: true,
+          out.push({ icon: e.icon || '✦', label: e.label + ': ' + rest, detail: e.detail || stepsSummary(e, tl), user: !isDef(e), top: true,
             run: function () { run(e, rest); } });
         }
       });
@@ -121,6 +129,7 @@
     SEARCH: SEARCH,
     slug: slug,
     typeLabel: typeLabel,
+    stepsSummary: stepsSummary,
     isDefaultCmd: isDefaultCmd,
     makeSearchProvider: makeSearchProvider,
     makeCustomItems: makeCustomItems,
