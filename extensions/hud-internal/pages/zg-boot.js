@@ -158,7 +158,7 @@
   }
 
   /* ---- colorscheme <-> native host bridge -------------------------------- */
-  var applyingExternal = false, currentScheme = null;
+  var applyingExternal = false, currentScheme = null, lastPick = 0;
   function bridge() {
     if (!window.ZGui || !ZGui.colorscheme) return;
     // any pick in the shell settings (or a custom scheme) -> native + storage.
@@ -170,6 +170,10 @@
       // setLight). Re-publishing a value we just received is what turned a
       // light/dark reconcile into an infinite flash loop between surfaces.
       if (applyingExternal || window.__zbApplyingExternal) return;
+      // Local user pick: stamp it so the 1.5s pull() below won't clobber it with a
+      // STALE host read (the {scheme} write is async and may not have landed yet —
+      // rapid picks otherwise "snap back" to the previous value).
+      lastPick = Date.now();
       try { chrome.runtime.sendNativeMessage(HOST, { scheme: name }, function () { void chrome.runtime.lastError; }); } catch (e) {}
       try { chrome.storage.local.set({ zb_scheme: name }); } catch (e) {}
       // setLight() re-applies the scheme, so onApply ALSO fires on a light/dark
@@ -195,8 +199,13 @@
       try {
         chrome.runtime.sendNativeMessage(HOST, { cmd: 'get' }, function (r) {
           void chrome.runtime.lastError;
-          var s = (r && r.scheme) || 'cyberpunk';
-          if (s !== currentScheme) {
+          // Only follow a REAL scheme value. A transient failed/empty `get` (host
+          // respawn, mid-write) must NOT fall back to 'cyberpunk' — that fallback
+          // is exactly what reset a freshly-picked scheme back to cyberpunk.
+          var s = r && r.scheme;
+          // Ignore a differing host scheme for a moment after a local pick — it's
+          // almost certainly a stale read racing our own not-yet-flushed write.
+          if (s && s !== currentScheme && Date.now() - lastPick > 2500) {
             applyingExternal = true;
             try { ZGui.colorscheme.apply(s); } finally { applyingExternal = false; }
             // keep any rendered scheme picker's highlight in sync with the
