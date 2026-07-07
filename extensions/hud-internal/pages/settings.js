@@ -7,7 +7,7 @@
   'use strict';
   var sp = chrome.settingsPrivate;
   var FZ = window.ZGui.fzf;
-  var shell, body, prefs = [], query = '', uiSeeded = false;
+  var shell, body, prefs = [], query = '';
 
   function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
   function pretty(s) { return s.replace(/[._]/g, ' ').replace(/\b\w/g, function (m) { return m.toUpperCase(); }); }
@@ -68,8 +68,14 @@
       tsRow.appendChild(tsT.el); inner.appendChild(tsRow);
       try { chrome.storage.local.get('zb_status', function (o) { void chrome.runtime.lastError; var inp = tsRow.querySelector('input[type=checkbox]'); if (inp) inp.checked = !(o && o.zb_status === false); }); } catch (e) {}
     }
-    // seed the native file from local state ONCE (render() re-runs per keystroke).
-    if (!uiSeeded) { uiSeeded = true; publishUi(); }
+    // NB: do NOT seed the host from local state here. ZGui light/fx state is
+    // restored synchronously from per-origin localStorage (colorscheme.load /
+    // fx.load) and only reconciled to the fleet truth (zb_ui ← ~/.zwire/global
+    // .toml) ASYNCHRONOUSLY by boot()'s reconcile below. A publish on render
+    // races that reconcile: when it wins, it writes the STALE local light/fx back
+    // to the host, reverting a scheme/light change just made from newtab (the
+    // sporadic "settings reverts my change" bug). The host is the source of
+    // truth on open — we only publish in response to an actual user toggle.
     return ZGui.card({ body: inner }).el;
   }
 
@@ -143,6 +149,25 @@
       render();
     });
     if (sp.onPrefsChanged) sp.onPrefsChanged.addListener(function (changed) { mergeChanged(changed); render(); });
+    // Reconcile the ZGui light/fx state to a fleet-truth ui object (zb_ui, which
+    // the background bridge mirrors from ~/.zwire/global.toml). Applied under the
+    // __zbApplyingExternal guard so the setLight-driven zg-boot onApply does NOT
+    // republish it back to the host — that republish is both the light/dark
+    // flash-loop AND, when the local value is stale, the clobber that reverted a
+    // newtab change.
+    function reconcileUi(ui) {
+      ui = ui || {};
+      window.__zbApplyingExternal = true;
+      try {
+        try { if (ZGui.colorscheme && ZGui.colorscheme.setLight && typeof ui.light === 'boolean' && ZGui.colorscheme.isLight() !== ui.light) ZGui.colorscheme.setLight(ui.light); } catch (e) {}
+        try { if (ZGui.fx && ZGui.fx.set) ['scanlines', 'vignette', 'glow', 'anim'].forEach(function (n) { if (typeof ui[n] === 'boolean' && ZGui.fx.get(n) !== ui[n]) ZGui.fx.set(n, ui[n]); }); } catch (e) {}
+      } finally { window.__zbApplyingExternal = false; }
+    }
+    // On OPEN, converge the switches to the host's CURRENT ui before the user sees
+    // (or a toggle could publish) a stale local value. storage.onChanged only
+    // fires on a *change*, so a fresh open — where zb_ui already equals the host —
+    // needs this explicit read to reconcile + re-render.
+    try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; if (o && o.zb_ui) { reconcileUi(o.zb_ui); render(); } }); } catch (e) {}
     // Keep the light/effect SWITCHES in sync when the state is changed elsewhere
     // (⌘K palette command, another surface): reconcile ZGui state to zb_ui, then
     // re-render so the toggles reflect it. Without this the switch went stale.
@@ -152,17 +177,7 @@
         // ⌘K toggle or `:set status off` must re-render this page too — otherwise
         // the Settings switch drifts out of sync with the palette / status bar.
         if (area !== 'local' || (!ch.zb_ui && !ch.zb_status)) return;
-        if (ch.zb_ui) {
-          var ui = ch.zb_ui.newValue || {};
-          // Reacting to an externally-changed value: guard so the setLight-driven
-          // onApply (zg-boot) doesn't republish it back out — that republish is
-          // what made a light/dark reconcile flash-loop between surfaces forever.
-          window.__zbApplyingExternal = true;
-          try {
-            try { if (ZGui.colorscheme && ZGui.colorscheme.setLight && typeof ui.light === 'boolean' && ZGui.colorscheme.isLight() !== ui.light) ZGui.colorscheme.setLight(ui.light); } catch (e) {}
-            try { if (ZGui.fx && ZGui.fx.set) ['scanlines', 'vignette', 'glow', 'anim'].forEach(function (n) { if (typeof ui[n] === 'boolean' && ZGui.fx.get(n) !== ui[n]) ZGui.fx.set(n, ui[n]); }); } catch (e) {}
-          } finally { window.__zbApplyingExternal = false; }
-        }
+        if (ch.zb_ui) reconcileUi(ch.zb_ui.newValue || {});
         render();
       });
     } catch (e) {}
