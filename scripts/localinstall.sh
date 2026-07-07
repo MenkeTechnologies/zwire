@@ -25,7 +25,7 @@ source scripts/cyberpunk.sh
 ROOT="$(pwd)"
 ICON="$ROOT/branding/zwire.icns"
 VERSION="$(python3 -c 'import json;print(json.load(open("package.json"))["version"])')"
-DEST="/Applications/zwire.app"
+DEST="${ZWIRE_DEST:-/Applications/zwire.app}"
 RES="$DEST/Contents/Resources"
 
 cyber_banner
