@@ -21,9 +21,13 @@ os=$(uname -s)
 case "$os" in
   Darwin)
     # The 0006 branding patch renames the bundle to zwire.app (and its
-    # executable to `zwire`); an unbranded build yields Chromium.app. Match
-    # whichever main bundle exists, excluding the Helper bundles.
-    APP=$(find "$OUTDIR" -maxdepth 1 -name '*.app' -type d ! -name '*Helper*' | head -1)
+    # executable to `zwire`); an unbranded build yields Chromium.app. A stale app
+    # from an earlier build/rename can linger in the out dir alongside the fresh
+    # one (e.g. zbrowser.app next to zwire.app), and a plain `head -1` would grab
+    # the alphabetically-first STALE bundle. Pick the MOST RECENTLY BUILT bundle
+    # instead, excluding the Helper bundles.
+    APP=$(find "$OUTDIR" -maxdepth 1 -name '*.app' -type d ! -name '*Helper*' \
+            -exec stat -f '%m %N' {} \; | sort -rn | head -1 | cut -d' ' -f2-)
     [[ -d $APP ]] || { echo "package: no app bundle found in $OUTDIR" >&2; exit 1; }
     APP_NAME=$(basename "$APP")                       # zwire.app | Chromium.app
     # Derive the real executable name from the bundle instead of hardcoding it.
