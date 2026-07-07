@@ -14,12 +14,22 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 source "$ROOT/scripts/state-dir.sh"
 STATE=${ZWIRE_STATE:-$(zwire_default_state)}
 
-# One-time migration: earlier builds kept state in ~/.zwire. If that legacy dir
-# exists and the new app-data dir does not, move it so an upgrade keeps the
-# profile/base/scheme intact. No-op once migrated (or when ZWIRE_STATE is set).
-if [[ -z ${ZWIRE_STATE:-} && -d $HOME/.zwire && ! -e $STATE ]]; then
-  mkdir -p "$(dirname "$STATE")"
-  mv "$HOME/.zwire" "$STATE" 2>/dev/null || true
+# One-time migration into the current state dir. Earlier builds kept state under
+# ~/.zwire, and on macOS a later build used the bare `zwire` app-data folder
+# before it moved to the bundle-id dir. If a legacy dir exists and the current
+# one does not, move it so an upgrade keeps the profile/base/scheme intact.
+# No-op once migrated (or when ZWIRE_STATE is set).
+if [[ -z ${ZWIRE_STATE:-} && ! -e $STATE ]]; then
+  legacy=""
+  if [[ $(uname -s) == Darwin && -d "$HOME/Library/Application Support/zwire" ]]; then
+    legacy="$HOME/Library/Application Support/zwire"
+  elif [[ -d $HOME/.zwire ]]; then
+    legacy="$HOME/.zwire"
+  fi
+  if [[ -n $legacy ]]; then
+    mkdir -p "$(dirname "$STATE")"
+    mv "$legacy" "$STATE" 2>/dev/null || true
+  fi
 fi
 
 PROFILE=$STATE/profile

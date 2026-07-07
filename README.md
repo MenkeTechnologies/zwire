@@ -148,9 +148,11 @@ overlay, then a pane/window action; `⌘K` opens the command palette. Rebind the
 prefix and every shortcut on the Keyboard HUD page.
 
 State lives under `$ZWIRE_STATE`, which defaults to the OS application-data
-directory — macOS `~/Library/Application Support/zwire`, Linux
-`${XDG_CONFIG_HOME:-~/.config}/zwire`, Windows `%APPDATA%\zwire`. A one-time
-launch auto-migrates a legacy `~/.zwire` into the new location:
+directory — macOS `~/Library/Application Support/com.menketechnologies.zwire`
+(the bundle id), Linux `${XDG_CONFIG_HOME:-~/.config}/zwire`, Windows
+`%APPDATA%\zwire`. A one-time launch auto-migrates a legacy `~/.zwire` (and, on
+macOS, an earlier bare `~/Library/Application Support/zwire`) into the new
+location:
 
 | Path | Purpose |
 |---|---|

@@ -120,7 +120,21 @@ cat > "$DEST/Contents/MacOS/zwire" <<'LAUNCH'
 #!/bin/bash
 set -euo pipefail
 RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
-STATE="${ZWIRE_STATE:-$HOME/Library/Application Support/zwire}"
+# macOS app-data folder is the bundle id (matches CFBundleIdentifier + the
+# convention that Application Support dirs are named by reverse-DNS id).
+STATE="${ZWIRE_STATE:-$HOME/Library/Application Support/com.menketechnologies.zwire}"
+# One-time migrations into the bundle-id dir: an earlier build kept state under
+# the bare `zwire` folder, and older ones under ~/.zwire. Move whichever exists
+# so an upgrade keeps the profile/base/scheme intact. No-op once migrated (or
+# when ZWIRE_STATE is set).
+if [[ -z "${ZWIRE_STATE:-}" && ! -e "$STATE" ]]; then
+  LEGACY_APPDATA="$HOME/Library/Application Support/zwire"
+  if [[ -d "$LEGACY_APPDATA" ]]; then
+    mv "$LEGACY_APPDATA" "$STATE" 2>/dev/null || true
+  elif [[ -d "$HOME/.zwire" ]]; then
+    mv "$HOME/.zwire" "$STATE" 2>/dev/null || true
+  fi
+fi
 PROFILE="$STATE/profile"
 mkdir -p "$PROFILE/NativeMessagingHosts" "$PROFILE/Default/NativeMessagingHosts"
 read -r -d '' HOSTJSON <<JSON || true

@@ -7,7 +7,7 @@
   var esc = (Z.util && Z.util.escapeHtml) || function (s) { return String(s == null ? '' : s); };
 
   // Keep in sync with package.json "version".
-  var ZWIRE_VERSION = '0.5.10';
+  var ZWIRE_VERSION = '0.5.11';
   var HOST = 'com.zwire.hud';
 
   var shell = window.ZBHUD.mount({ title: 'SYSTEM', current: 'version.html', filterPlaceholder: 'filter…', onFilter: function (v) { filterAll(v); } });
@@ -70,7 +70,7 @@
     ['Install', 'macOS .app · Linux ~/.local + .desktop · Windows %LOCALAPPDATA% + Start Menu'],
     // zwire stores its profile in the OS app-data dir (scripts/state-dir.sh), NOT
     // a dotdir — ~ shown here, refined to the absolute path by the host below.
-    ['Profile', (/Mac|Darwin/i.test(nav.platform || ua) ? '~/Library/Application Support/zwire/profile' : '~/.config/zwire/profile')],
+    ['Profile', (/Mac|Darwin/i.test(nav.platform || ua) ? '~/Library/Application Support/com.menketechnologies.zwire/profile' : '~/.config/zwire/profile')],
     ['Scheme file', '~/.zwire/hud-scheme']
   ]);
 
@@ -142,7 +142,7 @@
         put('Device memory', (gb >= 10 ? Math.round(gb) : gb.toFixed(1)) + ' GB');
       }
       if (h.home) {                                        // real absolute profile path
-        var st = h.os === 'macos' ? h.home + '/Library/Application Support/zwire'
+        var st = h.os === 'macos' ? h.home + '/Library/Application Support/com.menketechnologies.zwire'
                : h.os === 'windows' ? h.home + '\\AppData\\Local\\zwire'
                : h.home + '/.config/zwire';
         put('Profile', st + (h.os === 'windows' ? '\\profile' : '/profile'));
