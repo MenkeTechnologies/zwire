@@ -1,0 +1,22 @@
+diff --git a/chrome/common/extensions/chrome_extensions_client.cc b/chrome/common/extensions/chrome_extensions_client.cc
+index e725bce790..52d4bea859 100644
+--- a/chrome/common/extensions/chrome_extensions_client.cc
++++ b/chrome/common/extensions/chrome_extensions_client.cc
+@@ -150,7 +150,16 @@ bool ChromeExtensionsClient::IsScriptableURL(const GURL& url,
+   // The gallery is special-cased as a restricted URL for scripting to prevent
+   // access to special JS bindings we expose to the gallery (and avoid things
+   // like extensions removing the "report abuse" link).
+-  if (extension_urls::IsWebstoreDomain(url)) {
++  //
++  // zwire: the HUD ships its own new-tab / palette / extension-management
++  // surfaces that need to script the Chrome Web Store (e.g. one-click install
++  // flows, store re-skins). Stock Chromium hard-blocks all extension scripting
++  // on the webstore domains; drop that special-case so content scripts and
++  // tabs.executeScript run there like any other page. (The store's own
++  // privileged JS bindings are gated separately by IsWebstoreOrigin checks in
++  // permissions_data.cc, which this does not touch.)
++  constexpr bool kZwireAllowWebstoreScripting = true;
++  if (!kZwireAllowWebstoreScripting && extension_urls::IsWebstoreDomain(url)) {
+     if (error) {
+       *error = manifest_errors::kCannotScriptGallery;
+     }

@@ -32,6 +32,7 @@ running `fork/build.sh` — that is the gate for the native (Views) patches.
 | 0013 | **Restore last session** | `chrome/browser/prefs/session_startup_pref.cc` | Default startup preference = restore the last session, so tabs auto-restore on launch. | authored · apply-clean |
 | 0014 | **No crash bubble** | `chrome/browser/ui/views/session_crashed_bubble_view.cc` | Never show the "Restore pages?" session-crashed bubble — the restore-last-session default (0013) already brings tabs back. | authored · apply-clean |
 | 0015 | **No navigation block** | `extensions/browser/extension_navigation_throttle.cc` | Never block a `chrome-extension://` navigation to a not-yet-registered extension, so the new-tab override page always loads at startup before its extension finishes registering. | authored · apply-clean |
+| 0019 | **Script the Web Store** | `chrome/common/extensions/chrome_extensions_client.cc` (`IsScriptableURL`) | Drop the gallery special-case (`kCannotScriptGallery`) so extension content scripts and `tabs.executeScript` run on the Chrome Web Store domains (`chrome.google.com/webstore` + `chromewebstore.google.com`) like any other page — the HUD needs to script the store for its install/re-skin flows. Store-privileged JS bindings stay gated by `IsWebstoreOrigin` in `permissions_data.cc`, which this does not touch. | authored · apply-clean |
 
 ## Rebasing onto a new Chromium release
 
