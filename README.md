@@ -25,7 +25,9 @@ workspace layered on top:
 - a **⌘K command palette**, **vim-style navigation**, and a **find bar**;
 - durable, named **session management** with full CRUD + SVG layout previews;
 - **HUD reimplementations of Chrome's own internal pages** (extensions,
-  settings, history, bookmarks, version) plus a keyboard-remap page;
+  settings, history, bookmarks, version) plus a keyboard-remap page and a
+  **dashboard** — one searchable, drag-orderable tile grid that launches every
+  HUD page *and* every `chrome://` internal page;
 - **8 color schemes** — each with a **light variant** — that drive the browser
   chrome natively, with a light/dark toggle that syncs across the HUD, new-tab
   page, and `zpwrchrome` instantly;
@@ -33,7 +35,7 @@ workspace layered on top:
   never touches your system Chrome.
 
 The HUD layer (`extensions/hud-internal`) is ~5,400 lines of extension code
-across 11 subsystems and 14 pages. Under it, a **15-patch C++ fork** restyles the
+across 11 subsystems and 15 pages. Under it, a **15-patch C++ fork** restyles the
 *native* chrome the extension layer can't reach.
 
 **zwire is the full fork.** The 15-patch series (`fork/`) compiles a patched
