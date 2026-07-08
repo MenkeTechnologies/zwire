@@ -7,7 +7,7 @@
   var esc = (Z.util && Z.util.escapeHtml) || function (s) { return String(s == null ? '' : s); };
 
   // Keep in sync with package.json "version".
-  var ZWIRE_VERSION = '0.5.20';
+  var ZWIRE_VERSION = '0.5.21';
   var HOST = 'com.zwire.hud';
 
   var shell = window.ZBHUD.mount({ title: 'SYSTEM', current: 'version.html', filterPlaceholder: 'filter…', onFilter: function (v, rx) { filterAll(v, rx); } });
