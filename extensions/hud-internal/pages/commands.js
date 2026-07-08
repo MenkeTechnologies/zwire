@@ -11,7 +11,7 @@
   var KEY = 'zb_custom_cmds';
   var cmds = [];
   var editingId = null;
-  var filter = '';
+  var filter = '', matchFn = function () { return true; };
 
   var TYPES = [
     { value: 'url', label: 'Open URL' },
@@ -70,7 +70,7 @@
   injectCss();
   var shell = window.ZBHUD.mount({
     title: 'COMMANDS', current: 'commands.html', filterPlaceholder: '>_ filter commands…',
-    onFilter: function (v) { filter = (v || '').toLowerCase(); drawTable(); }
+    onFilter: function (v, rx) { matchFn = window.ZBHUD.matcher(v, rx); drawTable(); }
   });
   var body = shell.body;
 
@@ -286,7 +286,7 @@
   function rowsFiltered() {
     return cmds.filter(function (c) {
       var hay = c.label + ' ' + stepsSummary(c) + ' ' + entrySteps(c).map(function (s) { return s.value; }).join(' ') + ' ' + (c.keyword || '') + ' ' + (c.detail || '');
-      return !filter || hay.toLowerCase().indexOf(filter) >= 0;
+      return matchFn(hay);
     });
   }
   function drawTable() {

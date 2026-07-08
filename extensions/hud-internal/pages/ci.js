@@ -9,11 +9,11 @@
 
   var shell = window.ZBHUD.mount({
     title: 'CI', current: 'ci.html', filterPlaceholder: '>_ filter runs…',
-    onFilter: function (v) { filter = (v || '').toLowerCase(); drawTable(); }
+    onFilter: function (v, rx) { matchFn = window.ZBHUD.matcher(v, rx); drawTable(); }
   });
   var body = shell.body;
 
-  var filter = '';
+  var matchFn = function () { return true; };
   var CFG = { user: 'MenkeTechnologies', token: '', repoLimit: 20 };
   var allRuns = [];
   var lastError = '';
@@ -133,9 +133,7 @@
     return Math.floor(s / 86400) + 'd ago';
   }
   function matches(r) {
-    if (!filter) return true;
-    return (r.repo + ' ' + r.wf + ' ' + r.branch + ' ' + r.event + ' ' + r.actor + ' ' + r.conclusion + ' ' + r.status)
-      .toLowerCase().indexOf(filter) >= 0;
+    return matchFn(r.repo + ' ' + r.wf + ' ' + r.branch + ' ' + r.event + ' ' + r.actor + ' ' + r.conclusion + ' ' + r.status);
   }
 
   var tableHost = document.createElement('div');

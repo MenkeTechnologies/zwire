@@ -7,24 +7,29 @@
   var esc = (Z.util && Z.util.escapeHtml) || function (s) { return String(s == null ? '' : s); };
 
   // Keep in sync with package.json "version".
-  var ZWIRE_VERSION = '0.5.18';
+  var ZWIRE_VERSION = '0.5.19';
   var HOST = 'com.zwire.hud';
 
-  var shell = window.ZBHUD.mount({ title: 'SYSTEM', current: 'version.html', filterPlaceholder: 'filter…', onFilter: function (v) { filterAll(v); } });
+  var shell = window.ZBHUD.mount({ title: 'SYSTEM', current: 'version.html', filterPlaceholder: 'filter…', onFilter: function (v, rx) { filterAll(v, rx); } });
   var body = shell.body;
 
   // Live filter: show only rows (and their card) whose key/value — or the card
   // header — match the query; hide cards with nothing left.
   var curFilter = '';
-  function filterAll(v) {
-    curFilter = (v || '').trim().toLowerCase();
+  var curMatch = function () { return true; };
+  function filterAll(v, rx) {
+    curFilter = (v || '').trim();
+    curMatch = window.ZBHUD.matcher(v, rx);
+    applyFilter();
+  }
+  function applyFilter() {
     Array.prototype.forEach.call(body.children, function (cardEl) {
       var rows = cardEl.querySelectorAll('.info-row'); if (!rows.length) return;
       var header = cardEl.querySelector('.set-h');
-      var headMatch = curFilter && header && header.textContent.toLowerCase().indexOf(curFilter) >= 0;
+      var headMatch = curFilter && header && curMatch(header.textContent);
       var anyVisible = false;
       Array.prototype.forEach.call(rows, function (row) {
-        var show = !curFilter || headMatch || row.textContent.toLowerCase().indexOf(curFilter) >= 0;
+        var show = !curFilter || headMatch || curMatch(row.textContent);
         row.style.display = show ? '' : 'none'; if (show) anyVisible = true;
       });
       cardEl.style.display = anyVisible ? '' : 'none';
@@ -57,10 +62,22 @@
     ['What it is', 'A Chromium superset with the cyberpunk HUD — the zpwrchrome power-tool, an 8-scheme theme engine, a HUD new-tab, and a global ⌘K command palette, on a real Blink base.'],
     ['Version', ZWIRE_VERSION],
     ['HUD extension', 'v' + (chrome.runtime.getManifest ? chrome.runtime.getManifest().version : '?')],
+    ['zpwrchrome', '<span class="sub">probing…</span>', true],
     ['License', 'MIT'],
     ['Repo', '<a href="https://github.com/MenkeTechnologies/zwire" target="_blank">github.com/MenkeTechnologies/zwire</a>', true],
     ['Docs', '<a href="https://menketechnologies.github.io/zwire/" target="_blank">menketechnologies.github.io/zwire</a>', true]
   ]);
+
+  /* zpwrchrome is a SEPARATE bundled extension, so its version isn't in our own
+     manifest — resolve it live via chrome.management and refine the row in place. */
+  try {
+    if (chrome.management && chrome.management.getAll) chrome.management.getAll(function (exts) {
+      void chrome.runtime.lastError;
+      var zp = (exts || []).filter(function (e) { return /zpwrchrome/i.test(e.name || ''); })[0];
+      var cell = body.querySelector('.info-row[data-k="zpwrchrome"] .iv');
+      if (cell) cell.textContent = zp ? ('v' + zp.version) : 'not loaded';
+    });
+  } catch (e) {}
 
   /* ---- BUILD ---- */
   card('BUILD', [
@@ -80,7 +97,7 @@
     var fresh = card('NATIVE HOST', rows);
     body.replaceChild(fresh, hostCard);
     hostCard = fresh;
-    if (curFilter) filterAll(curFilter);   // keep an active filter applied across the async swap
+    if (curFilter) applyFilter();   // keep an active filter applied across the async swap
   }
   try {
     chrome.runtime.sendNativeMessage(HOST, { cmd: 'get' }, function (r) {

@@ -306,8 +306,8 @@
     root.appendChild(app);
     // ZGui.searchBox filter (real zgui widget)
     if (opts.onFilter && ZGui.searchBox) {
-      ZGui.searchBox(filterHost, { placeholder: opts.filterPlaceholder || '>_ filter…', regex: false,
-        onInput: function (v) { opts.onFilter(v); } });
+      ZGui.searchBox(filterHost, { placeholder: opts.filterPlaceholder || '>_ filter…',
+        onInput: function (v, meta) { opts.onFilter(v, meta ? !!meta.regex : false); } });
     }
     // CRT scanlines via ZGui.crt — call with NO {on} so it RESPECTS the saved
     // pref (localStorage zguiCrt). Forcing {on:true} here re-enabled it on every
@@ -417,6 +417,22 @@
     return { body: main, el: app, filterHost: filterHost };
   }
 
+  // Shared filter predicate for the HUD filter bar's regex toggle (ZGui.searchBox
+  // emits {regex}). Substring (case-insensitive) when off; a case-insensitive
+  // RegExp when on. Empty query matches all; an invalid regex matches nothing so
+  // the bad pattern is visibly reflected. Consumers: matchFn = ZBHUD.matcher(q, rx).
+  function matcher(query, regexOn) {
+    query = (query == null ? '' : String(query)).trim();
+    if (!query) return function () { return true; };
+    if (regexOn) {
+      var re = null; try { re = new RegExp(query, 'i'); } catch (e) { re = null; }
+      if (!re) return function () { return false; };
+      return function (t) { return re.test(t == null ? '' : String(t)); };
+    }
+    var lq = query.toLowerCase();
+    return function (t) { return (t == null ? '' : String(t)).toLowerCase().indexOf(lq) >= 0; };
+  }
+
   window.ZBHUD = { PAGES: PAGES, NATIVE_PAGES: NATIVE_PAGES, mount: mount, go: go,
-    navButton: navButton, HOST: HOST, publishUi: publishUi };
+    navButton: navButton, HOST: HOST, publishUi: publishUi, matcher: matcher };
 })();

@@ -12,7 +12,7 @@
 
   var shell, body, listEl, devToggleEl;
   var all = [], profile = { inDeveloperMode: false, canLoadUnpacked: true };
-  var view = 'list', detailId = null, query = '';
+  var view = 'list', detailId = null, query = '', regexOn = false;
   var STORE_URL = 'https://chromewebstore.google.com/';
 
   // zwire's own HUD core — the browser IS these. Disabling hud-internal kills
@@ -87,6 +87,12 @@
   function matched() {
     var q = (query || '').trim();
     if (!q) return all.filter(isExt).map(function (e) { return { e: e, idx: null }; });
+    if (regexOn) {
+      var re = null; try { re = new RegExp(q, 'i'); } catch (er) { re = null; }
+      var rout = [];
+      all.forEach(function (e) { if (!isExt(e)) return; if (re && (re.test(e.name) || re.test(e.description || ''))) rout.push({ e: e, idx: [], score: 0 }); });
+      return rout;
+    }
     var out = [];
     all.forEach(function (e) {
       if (!isExt(e)) return;
@@ -263,10 +269,10 @@
     view = 'shortcuts';
     body.innerHTML = '';
     body.appendChild(ZGui.button({ label: '← BACK', variant: 'mini', onClick: renderList }));
-    var q = (query || '').toLowerCase();
+    var q = (query || '').trim();
+    var m = window.ZBHUD.matcher(query, regexOn);
     function cmdMatch(e, c) {
-      if (!q) return true;
-      return (e.name + ' ' + (c.description || '') + ' ' + (c.name || '') + ' ' + (c.keybinding || '')).toLowerCase().indexOf(q) >= 0;
+      return m(e.name + ' ' + (c.description || '') + ' ' + (c.name || '') + ' ' + (c.keybinding || ''));
     }
     // filter to extensions that have at least one command matching the query,
     // and within each keep only the matching commands.
@@ -382,7 +388,7 @@
 
   function boot() {
     shell = ZBHUD.mount({ title: 'EXTENSIONS', current: 'extensions.html', filterPlaceholder: 'filter extensions…',
-      onFilter: function (q) { query = q; if (view === 'shortcuts') renderShortcuts(); else if (view === 'list') renderList(); },
+      onFilter: function (q, rx) { query = q; regexOn = rx; if (view === 'shortcuts') renderShortcuts(); else if (view === 'list') renderList(); },
       palette: [ { label: 'Load unpacked extension', run: loadUnpacked }, { label: 'Pack extension', run: pack },
         { label: 'Update all extensions', run: updateAll }, { label: 'Keyboard shortcuts', run: renderShortcuts } ] });
     body = shell.body;

@@ -13,11 +13,11 @@
 
   var shell = window.ZBHUD.mount({
     title: 'EXT SHORTCUTS', current: 'extshortcuts.html', filterPlaceholder: '>_ filter shortcuts…',
-    onFilter: function (v) { filter = (v || '').toLowerCase(); draw(); }
+    onFilter: function (v, rx) { filter = (v || '').trim(); matchFn = window.ZBHUD.matcher(v, rx); draw(); }
   });
   var body = shell.body;
 
-  var filter = '';
+  var filter = '', matchFn = function () { return true; };
   var rows = [];
   var recording = null;   // the row currently capturing a new combo
 
@@ -46,8 +46,7 @@
   }
 
   function matches(r) {
-    if (!filter) return true;
-    return (r.ext + ' ' + r.desc + ' ' + (r.keybinding || '')).toLowerCase().indexOf(filter) >= 0;
+    return matchFn(r.ext + ' ' + r.desc + ' ' + (r.keybinding || ''));
   }
   function clip(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 

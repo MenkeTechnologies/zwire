@@ -11,9 +11,10 @@
   var HOST = 'com.zwire.hud';
 
   var curFilter = '';
+  var logMatch = function () { return true; };
   var shell = window.ZBHUD.mount({
     title: 'HOST', current: 'host.html', filterPlaceholder: 'filter REPL log…',
-    onFilter: function (v) { curFilter = (v || '').trim().toLowerCase(); applyLogFilter(); }
+    onFilter: function (v, rx) { curFilter = (v || '').trim(); logMatch = window.ZBHUD.matcher(v, rx); applyLogFilter(); }
   });
   var body = shell.body;
   function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
@@ -270,11 +271,11 @@
     if (Z.jsonView) Z.jsonView(treeHost, obj, { collapseDepth: 2 }); else treeHost.textContent = JSON.stringify(obj);
     entry.appendChild(treeHost);
     logEl.appendChild(entry);
-    if (curFilter) entry.style.display = entry.textContent.toLowerCase().indexOf(curFilter) >= 0 ? '' : 'none';
+    if (curFilter) entry.style.display = logMatch(entry.textContent) ? '' : 'none';
     entry.scrollIntoView({ block: 'nearest' });            // keep the latest entry in view at the bottom
   }
   function logErr(text) { var e2 = el('div', 'zh-entry err'); e2.textContent = '✕ ' + text; logEl.appendChild(e2); logEl.scrollTop = logEl.scrollHeight; }
-  function applyLogFilter() { Array.prototype.forEach.call(logEl.children, function (en) { en.style.display = !curFilter || en.textContent.toLowerCase().indexOf(curFilter) >= 0 ? '' : 'none'; }); }
+  function applyLogFilter() { Array.prototype.forEach.call(logEl.children, function (en) { en.style.display = logMatch(en.textContent) ? '' : 'none'; }); }
 
   // COMMAND LOG card, appended last so it sits at the BOTTOM of the page.
   card('COMMAND LOG', clogInner);

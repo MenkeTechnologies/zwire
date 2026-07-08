@@ -8,7 +8,7 @@
   'use strict';
   var S = window.ZWIRE_STORE || { PRODUCTS: [], FEATURED: [], BASE: '', url: function () { return '#'; } };
   var FZ = window.ZGui && ZGui.fzf;
-  var body, query = '';
+  var body, query = '', regexOn = false;
 
   function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
   function open(u) { try { chrome.tabs.create({ url: u }); } catch (e) { try { location.href = u; } catch (x) {} } }
@@ -24,6 +24,7 @@
 
   function matches(p) {
     if (!query.trim()) return true;
+    if (regexOn) { try { var re = new RegExp(query, 'i'); return re.test(p.name) || re.test(p.tag) || re.test(p.category); } catch (e) { return false; } }
     return !!(FZ.fzfMatch(query, p.name) || FZ.fzfMatch(query, p.tag) || FZ.fzfMatch(query, p.category));
   }
 
@@ -93,7 +94,7 @@
   function boot() {
     injectCss();
     var shell = ZBHUD.mount({ title: 'APP STORE', current: 'store.html', filterPlaceholder: 'filter apps…',
-      onFilter: function (q) { query = q; render(); } });
+      onFilter: function (q, rx) { query = q; regexOn = rx; render(); } });
     body = shell.body;
     render();
     var welcome = false;

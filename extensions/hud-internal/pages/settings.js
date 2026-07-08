@@ -7,7 +7,7 @@
   'use strict';
   var sp = chrome.settingsPrivate;
   var FZ = window.ZGui.fzf;
-  var shell, body, prefs = [], query = '';
+  var shell, body, prefs = [], query = '', regexOn = false;
 
   function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
   function pretty(s) { return s.replace(/[._]/g, ' ').replace(/\b\w/g, function (m) { return m.toUpperCase(); }); }
@@ -113,6 +113,7 @@
   /* ------------------------------------------------------------------ render */
   function matches(p) {
     if (!query.trim()) return true;
+    if (regexOn) { try { var re = new RegExp(query, 'i'); return re.test(p.key) || re.test(labelOf(p.key)); } catch (e) { return false; } }
     return !!(FZ.fzfMatch(query, p.key) || FZ.fzfMatch(query, labelOf(p.key)));
   }
   function render() {
@@ -141,7 +142,7 @@
 
   function boot() {
     shell = ZBHUD.mount({ title: 'SETTINGS', current: 'settings.html', filterPlaceholder: 'filter settings…',
-      onFilter: function (q) { query = q; render(); } });
+      onFilter: function (q, rx) { query = q; regexOn = rx; render(); } });
     body = shell.body;
     sp.getAllPrefs(function (list) {
       void chrome.runtime.lastError;

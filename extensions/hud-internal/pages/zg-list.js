@@ -4,13 +4,17 @@
 (function () {
   'use strict';
   window.ZBList = function (cfg) {
-    var FZ = window.ZGui.fzf, rows = [], query = '';
+    var FZ = window.ZGui.fzf, rows = [], query = '', regexOn = false;
     var shell = window.ZBHUD.mount({ title: cfg.title, current: cfg.current,
-      filterPlaceholder: cfg.placeholder || 'filter…', onFilter: function (q) { query = q; render(); } });
+      filterPlaceholder: cfg.placeholder || 'filter…', onFilter: function (q, rx) { query = q; regexOn = rx; render(); } });
     var body = shell.body;
 
     function filtered() {
       if (!query.trim()) return rows;
+      if (regexOn) {
+        var re = null; try { re = new RegExp(query, 'i'); } catch (e) { re = null; }
+        return re ? rows.filter(function (r) { return re.test(cfg.text(r)); }) : [];
+      }
       return rows.map(function (r) { var m = FZ.fzfMatch(query, cfg.text(r)); return m ? { r: r, s: m.score } : null; })
         .filter(Boolean).sort(function (a, b) { return b.s - a.s; }).map(function (x) { return x.r; });
     }

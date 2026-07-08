@@ -147,16 +147,24 @@
     catch (e) { try { location.href = url; } catch (x) {} }
   }
 
-  var ctl = null;
   var shell = window.ZBHUD.mount({
     title: 'DASHBOARD', current: 'dashboard.html',
     filterPlaceholder: '>_ filter tiles… pages · chrome:// internals',
-    onFilter: function (v) { if (ctl) ctl.setQuery(v || ''); }
+    // ZGui.tiles filters by substring only; to honor the shell's regex toggle we
+    // filter the sections ourselves with ZBHUD.matcher and re-render the grid.
+    onFilter: function (v, rx) { renderTiles(window.ZBHUD.matcher(v, rx)); }
   });
 
-  ctl = Z.tiles.render(shell.body, SECTIONS, {
-    search: false,                 // the shell header already provides the filter
-    dragPrefix: 'zbDashOrder',
-    onActivate: function (id, t) { if (t && t.target) open(t.target); }
-  });
+  function renderTiles(m) {
+    var secs = SECTIONS.map(function (s) {
+      return { cat: s.cat, label: s.label, tiles: s.tiles.filter(function (t) { return m(t.label + ' ' + (t.desc || '') + ' ' + t.target); }) };
+    }).filter(function (s) { return s.tiles.length; });
+    Z.tiles.render(shell.body, secs, {
+      search: false,               // the shell header already provides the filter
+      dragPrefix: 'zbDashOrder',
+      onActivate: function (id, t) { if (t && t.target) open(t.target); }
+    });
+  }
+
+  renderTiles(function () { return true; });
 })();

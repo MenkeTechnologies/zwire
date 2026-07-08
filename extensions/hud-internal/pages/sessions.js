@@ -17,12 +17,12 @@
     return m;
   })();
   var sessions = [];
-  var filter = '';
+  var matchFn = function () { return true; };
   var editingId = null;         // session currently expanded for window/pane editing
 
   var shell = window.ZBHUD.mount({
     title: 'SESSIONS', current: 'sessions.html', filterPlaceholder: '>_ filter sessions…',
-    onFilter: function (v) { filter = (v || '').toLowerCase(); render(); }
+    onFilter: function (v, rx) { matchFn = window.ZBHUD.matcher(v, rx); render(); }
   });
   var body = shell.body;
 
@@ -197,12 +197,10 @@
   }
 
   function matches(s) {
-    if (!filter) return true;
-    if (s.name.toLowerCase().indexOf(filter) >= 0) return true;
-    return (s.windows || []).some(function (w) {
-      return (w.name || '').toLowerCase().indexOf(filter) >= 0 ||
-        (w.panes || []).some(function (p) { return (p.url || '').toLowerCase().indexOf(filter) >= 0 || (p.title || '').toLowerCase().indexOf(filter) >= 0; });
-    });
+    var hay = s.name + ' ' + (s.windows || []).map(function (w) {
+      return (w.name || '') + ' ' + (w.panes || []).map(function (p) { return (p.url || '') + ' ' + (p.title || ''); }).join(' ');
+    }).join(' ');
+    return matchFn(hay);
   }
 
   function render() {

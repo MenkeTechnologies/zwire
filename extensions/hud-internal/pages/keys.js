@@ -10,6 +10,7 @@
   var REG = window.ZWIRE_KEYMAP || { categories: [], global: [], native: [] };
   var overrides = {};        // zb_keys
   var filter = '';
+  var matchFn = function () { return true; };
   var capturing = null;
   var prefix = null;         // zb_tmux_prefix (chord list) — null = default C-b / ⌥B
   var opts = {};             // zb_tmux_opts { timeout }
@@ -30,12 +31,12 @@
 
   var shell = window.ZBHUD.mount({
     title: 'KEYBOARD', current: 'keys.html', filterPlaceholder: '>_ filter shortcuts…',
-    onFilter: function (v) { filter = (v || '').toLowerCase(); render(); }
+    onFilter: function (v, rx) { filter = (v || '').trim(); matchFn = window.ZBHUD.matcher(v, rx); render(); }
   });
   var body = shell.body;
 
   function keyOf(a) { return overrides[a.name] || a.def; }
-  function match(a) { return !filter || (a.label + ' ' + a.name + ' ' + keyOf(a)).toLowerCase().indexOf(filter) >= 0; }
+  function match(a) { return matchFn(a.label + ' ' + a.name + ' ' + keyOf(a)); }
   function save(cb) { try { chrome.storage.local.set({ zb_keys: overrides }, function () { void chrome.runtime.lastError; if (cb) cb(); }); } catch (e) { if (cb) cb(); } }
 
   // The action group an action lives in — that's its keyspace. tmux post-prefix

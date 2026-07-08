@@ -16,6 +16,7 @@
   if (!('highlights' in CSS)) return;           // needs Custom Highlight API
 
   var bar, input, countEl, styleEl;
+  var regexOn = false;
   var matches = [];                              // [{range}] navigable anchors
   var cur = -1;
 
@@ -40,7 +41,10 @@
     /* zgui-core .zg-searchbox (Audio-Haxor .search-box) */
     '.zg-searchbox{position:relative;display:flex;align-items:center;flex:1;}',
     '.zg-searchbox-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--cyan);font-size:14px;opacity:.6;pointer-events:none;z-index:1;}',
-    '.zg-searchbox-input{width:100%;padding:9px 36px 9px 36px;border-radius:2px;',
+    '.zg-searchbox-regex{position:absolute;right:34px;top:50%;transform:translateY(-50%);z-index:2;background:none;border:none;color:var(--text-muted,var(--text-dim));cursor:pointer;font-family:monospace;font-size:12px;line-height:1;padding:2px 4px;}',
+    '.zg-searchbox-regex:hover{color:var(--cyan);}',
+    '.zg-searchbox-regex.active{color:var(--magenta,#d300c5);text-shadow:0 0 6px var(--magenta,#d300c5);}',
+    '.zg-searchbox-input{width:100%;padding:9px 58px 9px 36px;border-radius:2px;',
     ' border:1px solid var(--border);background:var(--bg-secondary);color:var(--cyan);',
     ' font-family:inherit;font-size:13px;letter-spacing:.5px;outline:none;}',
     '.zg-searchbox-input:focus{border-color:var(--cyan);box-shadow:0 0 15px var(--cyan-glow),0 0 30px rgba(5,217,232,.08),inset 0 0 8px rgba(5,217,232,.05);}',
@@ -89,6 +93,7 @@
       '<div class="zg-searchbox">' +
         '<span class="zg-searchbox-icon">⌕</span>' +
         '<input class="zg-searchbox-input" type="text" spellcheck="false" placeholder="fzf filter…">' +
+        '<button class="zg-searchbox-regex" data-regex="1" title="Regex match (.*)">.*</button>' +
         '<button class="zg-searchbox-clear" data-clear="1" title="Clear">✕</button>' +
       '</div>' +
       '<span class="zfind-count">0/0</span>' +
@@ -100,6 +105,8 @@
     countEl = bar.querySelector('.zfind-count');
     input.addEventListener('input', function () { run(input.value); });
     bar.querySelector('[data-clear]').addEventListener('click', function () { input.value = ''; run(''); input.focus(); });
+    var rxBtn = bar.querySelector('[data-regex]');
+    if (rxBtn) rxBtn.addEventListener('click', function () { regexOn = !regexOn; rxBtn.classList.toggle('active', regexOn); run(input.value); input.focus(); });
     input.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); nav(e.shiftKey ? -1 : 1); }
       else if (e.key === 'Escape') { e.preventDefault(); close(); }
@@ -157,7 +164,22 @@
     clearHi();
     q = (q || '').trim();
     if (!q) { count(); return; }
-    var nodes = textNodes(), all = [], ql = q.toLowerCase();
+    var nodes = textNodes(), all = [];
+    if (regexOn) {
+      // regex mode — literal RegExp per text node (global, case-insensitive)
+      var re = null; try { re = new RegExp(q, 'gi'); } catch (e) { re = null; }
+      for (var ri = 0; re && ri < nodes.length && matches.length < CAP; ri++) {
+        var rs = nodes[ri].nodeValue, rm; re.lastIndex = 0;
+        while ((rm = re.exec(rs)) !== null) {
+          if (!rm[0].length) { re.lastIndex++; continue; }   // avoid zero-width infinite loop
+          var rr = document.createRange();
+          try { rr.setStart(nodes[ri], rm.index); rr.setEnd(nodes[ri], rm.index + rm[0].length); } catch (e2) { break; }
+          all.push(rr); matches.push({ range: rr });
+          if (matches.length >= CAP) break;
+        }
+      }
+    } else {
+    var ql = q.toLowerCase();
     // 1) substring occurrences (what a find bar is expected to do)
     for (var i = 0; i < nodes.length && matches.length < CAP; i++) {
       var t = nodes[i].nodeValue, tl = t.toLowerCase(), from = 0, p;
@@ -185,6 +207,7 @@
           try { cr.setStart(nodes[j], m.indices[k]); cr.setEnd(nodes[j], m.indices[k] + 1); all.push(cr); } catch (e) {}
         }
       }
+    }
     }
     var hl = new Highlight();
     all.forEach(function (r) { hl.add(r); });
