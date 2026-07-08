@@ -102,17 +102,47 @@
   // contrast: containers go transparent (so the dark body shows through, never
   // light-on-light), text goes light, form controls get a dark field. Add a
   // dedicated entry to PAGE_CSS for any page that needs bespoke tweaks.
+  // Restyle native, token-less debug pages in zgui-core's ACTUAL design language:
+  // the values here are lifted from zgui-core's component CSS — ZGui.dataTable
+  // (thead/tbody/hover/zebra), ZGui.searchBox (input + cyan focus glow), zs-btn
+  // (uppercase, cyan hover glow), and the card chrome — so these pages read like
+  // first-class HUD surfaces, not a crude dark override.
   var LEGACY_DARK = [
-    'html, body { background-color: var(--bg-primary) !important; color: var(--text) !important; }',
-    'table, thead, tbody, tr, th, td, div, span, p, section, article, fieldset, form,',
-    ' pre, code, label, li, ul, ol, h1, h2, h3, h4, h5, h6, dl, dt, dd, caption, legend, small, b, strong, em {',
-    '   background-color: transparent !important; color: var(--text) !important; border-color: var(--border) !important; }',
-    'th { background-color: var(--bg-secondary) !important; color: var(--cyan) !important; }',
-    'tr:nth-child(even) td { background-color: rgba(255,255,255,0.02) !important; }',
-    'input, textarea, select, button {',
-    '  background-color: var(--bg-secondary) !important; color: var(--text) !important;',
-    '  border: 1px solid var(--border) !important; }',
+    /* page surface — the HUD backdrop + mono type */
+    'html, body { background-color: var(--bg-primary) !important; color: var(--text) !important;',
+    '  font-family: "Share Tech Mono","Monaco",monospace !important; }',
+    /* headings — Orbitron/cyan, like a zgui card header (.set-h) */
+    'h1, h2, h3, h4, h5, h6 { color: var(--cyan) !important; font-family: "Orbitron", sans-serif !important; letter-spacing: 1px !important; }',
+    /* generic containers go transparent so the backdrop shows through (never light-on-light) */
+    'div, span, p, article, ul, ol, li, dl, dt, dd, label, caption, small, b, strong, em, tt {',
+    '  background-color: transparent !important; color: var(--text) !important; border-color: var(--border) !important; }',
+    /* box-like elements → ZGui.card (bg-card, border, subtle cyan glow) */
+    'fieldset, section, .widget, .box, [class*="panel"], [class*="card"], [class*="container"] {',
+    '  background-color: var(--bg-card) !important; border: 1px solid var(--border) !important;',
+    '  box-shadow: 0 0 0 1px var(--cyan-dim), 0 4px 18px rgba(0,0,0,.4) !important; padding: 10px !important; }',
+    'legend { color: var(--cyan) !important; font-family: "Orbitron", sans-serif !important; text-transform: uppercase !important; font-size: 11px !important; letter-spacing: 1px !important; }',
+    /* tables → ZGui.dataTable */
+    'table { width: 100% !important; border-collapse: collapse !important; font-size: 12px !important; background: var(--bg-card) !important; }',
+    'thead th, th { text-align: left !important; padding: 7px 10px !important; background: var(--bg-secondary) !important;',
+    '  border-bottom: 1px solid var(--border) !important; color: var(--text-dim) !important; font-family: "Orbitron", sans-serif !important;',
+    '  font-size: 10px !important; letter-spacing: 1px !important; text-transform: uppercase !important; }',
+    'tbody td, td { padding: 6px 10px !important; border-bottom: 1px solid var(--border) !important; color: var(--text) !important; background-color: transparent !important; }',
+    'tbody tr:hover td { background: var(--bg-hover) !important; }',
+    'tbody tr:nth-child(even) td { background-color: rgba(255,255,255,0.02) !important; }',
+    /* form fields → ZGui.searchBox */
+    'input, textarea, select { background: var(--bg-secondary) !important; color: var(--cyan) !important; border: 1px solid var(--border) !important;',
+    '  border-radius: 2px !important; padding: 7px 10px !important; font-family: inherit !important; }',
+    'input:focus, textarea:focus, select:focus { outline: none !important; border-color: var(--cyan) !important; box-shadow: 0 0 15px var(--cyan-glow) !important; }',
     'input::placeholder, textarea::placeholder { color: var(--text-muted) !important; }',
+    'input[type=checkbox], input[type=radio] { accent-color: var(--cyan) !important; }',
+    /* buttons → .zs-btn */
+    'button, input[type=button], input[type=submit], input[type=reset] { background: var(--bg-secondary) !important; color: var(--text-dim) !important;',
+    '  border: 1px solid var(--border) !important; border-radius: 0 !important; padding: 6px 12px !important; font-family: inherit !important;',
+    '  letter-spacing: 1px !important; text-transform: uppercase !important; cursor: pointer !important; }',
+    'button:hover, input[type=button]:hover, input[type=submit]:hover, input[type=reset]:hover { border-color: var(--cyan) !important;',
+    '  color: var(--cyan) !important; box-shadow: 0 0 8px var(--cyan-glow) !important; }',
+    /* code + links */
+    'pre, code, tt { background-color: var(--bg-secondary) !important; color: var(--text) !important; border: 1px solid var(--border) !important; padding: 1px 4px !important; }',
     'a, a:link, a:visited { color: var(--cyan) !important; }'
   ].join('\n');
 
