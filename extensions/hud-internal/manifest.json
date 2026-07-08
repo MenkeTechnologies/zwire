@@ -155,6 +155,42 @@
         "chrome://local-state/*",
         "chrome://tab-strip-internals/*"
       ],
+      "js": [
+        "debug-cloak.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "chrome://histograms/*",
+        "chrome://policy/*",
+        "chrome://components/*",
+        "chrome://prefs-internals/*",
+        "chrome://quota-internals/*",
+        "chrome://indexeddb-internals/*",
+        "chrome://blob-internals/*",
+        "chrome://serviceworker-internals/*",
+        "chrome://site-engagement/*",
+        "chrome://predictors/*",
+        "chrome://media-engagement/*",
+        "chrome://gcm-internals/*",
+        "chrome://ntp-tiles-internals/*",
+        "chrome://web-app-internals/*",
+        "chrome://app-service-internals/*",
+        "chrome://autofill-internals/*",
+        "chrome://attribution-internals/*",
+        "chrome://translate-internals/*",
+        "chrome://topics-internals/*",
+        "chrome://download-internals/*",
+        "chrome://gpu/*",
+        "chrome://interstitials/*",
+        "chrome://network-errors/*",
+        "chrome://suggest-internals/*",
+        "chrome://segmentation-internals/*",
+        "chrome://metrics-internals/*",
+        "chrome://local-state/*",
+        "chrome://tab-strip-internals/*"
+      ],
       "css": [
         "lib/zgui-core/webui/data-table.css",
         "lib/zgui-core/webui/layout.css",
