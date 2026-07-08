@@ -194,7 +194,8 @@
       "css": [
         "lib/zgui-core/webui/data-table.css",
         "lib/zgui-core/webui/layout.css",
-        "lib/zgui-core/webui/inspect.css"
+        "lib/zgui-core/webui/inspect.css",
+        "lib/zgui-core/webui/widgets.css"
       ],
       "js": [
         "lib/zgui-core/webui/data-table.js",

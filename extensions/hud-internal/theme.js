@@ -130,16 +130,18 @@
     'tbody tr:hover td { background: var(--bg-hover) !important; }',
     'tbody tr:nth-child(even) td { background-color: rgba(255,255,255,0.02) !important; }',
     /* form fields → ZGui.searchBox */
-    'input, textarea, select { background: var(--bg-secondary) !important; color: var(--cyan) !important; border: 1px solid var(--border) !important;',
+    /* form fields — readability fallback ONLY where the adapter hasn't added the
+       real zgui .zs-input class (dynamic pages the adapter doesn't convert). */
+    'input:not(.zs-input), textarea:not(.zs-input), select:not(.zs-input) { background: var(--bg-secondary) !important; color: var(--cyan) !important; border: 1px solid var(--border) !important;',
     '  border-radius: 2px !important; padding: 7px 10px !important; font-family: inherit !important; }',
-    'input:focus, textarea:focus, select:focus { outline: none !important; border-color: var(--cyan) !important; box-shadow: 0 0 15px var(--cyan-glow) !important; }',
+    'input:not(.zs-input):focus, textarea:not(.zs-input):focus, select:not(.zs-input):focus { outline: none !important; border-color: var(--cyan) !important; box-shadow: 0 0 15px var(--cyan-glow) !important; }',
     'input::placeholder, textarea::placeholder { color: var(--text-muted) !important; }',
     'input[type=checkbox], input[type=radio] { accent-color: var(--cyan) !important; }',
-    /* buttons → .zs-btn */
-    'button, input[type=button], input[type=submit], input[type=reset] { background: var(--bg-secondary) !important; color: var(--text-dim) !important;',
+    /* buttons — fallback ONLY where the adapter hasn't added the real .zs-btn class */
+    'button:not(.zs-btn), input[type=button]:not(.zs-btn), input[type=submit]:not(.zs-btn), input[type=reset]:not(.zs-btn) { background: var(--bg-secondary) !important; color: var(--text-dim) !important;',
     '  border: 1px solid var(--border) !important; border-radius: 0 !important; padding: 6px 12px !important; font-family: inherit !important;',
     '  letter-spacing: 1px !important; text-transform: uppercase !important; cursor: pointer !important; }',
-    'button:hover, input[type=button]:hover, input[type=submit]:hover, input[type=reset]:hover { border-color: var(--cyan) !important;',
+    'button:not(.zs-btn):hover, input[type=button]:not(.zs-btn):hover, input[type=submit]:not(.zs-btn):hover, input[type=reset]:not(.zs-btn):hover { border-color: var(--cyan) !important;',
     '  color: var(--cyan) !important; box-shadow: 0 0 8px var(--cyan-glow) !important; }',
     /* code + links */
     'pre, code, tt { background-color: var(--bg-secondary) !important; color: var(--text) !important; border: 1px solid var(--border) !important; padding: 1px 4px !important; }',

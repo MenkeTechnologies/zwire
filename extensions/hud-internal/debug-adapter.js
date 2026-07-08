@@ -18,7 +18,7 @@
   if (!window.ZGui || !window.ZGui.dataTable) return;   // deps missing — no-op
   var Z = window.ZGui;
   var seq = 0;
-  var CSS_FILES = ['data-table.css', 'layout.css', 'inspect.css'];
+  var CSS_FILES = ['data-table.css', 'layout.css', 'inspect.css', 'widgets.css'];
 
   // Consume the REAL zgui-core stylesheets (not a copy) by linking the extension's
   // web-accessible file into each root — the main doc gets them via manifest "css";
@@ -135,12 +135,27 @@
     } catch (e) {}
   }
 
+  // Native <button>/<input>/<textarea>/<select> keep their handlers — we just add
+  // the REAL zgui-core widget classes (.zs-btn / .zs-input from widgets.css) so
+  // free-form pages (serviceworker-internals etc.) get real zgui controls.
+  function styleControls(root) {
+    try {
+      if (!root.querySelectorAll) return;
+      var btns = root.querySelectorAll('button:not(.zs-btn),input[type=button]:not(.zs-btn),input[type=submit]:not(.zs-btn),input[type=reset]:not(.zs-btn)');
+      var ins = root.querySelectorAll('input[type=text]:not(.zs-input),input[type=search]:not(.zs-input),input[type=number]:not(.zs-input),input[type=url]:not(.zs-input),input:not([type]):not(.zs-input),textarea:not(.zs-input),select:not(.zs-input)');
+      if (btns.length || ins.length) ensureCss(root);
+      for (var i = 0; i < btns.length; i++) btns[i].classList.add('zs-btn');
+      for (var j = 0; j < ins.length; j++) ins[j].classList.add('zs-input');
+    } catch (e) {}
+  }
+
   function walk(root) {
     try {
       convertJson(root);
       var tables = root.querySelectorAll ? root.querySelectorAll('table:not([data-zb-adapted])') : [];
       for (var i = 0; i < tables.length; i++) convertTable(tables[i], root);
       sectionize(root);
+      styleControls(root);
       var els = root.querySelectorAll ? root.querySelectorAll('*') : [];
       for (var j = 0; j < els.length; j++) if (els[j].shadowRoot) walk(els[j].shadowRoot);
     } catch (e) {}
