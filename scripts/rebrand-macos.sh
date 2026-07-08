@@ -44,6 +44,19 @@ if [[ -f $ICON ]]; then
   pb "Delete :CFBundleIconName" 2>/dev/null || true
 fi
 
+# TCC purpose strings. macOS SIGABRTs (does not merely deny) any process that
+# reaches a privacy-gated capability with no matching NS*UsageDescription — the
+# plain-Chromium snapshot ships none, so a page using Web Bluetooth / getUserMedia
+# / Geolocation crashes the browser (TCC namespace abort). bin/zwire exec's THIS
+# base bundle directly, so TCC reads this Info.plist; inject the strings before
+# the re-sign below seals them. Keys mirror what a real Chromium browser carries.
+set_key NSBluetoothAlwaysUsageDescription     "zwire lets sites you allow connect to nearby Bluetooth devices (Web Bluetooth)."
+set_key NSBluetoothPeripheralUsageDescription "zwire lets sites you allow connect to nearby Bluetooth devices (Web Bluetooth)."
+set_key NSCameraUsageDescription              "zwire lets sites you allow use the camera for video capture and calls."
+set_key NSMicrophoneUsageDescription          "zwire lets sites you allow use the microphone for audio capture and calls."
+set_key NSLocationWhenInUseUsageDescription   "zwire lets sites you allow access your location (Geolocation)."
+set_key NSLocationUsageDescription            "zwire lets sites you allow access your location (Geolocation)."
+
 # Re-seal the bundle: the top-level Info.plist/Resources changed, so re-sign
 # ad-hoc (nested frameworks/helpers keep their own valid seals). Without this,
 # macOS treats the icon/name change as tampering and reverts to the cache.

@@ -110,8 +110,26 @@ if [[ -f "$ICON" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile zwire" "$NPL" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string zwire" "$NPL"
   /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$NPL" 2>/dev/null || true
 fi
+# TCC purpose strings. macOS does not merely DENY a privacy-gated capability with
+# no usage description — it SIGABRTs the whole process (TCC namespace abort). The
+# plain-Chromium snapshot from fetch-base.sh ships ZERO NS*UsageDescription keys,
+# so the first page that calls Web Bluetooth / getUserMedia / Geolocation kills
+# the browser. This is the NESTED bundle macOS actually runs (the launcher exec's
+# its binary), so TCC reads ITS Info.plist — inject the strings here, before the
+# re-sign below seals them into the ad-hoc signature. Set-or-Add stays idempotent
+# on a re-copied base. Keys mirror what a real Chromium browser build carries.
+nplist_set() { # $1 key  $2 purpose string
+  /usr/libexec/PlistBuddy -c "Set :$1 $2" "$NPL" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$NPL" 2>/dev/null || true
+}
+nplist_set NSBluetoothAlwaysUsageDescription     "zwire lets sites you allow connect to nearby Bluetooth devices (Web Bluetooth)."
+nplist_set NSBluetoothPeripheralUsageDescription "zwire lets sites you allow connect to nearby Bluetooth devices (Web Bluetooth)."
+nplist_set NSCameraUsageDescription              "zwire lets sites you allow use the camera for video capture and calls."
+nplist_set NSMicrophoneUsageDescription          "zwire lets sites you allow use the microphone for audio capture and calls."
+nplist_set NSLocationWhenInUseUsageDescription   "zwire lets sites you allow access your location (Geolocation)."
+nplist_set NSLocationUsageDescription            "zwire lets sites you allow access your location (Geolocation)."
 codesign --force --sign - "$NESTED" >/dev/null 2>&1 || cyber_warn "nested rebrand re-sign failed"
-cyber_ok "rebrand // nested browser -> zwire (name + icon)"
+cyber_ok "rebrand // nested browser -> zwire (name + icon + TCC purpose strings)"
 
 # 2) the extensions (skip node_modules/.git/tests to stay lean; skip _metadata —
 #    it's a dev-profile-specific compiled index Chromium regenerates per-user at
