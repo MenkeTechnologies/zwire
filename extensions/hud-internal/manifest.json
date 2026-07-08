@@ -69,7 +69,8 @@
       "resources": [
         "pages/*",
         "schemes.js",
-        "lib/term/*"
+        "lib/term/*",
+        "lib/zgui-core/webui/*.css"
       ],
       "matches": [
         "<all_urls>"
@@ -150,14 +151,19 @@
         "chrome://network-errors/*",
         "chrome://suggest-internals/*",
         "chrome://segmentation-internals/*",
-        "chrome://metrics-internals/*"
+        "chrome://metrics-internals/*",
+        "chrome://local-state/*",
+        "chrome://tab-strip-internals/*"
       ],
       "css": [
-        "lib/zgui-core/webui/data-table.css"
+        "lib/zgui-core/webui/data-table.css",
+        "lib/zgui-core/webui/layout.css",
+        "lib/zgui-core/webui/inspect.css"
       ],
       "js": [
         "lib/zgui-core/webui/data-table.js",
         "lib/zgui-core/webui/card.js",
+        "lib/zgui-core/webui/json-view.js",
         "debug-adapter.js"
       ],
       "run_at": "document_idle"
