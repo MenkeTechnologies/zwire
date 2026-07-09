@@ -8,7 +8,7 @@
 
 [![Base](https://img.shields.io/badge/base-chromium%20fork-05d9e8.svg)](#0x02-architecture)
 [![Workspace](https://img.shields.io/badge/HUD-tiling%20workspace-ff2a6d.svg)](#0x01-the-hud-workspace)
-[![Patches](https://img.shields.io/badge/native%20fork-15%20patches-d300c5.svg)](#0x05-full-hud-fork)
+[![Patches](https://img.shields.io/badge/native%20fork-24%20patches-d300c5.svg)](#0x05-full-hud-fork)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zwire/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -31,18 +31,23 @@ workspace layered on top:
 - **8 color schemes** — each with a **light variant** — that drive the browser
   chrome natively, with a light/dark toggle that syncs across the HUD, new-tab
   page, and `zpwrchrome` instantly;
+- a **browser-wide audio engine** — an always-on parametric output EQ + gain /
+  drive / pan compiled into the audio service (every tab, live-reconfigurable
+  with nothing open) plus a live **Audio HUD page** with real post-DSP spectrum
+  and meters;
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 
-The HUD layer (`extensions/hud-internal`) is ~5,400 lines of extension code
-across 11 subsystems and 15 pages. Under it, a **15-patch C++ fork** restyles the
+The HUD layer (`extensions/hud-internal`) is ~7,400 lines of extension code
+across 11 subsystems and 15 pages. Under it, a **24-patch C++ fork** restyles the
 *native* chrome the extension layer can't reach.
 
-**zwire is the full fork.** The 15-patch series (`fork/`) compiles a patched
+**zwire is the full fork.** The 24-patch series (`fork/`) compiles a patched
 Chromium so the *native* chrome carries the HUD too — sharp tab shapes, the
-Share Tech Mono UI font, the neon toolbar, the omnibox, and the 8 HUD schemes
-wired into the color mixer + DevTools — the styling an extension can't reach.
-See [`fork/README.md`](fork/README.md).
+Share Tech Mono UI font, the neon toolbar, the omnibox, the 8 HUD schemes wired
+into the color mixer + DevTools, native Views menus/dialogs bound to the HUD
+palette, and a browser-wide audio EQ + live meters — the styling and behavior an
+extension can't reach. See [`fork/README.md`](fork/README.md).
 
 ## `[0x00] WHY A REAL BLINK BASE`
 
@@ -64,7 +69,7 @@ Chrome can no longer be scripted this way; a Chromium build can.
 ## `[0x01] THE HUD WORKSPACE`
 
 `extensions/hud-internal` is where zwire stops being "a browser" and becomes a
-workspace. It is a content-script + page bundle (~5,400 LOC), not a theme.
+workspace. It is a content-script + page bundle (~7,400 LOC), not a theme.
 
 **`ztmux` — the tiling overlay (`ztmux.js`, ~900 LOC).** A tmux server, in the
 browser. Recursive binary pane splits, unlimited windows, and **every pane is a
@@ -92,9 +97,9 @@ scheme picker, the light/dark toggle, and the settings controls — **vim-style
 motions** (`zkeys` — jump / scroll / tabs / launch categories), a **find bar**
 (`zfind`), a **powerline status bar** (`zstatus`), and **HUD reimplementations**
 of `chrome://{extensions,settings,history,bookmarks,downloads,version}` plus
-Keyboard, Commands, Sessions, CI, a **Host** console, a **Terminal**, and an
-**App Store** page — 14 in all. Every shortcut, and the tmux prefix itself, is
-remappable on the Keyboard page.
+Keyboard, Commands, Sessions, CI, a **Host** console, a **Terminal**, an **App
+Store**, and a live **Audio** page — 15 in all. Every shortcut, and the tmux
+prefix itself, is remappable on the Keyboard page.
 
 **Host console (`pages/host.html`).** A HUD tab that talks to the `zwire-host`
 native-messaging host directly — inspect and drive the native bridge from inside
@@ -107,17 +112,26 @@ and open source; this is its shop window. On **first run** (`onInstalled`),
 `background.js` opens this page once with a welcome modal, so the store is shown
 up front — the new-tab page stays untouched.
 
+**Audio (`pages/audio.html`).** A live audio dashboard over a browser-wide DSP
+engine the fork compiles into the audio service (patches 0022–0024): an always-on
+parametric EQ cascade + preamp / gain / drive / equal-power pan / mono-fold
+applied to **every** output stream (media element, MSE/YouTube, Web Audio,
+WebRTC) before the OS device, live-reconfigurable with nothing open and no
+relaunch. The page renders the **real post-DSP output** — Goertzel spectrum bars,
+peak/RMS meters, phase correlation, and a stereo scope — pumped back over the
+native host (no `tabCapture`, so watching the meters never touches the audio).
+
 ## `[0x02] ARCHITECTURE`
 
 | Layer | What it is |
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
-| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zstatus`), the 8-scheme picker (with light/dark toggle), and 14 HUD pages (incl. the Sessions manager, Keyboard remapper, Host console + App Store). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
+| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zstatus`), the 8-scheme picker (with light/dark toggle), and 15 HUD pages (incl. the Sessions manager, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension: the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |
 | **Theme** | `theme/` — a colors-only Chrome theme. Present but **not** launcher-loaded — the fork's native color mixer (patch 0002) and the HUD skin own the palette, and a static theme applies last and would override them |
 | **Launcher** | `bin/zwire` — starts the base against `$ZWIRE_STATE/profile` with `newtab` + `zpwrchrome` + `hud-internal` loaded and `--extensions-on-chrome-urls` set (any dir missing a `manifest.json` is skipped, so a missing submodule degrades gracefully) |
-| **Fork** | `fork/` — the 15-patch source build that restyles the native chrome (tab shapes, fonts, borders, omnibox, DevTools schemes) and tunes native behavior (forced zwire new-tab, session restore, framing) the extension layer can't reach; this is what zwire ships as |
+| **Fork** | `fork/` — the 24-patch source build that restyles the native chrome (tab shapes, fonts, borders, omnibox, DevTools schemes, native menus/dialogs) and tunes native behavior (forced zwire new-tab, session restore, framing, browser-wide audio EQ + meters) the extension layer can't reach; this is what zwire ships as |
 
 A Chrome theme extension changes **colors only** — it cannot reshape tabs, fonts,
 or toolbar (those are native C++), and it cannot add a tiling overlay or a
@@ -178,7 +192,7 @@ fork/build.sh          ~/zwire-chromium/src  # the long compile
 fork/package.sh        ~/zwire-chromium/src/out/zwire
 ```
 
-All **15** HUD patches are **authored** against the pinned tag (`150.0.7871.46`)
+All **24** HUD patches are **authored** against the pinned tag (`150.0.7871.46`)
 and verified apply-clean. The nine styling/behavior patches: hard trapezoid tabs
 (`tab_style_views.cc`), the cyberpunk palette + the 8 HUD schemes on
 frame/toolbar/tabs/omnibox (`chrome_color_mixer.cc`), the Share Tech Mono /
@@ -188,17 +202,34 @@ product strings (`BRANDING`), the 8 HUD schemes in the DevTools Theme dropdown
 (`design_system_tokens.css` + `main-meta.ts` + `ThemeSupport.ts`), allow-framing
 any site so the `ztmux` overlay can iframe pages (`ancestor_throttle.cc`), and
 extension-command focus hand-off so the ⌘K palette is typeable from the omnibox
-(`extension_keybinding_registry_views.cc`). Plus six patches that force zwire's
-behavior over Chromium's defaults: `chrome://newtab` always resolves to the
-zwire new-tab (`search.cc`), pinned extension actions never drop to the overflow
-puzzle (`toolbar_view.cc`), a host page's `frame-src`/`child-src` CSP never
-blocks a sub-frame nav so panes can embed any site (`navigation_request.cc`),
-startup restores the last session (`session_startup_pref.cc`), no "Restore
-pages?" crash bubble (`session_crashed_bubble_view.cc`), and no navigation block
-for a not-yet-registered extension so the new-tab override always loads
-(`extension_navigation_throttle.cc`). Apply-clean proves the diff context
-matches; `fork/build.sh` is the compile gate. See [`fork/README.md`](fork/README.md)
-and [`fork/patches/README.md`](fork/patches/README.md).
+(`extension_keybinding_registry_views.cc`). Six patches force zwire's behavior
+over Chromium's defaults: `chrome://newtab` always resolves to the zwire new-tab
+(`search.cc`), pinned extension actions never drop to the overflow puzzle
+(`toolbar_view.cc`), a host page's `frame-src`/`child-src` CSP never blocks a
+sub-frame nav so panes can embed any site (`navigation_request.cc`), startup
+restores the last session (`session_startup_pref.cc`), no "Restore pages?" crash
+bubble (`session_crashed_bubble_view.cc`), and no navigation block for a
+not-yet-registered extension so the new-tab override always loads
+(`extension_navigation_throttle.cc`). Two more bind the *native* Views surface to
+the HUD palette so app/context menus, dialogs, dropdowns, and textfields track
+the scheme + light/dark toggle instead of the OS default
+(`chrome_color_mixer.cc`, the menu family then every core primitive). Three keep
+the HUD's own extension pages and the Chrome Web Store working: allowlist
+`hud-internal` for `developerPrivate` + `settingsPrivate` so the Extensions /
+Settings pages have their APIs (`_permission_features.json`), a crash fix so a
+content script can call `chrome.*` mid-navigation on the store without tripping a
+`NOTREACHED` (`extension_function_dispatcher.cc`), and dropping the gallery
+script-block so content scripts + `executeScript` run on the Web Store domains
+(`chrome_extensions_client.cc`). One forces immediate ⌘Q (no hold-to-quit)
+(`app_controller_mac.mm`). The last three are the **audio engine**: an always-on
+parametric output EQ + gain / drive / pan compiled into the audio service so
+*every* stream is processed before the OS device (`output_controller.cc` +
+`chrome_content_browser_client.cc`), tab-capture with no picker so the Audio page
+can analyze a playing tab (`tab_capture_api.cc`), and live EQ reconfiguration +
+an output-meters back-channel to the Audio page
+(`audio_service.mojom` + `service.cc` + `audio_service.cc`). Apply-clean proves
+the diff context matches; `fork/build.sh` is the compile gate. See
+[`fork/README.md`](fork/README.md) and [`fork/patches/README.md`](fork/patches/README.md).
 
 **Building it:** the fork is a normal Chromium checkout + `autoninja`, so any box
 that can build Chromium can build zwire — no paid infra required. It does **not**
