@@ -13,15 +13,14 @@
   // (its takeover cancels + reissues Chrome downloads), so a HUD downloads page
   // built on chrome.downloads.search would only show the cancelled stubs.
   var PAGES = [['DASHBOARD', 'dashboard.html'],
-    ['AUDIO', 'audio.html'],
+    ['AUDIO', 'audio.html'], ['HOOKS', 'hooks.html'],
     ['EXTENSIONS', 'extensions.html'], ['SETTINGS', 'settings.html'],
     ['APP STORE', 'store.html'],
     ['HISTORY', 'history.html'], ['DOWNLOADS', 'chrome://downloads'], ['BOOKMARKS', 'bookmarks.html'],
     ['CI', 'ci.html'], ['SHORTCUTS', 'keys.html'], ['EXT KEYS', 'extshortcuts.html'],
     ['COMMANDS', 'commands.html'], ['SESSIONS', 'sessions.html'], ['HOST', 'host.html'],
     ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
-  var NATIVE_PAGES = [['FLAGS', 'chrome://flags'], ['DISCARDS', 'chrome://discards'],
-    ['DNS', 'chrome://net-internals/#dns'], ['GPU', 'chrome://gpu'], ['NET', 'chrome://net-internals']];
+  var NATIVE_PAGES = [['FLAGS', 'chrome://flags']];
   // Extra palette-only destinations (not shown as nav buttons): more chrome://
   // internals + the web stores. External (http) targets open in a new tab.
   var MORE = [['Passwords', 'chrome://password-manager'],
@@ -67,11 +66,32 @@
       });
     } catch (e) { bootToast('shell: ' + e, 'error'); }
   }
+  // stryke steps run inline stryke code via zwire-host (`stryke -E`, bundled
+  // sidecar). stdout/stderr are plain strings (no base64, unlike exec).
+  function runStrykeBoot(code) {
+    try {
+      chrome.runtime.sendNativeMessage(HOST, { cmd: 'stryke_run', code: code }, function (reply) {
+        var err = chrome.runtime.lastError;
+        if (err) { bootToast('stryke: ' + err.message, 'error'); return; }
+        var r = reply || {};
+        if (r.ok === false) { bootToast('stryke: ' + (r.err || 'failed'), 'error'); return; }
+        var out = (r.stdout || '').trim(), er = (r.stderr || '').trim();
+        var bad = (r.code != null && r.code !== 0) || r.timedOut;
+        var text = out || er;
+        bootToast('⟨stryke⟩' + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad ? 'error' : 'success');
+      });
+    } catch (e) { bootToast('stryke: ' + e, 'error'); }
+  }
   function runStepBoot(type, v, arg) {
     v = v || '';
     if (type === 'shell') {
       var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
       runShellBoot(c);
+      return;
+    }
+    if (type === 'stryke') {
+      var sc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      runStrykeBoot(sc);
       return;
     }
     if (type === 'js') { try { (new Function('q', v))(arg || ''); } catch (x) {} return; }

@@ -243,11 +243,32 @@
       });
     } catch (err) { hostToast('shell: ' + err, true); }
   }
+  // stryke steps run inline stryke code through zwire-host (`stryke -E`, using the
+  // bundled sidecar — no PATH needed). stdout/stderr come back as plain strings.
+  function runStryke(code) {
+    try {
+      chrome.runtime.sendMessage({ type: 'zb-host', req: { cmd: 'stryke_run', code: code } }, function (res) {
+        void chrome.runtime.lastError;
+        if (!res || !res.ok) { hostToast('stryke: ' + ((res && res.err) || 'no response'), true); return; }
+        var r = res.reply || {};
+        if (!r.ok) { hostToast('stryke: ' + (r.err || 'error'), true); return; }
+        var out = (r.stdout || '').trim(), er = (r.stderr || '').trim();
+        var bad = (r.code != null && r.code !== 0) || r.timedOut;
+        var text = out || er;
+        hostToast('⟨stryke⟩' + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
+      });
+    } catch (err) { hostToast('stryke: ' + err, true); }
+  }
   function runStep(type, v, arg) {
     v = v || '';
     if (type === 'shell') {
       var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
       runShell(c);
+      return;
+    }
+    if (type === 'stryke') {
+      var sc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      runStryke(sc);
       return;
     }
     if (type === 'js') {

@@ -213,7 +213,7 @@ try {
   });
 } catch (e) {}
 
-// System-stats stream: a persistent native-messaging port to hud_host.py, which
+// System-stats stream: a persistent native-messaging port to zwire-host, which
 // streams real machine stats (cpu/mem/net/…) every 2s into zb_sys for the
 // statusbar. The open port also keeps this MV3 worker alive.
 function startSysStream() {
@@ -731,3 +731,33 @@ chrome.runtime.onMessage.addListener(function (msg, sender) {
     });
   });
 });
+
+/* ---- zwire lifecycle hooks: fire browser events to the native host so user
+   stryke hooks (pages/hooks.js UI, backend hooks.rs) actually run. Best-effort;
+   the host no-ops when no enabled hook is bound to the event. Listeners are
+   registered at top level so the MV3 worker wakes for them. Event names match
+   hooks::events() in the native host. ---- */
+(function () {
+  function fireHook(event, payload) {
+    try {
+      chrome.runtime.sendNativeMessage(HOST, { cmd: 'hook_fire', event: event, payload: payload || {} },
+        function () { void chrome.runtime.lastError; });
+    } catch (e) {}
+  }
+  try { chrome.runtime.onStartup.addListener(function () { fireHook('host-ready', {}); }); } catch (e) {}
+  try { chrome.tabs.onCreated.addListener(function (tab) { fireHook('tab-created', { tabId: tab.id, url: tab.url || tab.pendingUrl || '' }); }); } catch (e) {}
+  try { chrome.tabs.onRemoved.addListener(function (tabId) { fireHook('tab-closed', { tabId: tabId }); }); } catch (e) {}
+  try {
+    chrome.webNavigation.onCommitted.addListener(function (d) {
+      if (d.frameId !== 0) return;                       // top frame only
+      fireHook('navigation', { tabId: d.tabId, url: d.url, transition: d.transitionType });
+    });
+  } catch (e) {}
+  try {
+    chrome.storage.onChanged.addListener(function (ch, area) {
+      if (area === 'local' && ch && ch.zb_scheme && ch.zb_scheme.newValue) {
+        fireHook('scheme-changed', { scheme: ch.zb_scheme.newValue });
+      }
+    });
+  } catch (e) {}
+})();

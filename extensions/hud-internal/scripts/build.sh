@@ -14,6 +14,18 @@ cyber_banner
 cyber_status "OPERATION" "BUILD // package v${VERSION}"
 echo
 
+cyber_section "HOOKS EDITOR"
+# (Re)build the vendored stryke Hooks editor bundle (Monaco + vim/emacs) into
+# lib/hooks-editor/ so pages/hooks.html ships a fresh artifact. Skipped cleanly
+# when the monaco/esbuild devDeps aren't installed (source-only checkout).
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if command -v node >/dev/null && [[ -d "$ROOT/node_modules/monaco-editor" && -f "$ROOT/vendor/zpwr-hooks-editor/scripts/build-hooks-editor.mjs" ]]; then
+  ( cd "$ROOT" && HOOKS_EDITOR_OUT="$ROOT/lib/hooks-editor" node vendor/zpwr-hooks-editor/scripts/build-hooks-editor.mjs ) \
+    && cyber_ok "hooks editor bundled" || cyber_fail "hooks editor build failed (non-fatal)"
+else
+  cyber_ok "hooks editor: skipped (deps absent) — run 'pnpm install' to bundle"
+fi
+
 cyber_section "PACKAGE"
 mkdir -p dist
 command rm -f "$OUT"

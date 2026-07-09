@@ -1,0 +1,3 @@
+
+# generated DSP test artifacts (extracted .inc + binary; rebuilt by fork/tests/run_dsp_tests.sh)
+tests/build/

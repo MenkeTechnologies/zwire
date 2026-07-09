@@ -16,12 +16,13 @@
   var TYPES = [
     { value: 'url', label: 'Open URL' },
     { value: 'shell', label: 'Run shell command' },
+    { value: 'stryke', label: 'Run stryke script' },
     { value: 'js', label: 'Run JavaScript' },
     { value: 'action', label: 'Browser action' },
     { value: 'scheme', label: 'Set color scheme' },
     { value: 'host', label: 'zwire-host (JSON)' }
   ];
-  var TYPE_LABEL = { url: 'open url', shell: 'shell', js: 'javascript', action: 'action', scheme: 'scheme', host: 'host' };
+  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', action: 'action', scheme: 'scheme', host: 'host' };
   var ACTIONS = [
     ['newTab', 'New tab'], ['newWindow', 'New window'], ['duplicateTab', 'Duplicate tab'],
     ['reopenTab', 'Reopen closed tab'], ['closeTab', 'Close tab'], ['closeOthers', 'Close other tabs'],
@@ -35,6 +36,7 @@
   var HINTS = {
     url: 'A URL to open. Use {q} as a placeholder and give it a keyword to make it a search — e.g. keyword "jira", value https://jira/browse/{q}.',
     shell: 'Runs via zwire-host in the OS shell (cmd.exe on Windows, /bin/sh -c on macOS/Linux) and toasts the output — no terminal needed. {q} = the typed argument; otherwise the argument is appended.',
+    stryke: 'Runs an inline stryke script via zwire-host (stryke -E) using the bundled stryke sidecar — no PATH needed — and toasts stdout. Print with `p`. {q} = the typed argument; otherwise it is appended.',
     js: 'JavaScript run in the extension isolated world (has chrome.*). The variable `q` holds the typed argument.',
     action: 'Trigger a built-in browser action under your own name.',
     scheme: 'Switch the whole browser color scheme.',
@@ -95,6 +97,7 @@
     if (type === 'action') return Z.select({ options: opt(ACTIONS), value: val || 'newTab' });
     if (type === 'scheme') return Z.select({ options: opt(SCHEMES), value: val || 'cyberpunk' });
     if (type === 'js') return Z.textarea({ placeholder: "alert('hi ' + q + '!')", rows: 4, value: val || '' });
+    if (type === 'stryke') return Z.textarea({ placeholder: 'p "hello {q}"   # stryke — print with p, {q} = arg', rows: 4, value: val || '' });
     if (type === 'host') return Z.textarea({ placeholder: '{"cmd":"notify","title":"hi {q}"}', rows: 3, value: val || '' });
     return Z.textfield({ placeholder: type === 'shell' ? 'git status   ({q} for args)' : 'https://example.com   ({q} optional)', value: val || '' });
   }

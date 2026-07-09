@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Install the zwire HUD native-messaging host locally so the in-page 8-scheme
 # picker can drive the native color mixer live. This is the extension's
-# "localinstall": there is nothing to compile — instead we (a) rewrite the host
-# manifest's `path` to THIS checkout's absolute hud_host.py, and (b) drop that
-# manifest into every Chrome-family browser's NativeMessagingHosts dir on this
-# machine so the change is live now. Then it reminds you to load-unpacked.
+# "localinstall": build the Rust native host (cargo build) if needed, then (a)
+# rewrite the host manifest's `path` to THIS checkout's absolute zwire-host
+# binary, and (b) drop that manifest into every Chrome-family browser's
+# NativeMessagingHosts dir on this machine so the change is live now. Then it
+# reminds you to load-unpacked.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export APP_TITLE="ZWIRE HUD" APP_SUB="// the cyberpunk HUD extension"
@@ -13,7 +14,7 @@ source scripts/cyberpunk.sh
 EXT_DIR="$(pwd)"
 HOST_NAME="com.zwire.hud"
 SRC_MANIFEST="native/${HOST_NAME}.json"
-HOST_PY="${EXT_DIR}/native/hud_host.py"
+HOST_BIN="${EXT_DIR}/native/zwire-host/target/debug/zwire-host"
 
 cyber_banner
 cyber_status "OPERATION" "LOCALINSTALL // native messaging host"
@@ -24,17 +25,22 @@ if [[ ! -f "$SRC_MANIFEST" ]]; then
   cyber_fail "missing $SRC_MANIFEST"
   exit 1
 fi
-if [[ ! -f "$HOST_PY" ]]; then
-  cyber_fail "missing native/hud_host.py"
+# Build the Rust native host (debug — local dev never uses --release) if it
+# isn't built yet, then pin the manifest at it.
+if [[ ! -f "$HOST_BIN" ]]; then
+  cyber_status "OPERATION" "cargo build // zwire-host"
+  ( cd "${EXT_DIR}/native/zwire-host" && cargo build ) || { cyber_fail "cargo build (zwire-host) failed"; exit 1; }
+fi
+if [[ ! -f "$HOST_BIN" ]]; then
+  cyber_fail "missing zwire-host binary at $HOST_BIN"
   exit 1
 fi
-chmod +x "$HOST_PY"
-cyber_ok "host executable // $HOST_PY"
+cyber_ok "native host // $HOST_BIN"
 echo
 
-# Rewrite `path` to this checkout; keep name/description/type/allowed_origins.
+# Rewrite `path` to this checkout's zwire-host; keep name/description/type/allowed_origins.
 cyber_section "BUILD MANIFEST"
-GENERATED="$(python3 - "$SRC_MANIFEST" "$HOST_PY" <<'PY'
+GENERATED="$(python3 - "$SRC_MANIFEST" "$HOST_BIN" <<'PY'
 import json, sys
 src, host = sys.argv[1], sys.argv[2]
 with open(src) as f:

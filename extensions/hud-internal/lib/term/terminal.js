@@ -22,7 +22,7 @@ var termPrefs = window.prefs || {
 // Transport: abstract the IPC so the same UI drives Tauri commands/events or JUCE
 // native functions/backend events.
 const TT = (function () {
-    // zwire: PTY over a chrome native-messaging port to hud_host.py.
+    // zwire: PTY over a chrome native-messaging port to zwire-host.
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.connectNative) {
         let _port = null, _outCb = null, _exitCb = null;
         const ensure = () => {

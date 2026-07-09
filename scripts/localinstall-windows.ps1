@@ -7,7 +7,7 @@
   Assembles everything the browser needs under %LOCALAPPDATA%\zwire :
     browser\   the Chromium Win_x64 snapshot (chrome.exe + resources)
     ext\       newtab + zpwrchrome + hud-internal extensions
-    native\    zwire-host.exe (cross-platform Rust binary) + its manifest
+    native\    zwire-host.exe (cross-platform Rust binary) + stryke.exe (Hooks sidecar) + its manifest
   then wires the native-messaging host via the REGISTRY (Windows does not read
   host manifests from the profile dir like macOS/Linux do), drops a zwire.cmd
   launcher, and creates a Start Menu shortcut with the zwire icon.
@@ -95,6 +95,23 @@ foreach ($pair in @(@("newtab","newtab"), @("extensions\zpwrchrome","zpwrchrome"
 
 Copy-Item -Force $HostBin (Join-Path $Dest "native\zwire-host.exe")
 Say "native // zwire-host.exe"
+
+# stryke sidecar for the Hooks feature (runner + `stryke --lsp`), bundled next to
+# zwire-host.exe so resolve_stryke() finds it as a sibling. Skipped with a warning
+# if absent (the host falls back to a system stryke on PATH).
+$StrykeSrc = $null
+$cands = @()
+if ($env:ZWIRE_STRYKE) { $cands += $env:ZWIRE_STRYKE }
+$onPath = (Get-Command stryke.exe -ErrorAction SilentlyContinue)
+if ($onPath) { $cands += $onPath.Source }
+$cands += (Join-Path $env:USERPROFILE ".cargo\bin\stryke.exe")
+foreach ($c in $cands) { if ($c -and (Test-Path $c)) { $StrykeSrc = $c; break } }
+if ($StrykeSrc) {
+  Copy-Item -Force $StrykeSrc (Join-Path $Dest "native\stryke.exe")
+  Say "native // stryke.exe (Hooks sidecar) <- $StrykeSrc"
+} else {
+  Say "stryke.exe not found - Hooks sidecar skipped (host falls back to a system stryke on PATH)"
+}
 
 # --- 4. native-messaging host manifest + REGISTRY registration ---------------
 # Windows locates native hosts via a registry key whose default value is the

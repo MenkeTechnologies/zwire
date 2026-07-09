@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # localinstall-linux.sh — Linux self-contained install of zwire, mirroring the
 # macOS .app localinstall. Assembles everything the browser needs under
-#   ~/.local/opt/zwire/   browser + newtab/zpwrchrome/hud-internal + zwire-host
+#   ~/.local/opt/zwire/   browser + newtab/zpwrchrome/hud-internal + zwire-host + stryke
 # plus a `zwire` launcher on PATH and a .desktop entry (app menu + icon). No
 # root required (user install under ~/.local). Delete the repo afterward and the
 # install still runs — the native host is a self-contained cross-platform Rust
@@ -73,6 +73,21 @@ done
 # 3) the native host — one self-contained Rust binary
 cp "$HOST_BIN" "$DEST/native/zwire-host"; chmod +x "$DEST/native/zwire-host"
 cyber_ok "native // zwire-host"
+
+# 3b) stryke sidecar for the Hooks feature (runner + `stryke --lsp`), bundled
+#     next to zwire-host so resolve_stryke() finds it as a sibling. Skipped with
+#     a warning if absent (host falls back to a system stryke on PATH).
+STRYKE_SRC=""
+for cand in "${ZWIRE_STRYKE:-}" "$(command -v stryke 2>/dev/null || true)" \
+            "$HOME/.cargo/bin/stryke" /usr/local/bin/stryke /usr/bin/stryke; do
+  if [[ -n "$cand" && -x "$cand" ]]; then STRYKE_SRC="$cand"; break; fi
+done
+if [[ -n "$STRYKE_SRC" ]]; then
+  cp "$STRYKE_SRC" "$DEST/native/stryke"; chmod +x "$DEST/native/stryke"
+  cyber_ok "native // stryke (Hooks sidecar) ← $STRYKE_SRC"
+else
+  cyber_warn "stryke not found — Hooks sidecar skipped (host falls back to system stryke on PATH)"
+fi
 
 # 4) install-relative launcher: installs the native-host manifest into the
 #    profile (pointing at the bundled host) then execs the bundled browser.

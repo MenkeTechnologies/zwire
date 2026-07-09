@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # HUD extension test runner: JS syntax gate (node --check across every source +
-# page script) plus a byte-compile of the Python native host. There is no Rust
-# subsystem here — kept lean for parity with the sibling script set.
+# page script) plus a debug build of the Rust native host (native/zwire-host).
+# The host's own unit tests live under native/zwire-host (cargo test).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export APP_TITLE="ZWIRE HUD" APP_SUB="// the cyberpunk HUD extension"
@@ -31,17 +31,27 @@ echo -e "  ${D}checked${N} ${W}${JS_TOTAL}${N}  ${D}bad${N} ${R}${JS_BAD}${N}  $
 [[ "$JS_BAD" == "0" ]] && cyber_ok "JS nominal" || cyber_fail "JS compromised"
 echo
 
-cyber_section "NATIVE HOST (python compile)"
-if command -v python3 >/dev/null 2>&1; then
-  if python3 -m py_compile native/hud_host.py 2>/tmp/zwire-hud-py.$$; then
-    cyber_ok "hud_host.py compiles"
-  else
-    FAIL=1; cyber_fail "hud_host.py failed to compile"
-    command sed 's/^/    /' /tmp/zwire-hud-py.$$ | head -5
-  fi
-  command rm -f /tmp/zwire-hud-py.$$
+cyber_section "AUDIO SPEC (buildSpec/parseSpec round-trip)"
+if node tests/spec-roundtrip.mjs 2>/tmp/zwire-hud-spec.$$; then
+  cyber_ok "spec round-trip nominal"
 else
-  cyber_warn "python3 not found — skipping host compile"
+  FAIL=1; cyber_fail "spec round-trip compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-spec.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-spec.$$
+echo
+
+cyber_section "NATIVE HOST (rust build)"
+if command -v cargo >/dev/null 2>&1; then
+  if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then
+    cyber_ok "zwire-host builds"
+  else
+    FAIL=1; cyber_fail "zwire-host failed to build"
+    command sed 's/^/    /' /tmp/zwire-hud-rs.$$ | head -8
+  fi
+  command rm -f /tmp/zwire-hud-rs.$$
+else
+  cyber_warn "cargo not found — skipping native host build"
 fi
 echo
 cyber_line

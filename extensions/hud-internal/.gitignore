@@ -8,4 +8,8 @@ __pycache__/
 # node
 node_modules/
 
+# generated stryke Hooks editor bundle (rebuilt by scripts/build.sh from
+# vendor/zpwr-hooks-editor/ + the monaco/esbuild devDeps)
+lib/hooks-editor/
+
 .DS_Store

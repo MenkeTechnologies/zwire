@@ -6,6 +6,7 @@
 #   Contents/Resources/browser/   the Chromium base bundle (the ~325MB browser)
 #   Contents/Resources/ext/       newtab · zpwrchrome · hud-internal extensions
 #   Contents/Resources/native/    zwire-host (Rust binary: scheme · sysinfo · PTY)
+#                                  + stryke (Hooks sidecar: runner + --lsp)
 #   Contents/MacOS/zwire          a bundle-relative launcher
 # So you can delete this repo (and the base snapshot) and the app still runs —
 # with NO system dependencies (the native host is a self-contained Rust binary,
@@ -153,6 +154,27 @@ fi
 cp "$HOST_BIN" "$RES/native/zwire-host"
 chmod +x "$RES/native/zwire-host"
 cyber_ok "native // zwire-host (rust binary)"
+
+# 3b) the stryke interpreter — sidecar for the Hooks feature (the script runner
+#     + the `stryke --lsp` language server). Bundled next to zwire-host so the
+#     host's resolve_stryke() finds it as a sibling, keeping the app
+#     self-contained (no dependency on the user having stryke on PATH). Mirrors
+#     the Tauri siblings' externalBin sidecar (prepare-stryke-sidecar.mjs), whose
+#     bundle strips the host-triple suffix to a plain `stryke`. Same resolution
+#     order; skipped with a warning if stryke can't be found (resolve_stryke()
+#     then falls back to a system stryke on PATH), so the build never hard-fails.
+STRYKE_SRC=""
+for cand in "${ZWIRE_STRYKE:-}" "$(command -v stryke 2>/dev/null || true)" \
+            "$HOME/.cargo/bin/stryke" /opt/homebrew/bin/stryke /usr/local/bin/stryke; do
+  if [[ -n "$cand" && -x "$cand" ]]; then STRYKE_SRC="$cand"; break; fi
+done
+if [[ -n "$STRYKE_SRC" ]]; then
+  cp "$STRYKE_SRC" "$RES/native/stryke"
+  chmod +x "$RES/native/stryke"
+  cyber_ok "native // stryke (Hooks sidecar: runner + --lsp) ← $STRYKE_SRC"
+else
+  cyber_warn "stryke not found — Hooks sidecar skipped (host falls back to a system stryke on PATH)"
+fi
 
 # 4) icon
 [[ -f "$ICON" ]] && cp "$ICON" "$RES/zwire.icns" && cyber_ok "icon // zwire.icns"
