@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="zwire is a Chromium/Blink browser forked into a keyboard-driven cyberpunk HUD: a tmux-style tiling overlay (windows, panes, each an embedded webview), a ⌘K command palette, vim navigation, durable session CRUD, an 8-scheme HUD, a browser-wide audio EQ + live meters, and the zpwrchrome power-tool preloaded. A ~7,400-line HUD extension layer compiled into a 24-patch native Chromium fork.">
+  <meta name="description" content="zwire is a Chromium/Blink browser forked into a keyboard-driven cyberpunk HUD: a tmux-style tiling overlay (windows, panes, each an embedded webview), a âK command palette, vim navigation, durable session CRUD, an 8-scheme HUD, a browser-wide audio EQ + live meters, and the zpwrchrome power-tool preloaded. A ~7,400-line HUD extension layer compiled into a 24-patch native Chromium fork.">
   <title>zwire &mdash; Documentation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,14 +60,12 @@
             <span class="sep">/</span>
             <a href="report.html">Engineering Report</a>
             <span class="sep">/</span>
-            <a href="audio-architecture.html">Audio Architecture</a>
-            <span class="sep">/</span>
             <a href="https://github.com/MenkeTechnologies/zwire" target="_blank" rel="noopener noreferrer">GitHub</a>
             <span class="sep">/</span>
             <a href="https://github.com/MenkeTechnologies/zpwrchrome" target="_blank" rel="noopener noreferrer">zpwrchrome</a>
           </nav>
           <p style="margin:0.35rem 0 0;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);letter-spacing:0.03em;opacity:0.8;">
-            Tmux-style tiling browser &middot; ⌘K palette &middot; vim nav &middot; session CRUD &middot; 8-scheme HUD &middot; browser-wide audio EQ &middot; on a real Blink engine &middot; 24-patch native fork (tag <code>150.0.7871.46</code>)
+            Tmux-style tiling browser &middot; âK palette &middot; vim nav &middot; session CRUD &middot; 8-scheme HUD &middot; browser-wide audio EQ &middot; on a real Blink engine &middot; 24-patch native fork (tag <code>150.0.7871.46</code>)
           </p>
         </div>
         <div class="tutorial-toolbar">
@@ -75,7 +73,6 @@
           <button type="button" class="btn btn-secondary active" id="btnCrt" title="CRT scanline overlay">CRT</button>
           <button type="button" class="btn btn-secondary active" id="btnNeon" title="Neon border pulse">Neon</button>
           <a class="btn btn-secondary" href="report.html">Report</a>
-          <a class="btn btn-secondary" href="audio-architecture.html">Audio</a>
           <a class="btn btn-secondary" href="https://github.com/MenkeTechnologies/zwire" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
       </div>
@@ -90,10 +87,10 @@
 
     <main class="tutorial-main">
       <h2 class="tutorial-title"><span class="step-hash">&gt;_</span>ZWIRE REFERENCE</h2>
-      <p class="tutorial-subtitle">zwire is a Chromium/Blink browser forked into a cyberpunk HUD &mdash; a real engine running a keyboard-driven workspace: a tmux-style tiling overlay where every pane is an embedded webview, a ⌘K command palette, vim navigation, durable session management, a browser-wide audio EQ + live meters, and HUD reimplementations of Chrome's own internal pages. The <code>hud-internal</code> extension layer is ~7,400 lines across 11 subsystems and 15 pages; under it, a 24-patch native fork restyles the chrome the extension layer can't reach. For patch-by-patch numbers see the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
+      <p class="tutorial-subtitle">zwire is a Chromium/Blink browser forked into a cyberpunk HUD &mdash; a real engine running a keyboard-driven workspace: a tmux-style tiling overlay where every pane is an embedded webview, a âK command palette, vim navigation, durable session management, a browser-wide audio EQ + live meters, and HUD reimplementations of Chrome's own internal pages. The <code>hud-internal</code> extension layer is ~7,400 lines across 11 subsystems and 15 pages; under it, a 24-patch native fork restyles the chrome the extension layer can't reach. For patch-by-patch numbers see the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
 
       <p class="motto">A TILING, PALETTE-DRIVEN BROWSER ON A REAL BLINK ENGINE.</p>
-      <p class="motto sub">ZTMUX TILING &middot; ⌘K PALETTE &middot; SESSION CRUD &middot; 8-SCHEME HUD &middot; BROWSER-WIDE AUDIO EQ &middot; 24-PATCH NATIVE FORK</p>
+      <p class="motto sub">ZTMUX TILING &middot; âK PALETTE &middot; SESSION CRUD &middot; 8-SCHEME HUD &middot; BROWSER-WIDE AUDIO EQ &middot; 24-PATCH NATIVE FORK</p>
 
       <div class="stat-grid">
         <div><div class="stat">24</div><div class="stat-label">native fork patches</div></div>
@@ -106,27 +103,27 @@
 
       <hr class="section-rule">
 
-      <!-- ═══════════════ WHAT IT IS ═══════════════ -->
+      <!-- âââââââââââââââ WHAT IT IS âââââââââââââââ -->
       <h2 class="tutorial-title"><span class="step-hash">#</span>WHAT IT IS</h2>
       <p class="tutorial-subtitle">A keyboard-driven cyberpunk workspace on a genuine Blink engine &mdash; a HUD extension layer compiled into a native fork.</p>
       <div class="cat-grid">
         <div class="cat-card"><h4>Tiling HUD workspace</h4><p>The <code>ztmux</code> overlay: tmux-style tiling where every pane is an embedded webview &mdash; unlimited windows, recursive splits, zoom, layouts + preset grids, copy-mode, marks, and partial synchronize-panes. Rebindable prefix, 45 remappable actions.</p></div>
-        <div class="cat-card"><h4>Sessions &middot; palette &middot; vim</h4><p>Durable named sessions (windows/panes/webviews) with full CRUD + SVG layout previews. A ⌘K command palette, vim-style motions, a find bar, a powerline status bar, a light/dark toggle, and HUD reimplementations of Chrome's internal pages &mdash; 15 pages in all.</p></div>
+        <div class="cat-card"><h4>Sessions &middot; palette &middot; vim</h4><p>Durable named sessions (windows/panes/webviews) with full CRUD + SVG layout previews. A âK command palette, vim-style motions, a find bar, a powerline status bar, a light/dark toggle, and HUD reimplementations of Chrome's internal pages &mdash; 15 pages in all.</p></div>
         <div class="cat-card"><h4>Browser-wide audio engine</h4><p>An always-on parametric output EQ + preamp / gain / drive / pan compiled into the audio service (patches 0022&ndash;0024) &mdash; <strong>every</strong> stream (media, MSE/YouTube, Web Audio, WebRTC) equalized before the OS device, live-reconfigurable with nothing open. A live <strong>Audio</strong> HUD page renders the real post-DSP spectrum, meters, and stereo scope over the native host &mdash; no <code>tabCapture</code>.</p></div>
-        <div class="cat-card"><h4>Native 24-patch fork</h4><p>The source build zwire ships as. A C++ patch series restyles the native chrome the extension layer can't reach: tab shapes, UI font, neon toolbar, omnibox, product strings, the 8 HUD schemes in the color mixer + DevTools, native Views menus/dialogs &mdash; plus allow-framing for the tiling overlay, ⌘K-palette focus hand-off, a forced zwire new-tab, session restore, and the browser-wide audio EQ + meters.</p></div>
+        <div class="cat-card"><h4>Native 24-patch fork</h4><p>The source build zwire ships as. A C++ patch series restyles the native chrome the extension layer can't reach: tab shapes, UI font, neon toolbar, omnibox, product strings, the 8 HUD schemes in the color mixer + DevTools, native Views menus/dialogs &mdash; plus allow-framing for the tiling overlay, âK-palette focus hand-off, a forced zwire new-tab, session restore, and the browser-wide audio EQ + meters.</p></div>
         <div class="cat-card"><h4>Dedicated profile</h4><p>Everything runs against <code>$ZWIRE_STATE/profile</code> (default <code>~/Library/Application&nbsp;Support/com.menketechnologies.zwire</code> on macOS) &mdash; bookmarks, history, sessions kept separate from system Chrome.</p></div>
       </div>
 
       <hr class="section-rule">
 
-      <!-- ═══════════════ WHY A REAL BLINK BASE ═══════════════ -->
+      <!-- âââââââââââââââ WHY A REAL BLINK BASE âââââââââââââââ -->
       <h2 class="tutorial-title"><span class="step-hash">@</span>WHY A REAL BLINK BASE</h2>
       <p class="tutorial-subtitle">zpwrchrome is a Manifest V3 extension needing <code>userScripts</code>, <code>declarativeNetRequestWithHostAccess</code>, <code>nativeMessaging</code>, <code>webRequest</code>, a service-worker background, and <code>minimum_chrome_version: 127</code>. None of that runs on WebKit (Tauri/Safari) or Servo &mdash; only a genuine Chromium engine loads it.</p>
       <p style="font-size:12.5px;line-height:1.7;color:var(--text-dim);">The fork compiles unbranded (<code>is_chrome_branded=false</code>) &mdash; no Google logo, no "for automated testing" banner (that stripe is exclusive to Chrome for Testing). A Chromium build also keeps the <code>--load-extension</code> switch that preloads zpwrchrome, removed from <em>branded</em> Chrome in v137. Stock Google Chrome can no longer be scripted this way; a Chromium build can.</p>
 
       <hr class="section-rule">
 
-      <!-- ═══════════════ ARCHITECTURE ═══════════════ -->
+      <!-- âââââââââââââââ ARCHITECTURE âââââââââââââââ -->
       <h2 class="tutorial-title"><span class="step-hash">&amp;</span>ARCHITECTURE</h2>
       <p class="tutorial-subtitle">Layered from the compiled fork base, up through the HUD workspace, to the native chrome the fork restyles.</p>
       <table class="arch-table">
@@ -136,16 +133,158 @@
           <tr><td>Rebrand</td><td><code>scripts/rebrand-macos.sh</code> patches the base bundle's Dock name to <code>zwire</code> + a cyberpunk <code>.icns</code>, deletes <code>CFBundleIconName</code>, and re-signs ad-hoc so macOS honors it.</td></tr>
           <tr><td>Theme</td><td><code>theme/</code> &mdash; a Chrome theme mapping the HUD palette onto frame / toolbar / tabs (colors only). Present but <strong>not</strong> launcher-loaded: a static theme applies last and would override the fork's color mixer (0002) and the internal-HUD skin.</td></tr>
           <tr><td>New tab</td><td><code>newtab/</code> &mdash; a <code>chrome_url_overrides.newtab</code> extension: the full HUD (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally.</td></tr>
-          <tr><td>HUD workspace</td><td><code>extensions/hud-internal</code> (~7,400 LOC) &mdash; the tiling overlay <code>ztmux</code> (tmux-style panes/windows, each an embedded webview; rebindable prefix; partial synchronize-panes; durable session CRUD), the ⌘K palette (<code>zpalette</code>), vim nav + keymap (<code>zvim</code>/<code>zkeys</code>), find (<code>zfind</code>), a powerline status bar (<code>zstatus</code>), the 8-scheme picker (with light/dark toggle), and 15 HUD pages (incl. Sessions, a Keyboard remapper, a Host console, an App Store + a live Audio page). MV3 content scripts on <code>chrome://*/*</code> + <code>http(s)</code>, bridged to a native host. Needs <code>--extensions-on-chrome-urls</code>.</td></tr>
+          <tr><td>HUD workspace</td><td><code>extensions/hud-internal</code> (~7,400 LOC) &mdash; the tiling overlay <code>ztmux</code> (tmux-style panes/windows, each an embedded webview; rebindable prefix; partial synchronize-panes; durable session CRUD), the âK palette (<code>zpalette</code>), vim nav + keymap (<code>zvim</code>/<code>zkeys</code>), find (<code>zfind</code>), a powerline status bar (<code>zstatus</code>), the 8-scheme picker (with light/dark toggle), and 15 HUD pages (incl. Sessions, a Keyboard remapper, a Host console, an App Store + a live Audio page). MV3 content scripts on <code>chrome://*/*</code> + <code>http(s)</code>, bridged to a native host. Needs <code>--extensions-on-chrome-urls</code>.</td></tr>
           <tr><td>Power-tool</td><td><code>extensions/zpwrchrome</code> &mdash; the MV3 extension, loaded as a submodule (reuse, not copy).</td></tr>
           <tr><td>Launcher</td><td><code>bin/zwire</code> starts the base against <code>$ZWIRE_STATE/profile</code> with newtab + zpwrchrome + hud-internal loaded and <code>--extensions-on-chrome-urls</code> set. Any dir missing a <code>manifest.json</code> is skipped, so a missing submodule degrades gracefully.</td></tr>
-          <tr><td>Fork</td><td><code>fork/</code> &mdash; the source build zwire ships as: a 24-patch series restyles native tabs, colors, UI font, toolbar, omnibox, the DevTools Theme dropdown, and native Views menus/dialogs, plus allow-framing, ⌘K-palette focus, a forced zwire new-tab, session restore, and a browser-wide audio EQ + live meters.</td></tr>
+          <tr><td>Fork</td><td><code>fork/</code> &mdash; the source build zwire ships as: a 24-patch series restyles native tabs, colors, UI font, toolbar, omnibox, the DevTools Theme dropdown, and native Views menus/dialogs, plus allow-framing, âK-palette focus, a forced zwire new-tab, session restore, and a browser-wide audio EQ + live meters.</td></tr>
         </tbody>
       </table>
 
       <hr class="section-rule">
 
-      <!-- ═══════════════ INSTALL ═══════════════ -->
+      <!-- ═══════ AUDIO ENGINE ═══════ -->
+      <h2 class="tutorial-title"><span class="step-hash">♪</span>AUDIO ENGINE — IPC TOPOLOGY</h2>
+      <p class="tutorial-subtitle">How the HUD Audio dashboard, <code>zwire-host</code>, the <code>$STATE</code> files, the browser process, and the sandboxed audio service communicate for the browser-wide output DSP (patches 0022/0024). <code>zwire-host</code> and the audio service share <strong>no direct channel</strong> — the file is the rendezvous and the browser is the only party on both sides (filesystem + mojom).</p>
+      <div style="border:1px solid var(--border);border-left:2px solid var(--cyan);background:color-mix(in srgb, var(--bg-card) 92%, transparent);border-radius:2px;overflow-x:auto;margin:1rem 0 1.6rem;">
+        <svg style="display:block;width:100%;min-width:760px;height:auto;" viewBox="0 0 1160 600" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <style>
+              .card { fill: var(--bg-card); stroke: var(--border); stroke-width: 1.4; }
+              .card-broker { fill: var(--bg-hover); stroke: var(--cyan); stroke-width: 2; }
+              .card-sandbox { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 6 5; opacity: 0.9; }
+              .card-disk { fill: color-mix(in srgb, var(--green-bg) 60%, var(--bg-card)); stroke: var(--green); stroke-width: 1.4; stroke-dasharray: 4 4; }
+              .t-title { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 1px; }
+              .t-cyan { fill: var(--cyan); } .t-green { fill: var(--green); } .t-accent { fill: var(--accent); }
+              .t-sub { font-family: 'Share Tech Mono', monospace; font-size: 10px; fill: var(--text-muted); }
+              .t-body { font-family: 'Share Tech Mono', monospace; font-size: 10.5px; fill: var(--text-dim); }
+              .pill { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 8.5px; letter-spacing: 1px; }
+              .edge-cfg { fill: none; stroke: var(--cyan); stroke-width: 2; }
+              .edge-meter { fill: none; stroke: var(--accent); stroke-width: 2; }
+              .edge-seed { fill: none; stroke: var(--green); stroke-width: 1.6; stroke-dasharray: 5 4; }
+              .edge-none { fill: none; stroke: var(--text-muted); stroke-width: 1.4; stroke-dasharray: 3 5; opacity: 0.75; }
+              .lane-lbl { font-family: 'Share Tech Mono', monospace; font-size: 9.5px; letter-spacing: .5px; }
+              .num { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 10px; }
+              .num-c { fill: var(--bg-primary); }
+              .chip-cyan { fill: var(--cyan); } .chip-accent { fill: var(--accent); }
+            </style>
+            <marker id="ahCyan" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L7,3 L0,6 Z" fill="var(--cyan)"/>
+            </marker>
+            <marker id="ahAccent" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L7,3 L0,6 Z" fill="var(--accent)"/>
+            </marker>
+            <marker id="ahGreen" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L7,3 L0,6 Z" fill="var(--green)"/>
+            </marker>
+          </defs>
+
+          <!-- CONFIG lane title (top) -->
+          <text x="24" y="34" class="lane-lbl t-cyan">&#9654; CONFIG&#160;&#160;UI &#8594; engine</text>
+          <!-- METER lane title (bottom) -->
+          <text x="24" y="470" class="lane-lbl t-accent">&#9664; METERS&#160;&#160;engine &#8594; UI</text>
+
+          <!-- ===== launch seed arc (green): $STATE -> audio service ===== -->
+          <path class="edge-seed" marker-end="url(#ahGreen)" d="M 548 200 C 548 96, 1012 96, 1012 198"/>
+          <text x="720" y="86" text-anchor="middle" class="lane-lbl t-green">&#9678; launch seed &#183; bin/zwire &#8594; --zwire-audio-eq (reads audio-eq at start)</text>
+
+          <!-- ===== cards ===== -->
+          <!-- c1 Renderer (sandboxed) -->
+          <rect x="18" y="190" width="196" height="212" rx="4" class="card"/>
+          <rect x="12" y="184" width="208" height="224" rx="7" class="card-sandbox"/>
+          <rect x="120" y="180" width="96" height="16" rx="8" fill="var(--accent-glow)"/>
+          <text x="168" y="192" text-anchor="middle" class="pill t-accent">&#8856; SANDBOXED</text>
+          <text x="34" y="218" class="t-title t-cyan">RENDERER</text>
+          <text x="34" y="233" class="t-sub">sandboxed page</text>
+          <text x="34" y="258" class="t-body">audio.js &#8212; HUD Audio</text>
+          <text x="34" y="275" class="t-body">buildSpec() / parseSpec()</text>
+          <text x="34" y="292" class="t-body">live meter charts</text>
+          <text x="34" y="316" class="t-body" fill="var(--text-muted)">&#8212; no FS, no mojom &#8212;</text>
+
+          <!-- c2 zwire-host -->
+          <rect x="244" y="190" width="196" height="212" rx="4" class="card"/>
+          <rect x="350" y="180" width="86" height="16" rx="8" fill="var(--cyan-dim)"/>
+          <text x="393" y="192" text-anchor="middle" class="pill t-cyan">USER PRIV</text>
+          <text x="260" y="218" class="t-title t-cyan">zwire-host</text>
+          <text x="260" y="233" class="t-sub">native binary</text>
+          <text x="260" y="258" class="t-body">Native Messaging (stdio)</text>
+          <text x="260" y="275" class="t-body">fs_write &#183; fs_watch</text>
+          <text x="260" y="292" class="t-body">meter_stream</text>
+          <text x="260" y="309" class="t-body">pub/sub bus + peers</text>
+          <text x="260" y="333" class="t-body" fill="var(--text-muted)">&#8212; no Chromium IPC &#8212;</text>
+
+          <!-- c3 $STATE (disk) -->
+          <rect x="470" y="205" width="150" height="182" rx="4" class="card-disk"/>
+          <rect x="500" y="197" width="60" height="16" rx="8" fill="var(--green-bg)"/>
+          <text x="530" y="209" text-anchor="middle" class="pill t-green">DISK</text>
+          <text x="486" y="234" class="t-title t-green">$STATE</text>
+          <text x="486" y="262" class="t-body t-cyan">audio-eq</text>
+          <text x="486" y="278" class="t-body">&#160;&#160;config &#183; durable</text>
+          <text x="486" y="300" class="t-body t-accent">meters</text>
+          <text x="486" y="316" class="t-body">&#160;&#160;frames &#183; ephemeral</text>
+          <text x="486" y="352" class="t-body" fill="var(--text-muted)">user-owned files</text>
+
+          <!-- c4 Browser process (broker) -->
+          <rect x="650" y="190" width="206" height="212" rx="4" class="card-broker"/>
+          <rect x="700" y="180" width="106" height="16" rx="8" fill="var(--cyan-dim)"/>
+          <text x="753" y="192" text-anchor="middle" class="pill t-cyan">&#9733; TRUSTED BROKER</text>
+          <text x="666" y="218" class="t-title t-cyan">BROWSER PROCESS</text>
+          <text x="666" y="233" class="t-sub">unsandboxed</text>
+          <text x="666" y="258" class="t-body">full user FS authority</text>
+          <text x="666" y="275" class="t-body">RepeatingTimer poll</text>
+          <text x="666" y="292" class="t-body">&#160;&#160;25ms cfg &#183; 33ms meters</text>
+          <text x="666" y="309" class="t-body">holds the mojom pipe</text>
+          <text x="666" y="333" class="t-body" fill="var(--text-muted)">&#8212; the only bridge &#8212;</text>
+
+          <!-- c5 Audio service (sandboxed) -->
+          <rect x="886" y="190" width="256" height="212" rx="4" class="card"/>
+          <rect x="880" y="184" width="268" height="224" rx="7" class="card-sandbox"/>
+          <rect x="1000" y="180" width="96" height="16" rx="8" fill="var(--accent-glow)"/>
+          <text x="1048" y="192" text-anchor="middle" class="pill t-accent">&#8856; SANDBOXED</text>
+          <text x="902" y="218" class="t-title t-cyan">AUDIO SERVICE</text>
+          <text x="902" y="233" class="t-sub">sandboxed utility</text>
+          <text x="902" y="258" class="t-body t-cyan">ZwireAudioEq &#183; OnMoreData()</text>
+          <text x="902" y="275" class="t-body">per-stream DSP chain</text>
+          <text x="902" y="292" class="t-body">Goertzel meter frame</text>
+          <text x="902" y="316" class="t-body" fill="var(--text-muted)">&#8212; can't read files / sockets &#8212;</text>
+
+          <!-- ===== config edges (cyan, top, ->) ===== -->
+          <path class="edge-cfg" marker-end="url(#ahCyan)" d="M 220 165 L 244 165"/>
+          <path class="edge-cfg" marker-end="url(#ahCyan)" d="M 440 165 L 470 165"/>
+          <path class="edge-cfg" marker-end="url(#ahCyan)" d="M 620 165 L 650 165"/>
+          <path class="edge-cfg" marker-end="url(#ahCyan)" d="M 856 165 L 886 165"/>
+          <!-- config step numbers -->
+          <circle cx="232" cy="150" r="9" class="chip-cyan"/><text x="232" y="153.5" text-anchor="middle" class="num num-c">1</text>
+          <circle cx="455" cy="150" r="9" class="chip-cyan"/><text x="455" y="153.5" text-anchor="middle" class="num num-c">2</text>
+          <circle cx="635" cy="150" r="9" class="chip-cyan"/><text x="635" y="153.5" text-anchor="middle" class="num num-c">3</text>
+          <circle cx="871" cy="150" r="9" class="chip-cyan"/><text x="871" y="153.5" text-anchor="middle" class="num num-c">4</text>
+
+          <!-- ===== meter edges (accent, bottom, <-) ===== -->
+          <path class="edge-meter" marker-end="url(#ahAccent)" d="M 886 425 L 856 425"/>
+          <path class="edge-meter" marker-end="url(#ahAccent)" d="M 650 425 L 620 425"/>
+          <path class="edge-meter" marker-end="url(#ahAccent)" d="M 470 425 L 440 425"/>
+          <path class="edge-meter" marker-end="url(#ahAccent)" d="M 244 425 L 220 425"/>
+          <!-- meter step numbers -->
+          <circle cx="871" cy="440" r="9" class="chip-accent"/><text x="871" y="443.5" text-anchor="middle" class="num num-c">5</text>
+          <circle cx="635" cy="440" r="9" class="chip-accent"/><text x="635" y="443.5" text-anchor="middle" class="num num-c">6</text>
+          <circle cx="455" cy="440" r="9" class="chip-accent"/><text x="455" y="443.5" text-anchor="middle" class="num num-c">7</text>
+          <circle cx="232" cy="440" r="9" class="chip-accent"/><text x="232" y="443.5" text-anchor="middle" class="num num-c">8</text>
+
+          <!-- ===== NO direct link (muted, bottom arc) ===== -->
+          <path class="edge-none" d="M 342 402 C 342 512, 1012 512, 1012 402"/>
+          <circle cx="677" cy="507" r="9" fill="var(--bg-primary)" stroke="var(--text-muted)" stroke-width="1.2"/>
+          <text x="677" y="511" text-anchor="middle" class="num" fill="var(--accent)">&#10005;</text>
+          <text x="677" y="536" text-anchor="middle" class="lane-lbl" fill="var(--text-muted)">no direct channel &#8212; zwire-host and the audio service share no endpoint</text>
+
+          <!-- ===== DSP chain strip ===== -->
+          <rect x="18" y="558" width="1124" height="30" rx="4" fill="var(--bg-primary)" stroke="var(--border)" stroke-width="1"/>
+          <text x="30" y="577" class="lane-lbl t-cyan">ZwireAudioEq chain (per output stream):</text>
+          <text x="252" y="577" class="t-body">preamp &#9656; EQ cascade &#9656; gain &#9656; drive &#9656; compressor &#9656; delay &#9656; reverb &#9656; M/S width &#9656; pan / mono &#9656; brickwall limiter</text>
+        </svg>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- âââââââââââââââ INSTALL âââââââââââââââ -->
       <h2 class="tutorial-title"><span class="step-hash">$</span>INSTALL</h2>
       <p class="tutorial-subtitle">Clone with submodules, run the installer, launch. Re-run <code>install.sh</code> after a base upgrade.</p>
       <div class="code-block"><span class="cmd">git clone --recurse-submodules https://github.com/MenkeTechnologies/zwire.git</span>
@@ -155,10 +294,10 @@
 
       <hr class="section-rule">
 
-      <!-- ═══════════════ THE NATIVE FORK ═══════════════ -->
+      <!-- âââââââââââââââ THE NATIVE FORK âââââââââââââââ -->
       <h2 class="tutorial-title"><span class="step-hash">~</span>THE NATIVE FORK</h2>
       <p class="tutorial-subtitle">The HUD workspace &mdash; tiling, palette, sessions, vim, the 8-scheme picker &mdash; is extension code. But a theme extension changes <strong>colors only</strong>; it can't reshape tabs, fonts, or the toolbar (native C++). To put the whole chrome in the HUD, zwire is compiled from a patched Chromium &mdash; this is what it ships as.</p>
-      <p style="font-size:12.5px;line-height:1.7;color:var(--text-dim);">The <code>fork/</code> build is a 24-patch series (trapezoid tabs, cyberpunk palette, mono UI font, neon toolbar, sharp omnibox, <code>zwire</code> strings, 8 HUD schemes in the color mixer + DevTools, native Views menus/dialogs bound to the HUD palette, allow-framing for the ztmux overlay, ⌘K-palette focus hand-off, a forced zwire new-tab, session restore, and a browser-wide audio EQ + live output meters) authored against the pinned tag and verified apply-clean. It costs a ~100&nbsp;GB checkout, a 1&ndash;4&nbsp;hr first build, and ongoing rebase maintenance &mdash; no paid infra needed, but it won't fit on stock GitHub-hosted runners (checkout &gt; disk, cold build &gt; the 6&nbsp;h job cap), so build it locally or on a self-hosted runner with a warm checkout. See <a href="https://github.com/MenkeTechnologies/zwire/tree/main/fork" target="_blank" rel="noopener noreferrer" style="color:var(--cyan);">fork/</a> and the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
+      <p style="font-size:12.5px;line-height:1.7;color:var(--text-dim);">The <code>fork/</code> build is a 24-patch series (trapezoid tabs, cyberpunk palette, mono UI font, neon toolbar, sharp omnibox, <code>zwire</code> strings, 8 HUD schemes in the color mixer + DevTools, native Views menus/dialogs bound to the HUD palette, allow-framing for the ztmux overlay, âK-palette focus hand-off, a forced zwire new-tab, session restore, and a browser-wide audio EQ + live output meters) authored against the pinned tag and verified apply-clean. It costs a ~100&nbsp;GB checkout, a 1&ndash;4&nbsp;hr first build, and ongoing rebase maintenance &mdash; no paid infra needed, but it won't fit on stock GitHub-hosted runners (checkout &gt; disk, cold build &gt; the 6&nbsp;h job cap), so build it locally or on a self-hosted runner with a warm checkout. See <a href="https://github.com/MenkeTechnologies/zwire/tree/main/fork" target="_blank" rel="noopener noreferrer" style="color:var(--cyan);">fork/</a> and the <a href="report.html" style="color:var(--accent);">Engineering Report</a>.</p>
     </main>
 
     <footer class="tutorial-main doc-footer" style="padding-top:0;">
