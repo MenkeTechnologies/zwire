@@ -142,6 +142,15 @@
 
       <hr class="section-rule">
 
+      <!-- ═══════ HUD ARCHITECTURE DIAGRAMS ═══════ -->
+      <h2 class="tutorial-title"><span class="step-hash">◱</span>HUD &amp; FORK DIAGRAMS</h2>
+      <p class="tutorial-subtitle">The keyboard-driven surfaces and the native fork, as architecture diagrams. For the whole stack and 30+ more, see the <a href="https://menketechnologies.github.io/MenkeTechnologiesMeta/inventions.html" style="color:var(--accent);">illustrated invention ledger</a>.</p>
+      <img src="diagrams/ch10a-zwire-tmux.svg" alt="zwire dual tmux engine: one prefix key drives an in-page iframe overlay and an OS-window tiling engine sharing one nested tmux model" style="display:block;width:100%;max-width:1000px;height:auto;margin:1rem auto;border:1px solid var(--border);border-radius:3px;">
+      <img src="diagrams/ch10f-fork.svg" alt="the zwire native fork stack: a 24-patch pinned-Chromium fork under the ~7,400-line hud-internal extension layer, launched by bin/zwire" style="display:block;width:100%;max-width:1000px;height:auto;margin:1rem auto;border:1px solid var(--border);border-radius:3px;">
+      <img src="diagrams/ch10g-palette.svg" alt="zwire's Command-K palette: a custom command is a chain of typed steps running identically across three isolation contexts, with shell steps reaching the OS via the native host" style="display:block;width:100%;max-width:1000px;height:auto;margin:1rem auto;border:1px solid var(--border);border-radius:3px;">
+
+      <hr class="section-rule">
+
       <!-- ═══════ AUDIO ENGINE ═══════ -->
       <h2 class="tutorial-title"><span class="step-hash">♪</span>AUDIO ENGINE — IPC TOPOLOGY</h2>
       <p class="tutorial-subtitle">How the HUD Audio dashboard, <code>zwire-host</code>, the <code>$STATE</code> files, the browser process, and the sandboxed audio service communicate for the browser-wide output DSP (patches 0022/0024). <code>zwire-host</code> and the audio service share <strong>no direct channel</strong> — the file is the rendezvous and the browser is the only party on both sides (filesystem + mojom).</p>
