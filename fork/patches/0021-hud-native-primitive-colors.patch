@@ -1,0 +1,28 @@
+diff --git a/chrome/browser/ui/color/chrome_color_mixer.cc b/chrome/browser/ui/color/chrome_color_mixer.cc
+index 029f1b12bf..81a843b4c6 100644
+--- a/chrome/browser/ui/color/chrome_color_mixer.cc
++++ b/chrome/browser/ui/color/chrome_color_mixer.cc
+@@ -1449,4 +1449,23 @@ void AddZwireHudFinalMixer(ui::ColorProvider* provider,
+   mixer[ui::kColorMenuSelectionBackground] = {ui::kColorSysBaseContainerElevated};
+   mixer[ui::kColorMenuItemBackgroundAlertedInitial] = {ui::kColorSysBaseContainerElevated};
+   mixer[ui::kColorMenuButtonBackgroundSelected] = {ui::kColorSysBaseContainerElevated};
++
++  // zwire HUD: systemic mode fix. HUD light mode (~/.zwire/hud-light) recolors
++  // the Sys tokens above but never flips Chromium's NativeTheme, so the color
++  // pipeline still builds every core UI primitive from key.color_mode (the OS
++  // dark/light). core_default_color_mixer.cc derives the whole native-Views
++  // family tree — dialogs, bubbles, dropdowns, textfields, labels, tooltips,
++  // context menus — from a handful of primitives (kColorPrimary/Secondary/
++  // DisabledForeground, kColorPrimaryBackground, kColorEndpointBackground,
++  // kColorMidground). When the HUD mode and the OS mode disagree those surfaces
++  // invert (light text on light, the same class of bug as the app menu). Rebind
++  // the primitives to the HUD Sys tokens — which ARE HUD-mode-aware — so the
++  // entire native surface tree tracks the HUD light/dark + scheme in one place,
++  // no per-surface patching. References, not literals.
++  mixer[ui::kColorPrimaryBackground] = {ui::kColorSysBaseContainer};
++  mixer[ui::kColorPrimaryForeground] = {ui::kColorSysOnSurface};
++  mixer[ui::kColorSecondaryForeground] = {ui::kColorSysOnSurfaceSubtle};
++  mixer[ui::kColorDisabledForeground] = {ui::kColorSysOnSurfaceSubtle};
++  mixer[ui::kColorEndpointBackground] = {ui::kColorSysSurface};
++  mixer[ui::kColorMidground] = {ui::kColorSysOutline};
+ }
