@@ -9,6 +9,16 @@
  *     unreliable — an MV3 worker can suspend mid-round-trip).
  */
 var HOST = 'com.zwire.hud';
+// Fire a lifecycle event to the native host so user stryke hooks run (see the
+// lifecycle-hooks IIFE below + hooks.rs). Top-level so every listener/handler in
+// this worker can call it. Best-effort: the host no-ops when no enabled hook is
+// bound to the event, and errors are swallowed (the port may suspend mid-round).
+function fireHook(event, payload) {
+  try {
+    chrome.runtime.sendNativeMessage(HOST, { cmd: 'hook_fire', event: event, payload: payload || {} },
+      function () { void chrome.runtime.lastError; });
+  } catch (e) {}
+}
 // zpwrchrome extension — kept in colorscheme sync with the global HUD/native
 // scheme over runtime messaging (separate extensions can't share storage).
 var ZPWR_ID = 'hpppdchpnphmiijdeanibpcadgknmaja';
@@ -93,7 +103,11 @@ try {
   chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (!msg || !sender || !sender.tab || sender.tab.id == null) return;
     var tid = sender.tab.id;
-    if (msg.type === 'zbTermOpen') { if (msg.open) termOpenByTab[tid] = true; else delete termOpenByTab[tid]; return; }
+    if (msg.type === 'zbTermOpen') {
+      if (msg.open) termOpenByTab[tid] = true; else delete termOpenByTab[tid];
+      fireHook(msg.open ? 'terminal-opened' : 'terminal-closed', { tabId: tid });
+      return;
+    }
     if (msg.type === 'zbTermState') { sendResponse({ open: termOpenByTab[tid] === true }); return true; }
   });
 } catch (e) {}
@@ -472,6 +486,18 @@ chrome.storage.onChanged.addListener(function (changes, area) {
 });
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+  // HUD pages fire their own lifecycle events (palette-command, session-saved,
+  // pane-split, audio-eq-changed, …) through this relay so all hook firing goes
+  // through the one native-host seam. { type:'zbFireHook', event, payload }.
+  if (msg && msg.type === 'zbFireHook' && msg.event) {
+    fireHook(String(msg.event), msg.payload || {});
+    // Mirror command-ish HUD events into the generic `action` catch-all so one
+    // hook bound to `action` can react to every command (filter by $_.command).
+    if (msg.event === 'palette-command' && msg.payload && msg.payload.command && self.__zbAct) {
+      try { self.__zbAct('palette:' + msg.payload.command); } catch (e) {}
+    }
+    return;
+  }
   if (msg && msg.type === 'zbhud-scheme' && msg.scheme) {
     // Write to native (drives the compiled mixer) and mirror to storage
     // (drives the chrome:// theme content scripts).
@@ -676,6 +702,7 @@ function tmuxCmd(sub, c) {
         void chrome.runtime.lastError; if (!w) return;
         var idx = win.panes.indexOf(win.active);
         win.panes.splice(idx < 0 ? win.panes.length : idx + 1, 0, w.id); win.active = w.id; tile();
+        fireHook('pane-split', { dir: (c.dir === 'down') ? 'v' : 'h', paneId: w.id });
       });
     } else if (sub === 'navigate') {
       var panes = win.panes; if (!panes.length) return;
@@ -737,27 +764,90 @@ chrome.runtime.onMessage.addListener(function (msg, sender) {
    the host no-ops when no enabled hook is bound to the event. Listeners are
    registered at top level so the MV3 worker wakes for them. Event names match
    hooks::events() in the native host. ---- */
+// `fireHook` is defined at the top of this worker. Each listener below is
+// registered at top level so the MV3 worker wakes for its event. Every `on*`
+// call is wrapped so a missing API/permission on one platform never breaks the
+// rest. Event names match hooks::events() in the native host (keep in sync).
 (function () {
-  function fireHook(event, payload) {
-    try {
-      chrome.runtime.sendNativeMessage(HOST, { cmd: 'hook_fire', event: event, payload: payload || {} },
-        function () { void chrome.runtime.lastError; });
-    } catch (e) {}
-  }
-  try { chrome.runtime.onStartup.addListener(function () { fireHook('host-ready', {}); }); } catch (e) {}
-  try { chrome.tabs.onCreated.addListener(function (tab) { fireHook('tab-created', { tabId: tab.id, url: tab.url || tab.pendingUrl || '' }); }); } catch (e) {}
-  try { chrome.tabs.onRemoved.addListener(function (tabId) { fireHook('tab-closed', { tabId: tabId }); }); } catch (e) {}
-  try {
-    chrome.webNavigation.onCommitted.addListener(function (d) {
-      if (d.frameId !== 0) return;                       // top frame only
-      fireHook('navigation', { tabId: d.tabId, url: d.url, transition: d.transitionType });
-    });
-  } catch (e) {}
-  try {
-    chrome.storage.onChanged.addListener(function (ch, area) {
-      if (area === 'local' && ch && ch.zb_scheme && ch.zb_scheme.newValue) {
-        fireHook('scheme-changed', { scheme: ch.zb_scheme.newValue });
-      }
-    });
-  } catch (e) {}
+  var on = function (obj, ev, fn) { try { if (obj && obj[ev] && obj[ev].addListener) obj[ev].addListener(fn); } catch (e) {} };
+  // `action` is the catch-all: it fires for EVERY command/menu/palette invocation
+  // (ported from the Audio-Haxor `action` hook) so ONE hook can react to anything,
+  // filtered by $_.command. Specific events still fire too — bind whichever you want.
+  var act = function (command, extra) { var p = { command: command }; if (extra) for (var k in extra) p[k] = extra[k]; fireHook('action', p); };
+
+  // ── runtime / browser lifecycle ──
+  on(chrome.runtime, 'onStartup', function () { fireHook('host-ready', {}); fireHook('app-open', {}); });
+  on(chrome.runtime, 'onInstalled', function (d) { fireHook('extension-installed', { reason: d && d.reason }); });
+  on(chrome.runtime, 'onSuspend', function () { fireHook('browser-suspend', {}); });
+  on(chrome.runtime, 'onUpdateAvailable', function (d) { fireHook('update-available', { version: d && d.version }); });
+
+  // ── tabs ──
+  on(chrome.tabs, 'onCreated', function (tab) { fireHook('tab-created', { tabId: tab.id, url: tab.url || tab.pendingUrl || '', windowId: tab.windowId }); });
+  on(chrome.tabs, 'onRemoved', function (tabId, info) { fireHook('tab-closed', { tabId: tabId, windowId: info && info.windowId, windowClosing: !!(info && info.isWindowClosing) }); });
+  on(chrome.tabs, 'onActivated', function (info) { fireHook('tab-activated', { tabId: info.tabId, windowId: info.windowId }); });
+  on(chrome.tabs, 'onUpdated', function (tabId, ch, tab) { if (ch && ch.status === 'complete') fireHook('tab-updated', { tabId: tabId, url: (tab && tab.url) || '', status: 'complete' }); });
+  on(chrome.tabs, 'onMoved', function (tabId, info) { fireHook('tab-moved', { tabId: tabId, windowId: info.windowId, fromIndex: info.fromIndex, toIndex: info.toIndex }); });
+  on(chrome.tabs, 'onDetached', function (tabId, info) { fireHook('tab-detached', { tabId: tabId, oldWindowId: info.oldWindowId, oldPosition: info.oldPosition }); });
+  on(chrome.tabs, 'onAttached', function (tabId, info) { fireHook('tab-attached', { tabId: tabId, newWindowId: info.newWindowId, newPosition: info.newPosition }); });
+  on(chrome.tabs, 'onReplaced', function (added, removed) { fireHook('tab-replaced', { addedTabId: added, removedTabId: removed }); });
+  on(chrome.tabs, 'onHighlighted', function (info) { fireHook('tab-highlighted', { windowId: info.windowId, tabIds: info.tabIds }); });
+  on(chrome.tabs, 'onZoomChange', function (info) { fireHook('tab-zoom-changed', { tabId: info.tabId, newZoom: info.newZoomFactor, oldZoom: info.oldZoomFactor }); });
+
+  // ── windows ──
+  on(chrome.windows, 'onCreated', function (w) { fireHook('window-created', { windowId: w.id, type: w.type, incognito: w.incognito }); });
+  on(chrome.windows, 'onRemoved', function (winId) {
+    fireHook('window-closed', { windowId: winId });
+    // Last window gone ≈ the browser is closing → app-close (no direct quit event).
+    try { chrome.windows.getAll({}, function (wins) { void chrome.runtime.lastError; if (!wins || !wins.length) fireHook('app-close', {}); }); } catch (e) {}
+  });
+  on(chrome.windows, 'onFocusChanged', function (winId) { fireHook('window-focus-changed', { windowId: winId }); });
+
+  // ── navigation (top frame only) ──
+  on(chrome.webNavigation, 'onBeforeNavigate', function (d) { if (d.frameId === 0) fireHook('navigation-started', { tabId: d.tabId, url: d.url }); });
+  on(chrome.webNavigation, 'onCommitted', function (d) { if (d.frameId === 0) fireHook('navigation', { tabId: d.tabId, url: d.url, transition: d.transitionType }); });
+  on(chrome.webNavigation, 'onDOMContentLoaded', function (d) { if (d.frameId === 0) fireHook('dom-content-loaded', { tabId: d.tabId, url: d.url }); });
+  on(chrome.webNavigation, 'onCompleted', function (d) { if (d.frameId === 0) fireHook('navigation-completed', { tabId: d.tabId, url: d.url }); });
+  on(chrome.webNavigation, 'onErrorOccurred', function (d) { if (d.frameId === 0) fireHook('navigation-error', { tabId: d.tabId, url: d.url, error: d.error }); });
+  on(chrome.webNavigation, 'onHistoryStateUpdated', function (d) { if (d.frameId === 0) fireHook('history-state-updated', { tabId: d.tabId, url: d.url }); });
+
+  // ── downloads ──
+  on(chrome.downloads, 'onCreated', function (d) { fireHook('download-started', { id: d.id, url: d.url, filename: d.filename }); });
+  on(chrome.downloads, 'onChanged', function (d) { if (d.state && d.state.current === 'complete') fireHook('download-completed', { id: d.id }); });
+  on(chrome.downloads, 'onErased', function (id) { fireHook('download-erased', { id: id }); });
+
+  // ── bookmarks ──
+  on(chrome.bookmarks, 'onCreated', function (id, node) { fireHook('bookmark-created', { id: id, title: node && node.title, url: node && node.url }); });
+  on(chrome.bookmarks, 'onRemoved', function (id) { fireHook('bookmark-removed', { id: id }); });
+  on(chrome.bookmarks, 'onChanged', function (id, ch) { fireHook('bookmark-changed', { id: id, title: ch && ch.title, url: ch && ch.url }); });
+  on(chrome.bookmarks, 'onMoved', function (id) { fireHook('bookmark-moved', { id: id }); });
+
+  // ── history ──
+  on(chrome.history, 'onVisited', function (item) { fireHook('history-visited', { url: item.url, title: item.title }); });
+  on(chrome.history, 'onVisitRemoved', function (r) { fireHook('history-removed', { allHistory: !!(r && r.allHistory), urls: r && r.urls }); });
+
+  // ── sessions (restore) ──
+  on(chrome.sessions, 'onChanged', function () { fireHook('session-restored', {}); });
+
+  // ── management (other extensions) ──
+  on(chrome.management, 'onInstalled', function (info) { fireHook('management-installed', { id: info.id, name: info.name }); });
+  on(chrome.management, 'onUninstalled', function (id) { fireHook('management-uninstalled', { id: id }); });
+  on(chrome.management, 'onEnabled', function (info) { fireHook('management-enabled', { id: info.id, name: info.name }); });
+  on(chrome.management, 'onDisabled', function (info) { fireHook('management-disabled', { id: info.id, name: info.name }); });
+
+  // ── keyboard commands + alarms + notifications + toolbar action + display ──
+  on(chrome.commands, 'onCommand', function (command) { fireHook('command', { command: command }); act('command:' + command); });
+  on(chrome.alarms, 'onAlarm', function (a) { fireHook('alarm', { name: a && a.name }); });
+  on(chrome.notifications, 'onClicked', function (id) { fireHook('notification-clicked', { id: id }); });
+  on(chrome.notifications, 'onClosed', function (id, byUser) { fireHook('notification-closed', { id: id, byUser: !!byUser }); });
+  on(chrome.action, 'onClicked', function (tab) { fireHook('action-clicked', { tabId: tab && tab.id }); act('action-clicked'); });
+  on(chrome.system && chrome.system.display, 'onDisplayChanged', function () { fireHook('display-changed', {}); });
+
+  // ── HUD scheme (any storage key change is also surfaced generically) ──
+  on(chrome.storage, 'onChanged', function (ch, area) {
+    if (area !== 'local' || !ch) return;
+    if (ch.zb_scheme && ch.zb_scheme.newValue) fireHook('scheme-changed', { scheme: ch.zb_scheme.newValue });
+  });
+
+  // expose `act` so the zbFireHook relay can also emit the generic action mirror
+  self.__zbAct = act;
 })();

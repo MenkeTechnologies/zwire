@@ -16,7 +16,11 @@
   var HOST = (window.ZBHUD && window.ZBHUD.HOST) || 'com.zwire.hud';
   function toast(m, ty) { try { if (Z.toast && Z.toast.show) Z.toast.show(m, 2600, ty || ''); } catch (e) {} }
 
-  var shell = window.ZBHUD.mount({ title: 'HOOKS', current: 'hooks.html' });
+  var shell = window.ZBHUD.mount({
+    title: 'HOOKS', current: 'hooks.html',
+    filterPlaceholder: 'filter hooks…',
+    onFilter: function (v, rx) { _filter = (v || '').trim(); _filterRx = !!rx; renderList(); }
+  });
   var body = shell.body;
 
   /* ---- native host bridge (replaces Tauri invoke) ---- */
@@ -35,12 +39,12 @@
 
   /* ---- styles (arrangement only; colors from the active HUD scheme) ---- */
   var css = [
-    '.hk-wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:14px;align-items:start;}',
-    '@media(max-width:820px){.hk-wrap{grid-template-columns:1fr;}}',
-    '.hk-side{border:1px solid var(--border,#1a1a3e);border-radius:2px;background:var(--bg-card,#0d0d1a);}',
+    '.hk-wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:14px;align-items:stretch;min-height:calc(100vh - 168px);}',
+    '@media(max-width:820px){.hk-wrap{grid-template-columns:1fr;align-items:start;}}',
+    '.hk-side{border:1px solid var(--border,#1a1a3e);border-radius:2px;background:var(--bg-card,#0d0d1a);display:flex;flex-direction:column;}',
     '.hk-side-head{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border,#1a1a3e);}',
     '.hk-side-head .hk-t{font:11px/1 var(--mono,monospace);letter-spacing:1px;text-transform:uppercase;color:var(--cyan,#05d9e8);}',
-    '.hk-list{max-height:60vh;overflow-y:auto;}',
+    '.hk-list{flex:1 1 auto;min-height:0;overflow-y:auto;}',
     '.hk-item{padding:8px 10px;border-bottom:1px solid var(--border,#1a1a3e);cursor:pointer;display:flex;flex-direction:column;gap:2px;}',
     '.hk-item:hover{background:var(--bg-hover,#12122a);}',
     '.hk-item.active{background:var(--bg-hover,#12122a);border-left:2px solid var(--cyan,#05d9e8);}',
@@ -63,7 +67,13 @@
     '.hk-btn{font:11px/1 var(--mono,monospace);background:var(--bg-primary,#05050a);color:var(--cyan,#05d9e8);border:1px solid var(--cyan,#05d9e8);border-radius:2px;padding:5px 10px;cursor:pointer;}',
     '.hk-btn:hover{background:var(--bg-hover,#12122a);}',
     '.hk-btn.danger{color:var(--accent,#ff2a6d);border-color:var(--accent,#ff2a6d);}',
-    '.hk-out{font:11px/1.5 var(--mono,monospace);color:var(--text-dim,#8aa);background:var(--bg-primary,#05050a);border:1px solid var(--border,#1a1a3e);border-radius:2px;padding:8px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow:auto;margin:0;}'
+    '.hk-out{font:11px/1.5 var(--mono,monospace);color:var(--text-dim,#8aa);background:var(--bg-primary,#05050a);border:1px solid var(--border,#1a1a3e);border-radius:2px;padding:8px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow:auto;margin:0;}',
+    // event combobox: fill the form row (default zg-combo is inline-block) and give
+    // the dropdown room — 53 events at the shared 220px cap was too short.
+    '#hookEventHost{flex:1 1 200px;min-width:0;}',
+    '#hookEventHost .zg-combo{display:block;width:100%;}',
+    '#hookEventHost .zg-combo-input{font:12px/1.4 var(--mono,monospace);background:var(--bg-primary,#05050a);color:var(--text,#cfe);border:1px solid var(--border,#1a1a3e);border-radius:2px;padding:4px 6px;}',
+    '#hookEventHost .zg-combo-list{max-height:60vh;}'
   ].join('');
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
@@ -81,7 +91,7 @@
       '<div class="hk-form" id="hooksForm" hidden>' +
         '<div class="hk-form-row">' +
           '<input type="text" class="hk-in" id="hookName" placeholder="Hook name" spellcheck="false">' +
-          '<select class="hk-sel" id="hookEvent" title="Lifecycle event that triggers this hook"></select>' +
+          '<span id="hookEventHost" class="hk-combo-host" title="Lifecycle event that triggers this hook"></span>' +
           '<label class="hk-tog"><input type="checkbox" id="hookEnabled"> Enabled</label>' +
         '</div>' +
         '<div class="hk-mode-row">' +
@@ -108,6 +118,9 @@
   var _hooks = [];
   var _events = [];
   var _selectedId = null;
+  var _filter = '';
+  var _filterRx = false;
+  var _eventCombo = null;
   var _editor = null;
   var _saveTimer = null;
   var _lspStarted = false;
@@ -170,20 +183,41 @@
   function loadEvents() {
     return nativeCall({ cmd: 'hooks_events' }).then(function (cat) {
       _events = (cat && cat.events) || [];
-    }).catch(function () { _events = []; }).then(function () {
-      var sel = el('hookEvent');
-      if (sel) sel.innerHTML = _events.map(function (ev) { return '<option value="' + esc(ev.name) + '">' + esc(ev.name) + '</option>'; }).join('');
-    });
+    }).catch(function () { _events = []; }).then(mountEventCombo);
+  }
+  // Searchable event picker (ZGui.combobox) — 50+ lifecycle events, so type-to-filter
+  // (fzf-ranked, matches name AND description) beats a giant native <select>. The
+  // combobox value is the event name; get()/set() below read/write it.
+  function mountEventCombo() {
+    var host = el('hookEventHost'); if (!host) return;
+    var cur = _eventCombo ? _eventCombo.get() : null;
+    var opts = _events.map(function (ev) { return { value: ev.name, label: ev.name }; });
+    host.innerHTML = '';
+    if (window.ZGui && ZGui.combobox) {
+      _eventCombo = ZGui.combobox({ options: opts, value: cur, placeholder: 'search events…' });
+      host.appendChild(_eventCombo.el);
+    }
   }
   function loadHooks() {
     return nativeCall({ cmd: 'hooks_list' }).then(function (r) { _hooks = (r && r.hooks) || []; })
       .catch(function () { _hooks = []; }).then(renderList);
   }
 
+  // Filter predicate for the ZGui.searchBox bar — matches a hook's name + event.
+  // Honors the searchBox regex toggle (meta.regex); a bad regex matches nothing.
+  function hookMatches(h) {
+    if (!_filter) return true;
+    var hay = (h.name || '') + ' ' + (h.event || '');
+    if (_filterRx) { try { return new RegExp(_filter, 'i').test(hay); } catch (e) { return false; } }
+    return hay.toLowerCase().indexOf(_filter.toLowerCase()) !== -1;
+  }
+
   function renderList() {
     var list = el('hooksList'); if (!list) return;
     if (!_hooks.length) { list.innerHTML = '<div class="hk-empty">No hooks yet.</div>'; return; }
-    list.innerHTML = _hooks.map(function (h) {
+    var shown = _hooks.filter(hookMatches);
+    if (!shown.length) { list.innerHTML = '<div class="hk-empty">No hooks match “' + esc(_filter) + '”.</div>'; return; }
+    list.innerHTML = shown.map(function (h) {
       var active = h.id === _selectedId ? ' active' : '';
       var off = h.enabled ? '' : ' off';
       return '<div class="hk-item' + active + off + '" data-hook-id="' + esc(h.id) + '">' +
@@ -201,7 +235,7 @@
     if (!h) { if (form) form.hidden = true; if (empty) empty.hidden = false; return Promise.resolve(); }
     if (empty) empty.hidden = true; if (form) form.hidden = false;
     el('hookName').value = h.name || '';
-    el('hookEvent').value = h.event;
+    if (_eventCombo) _eventCombo.set(h.event);
     el('hookEnabled').checked = !!h.enabled;
     el('hookOutput').textContent = '';
 
@@ -227,18 +261,21 @@
 
   function createNew() {
     var name = 'New hook';
-    var event = (_events[0] && _events[0].name) || 'scheme-changed';
-    return nativeCall({ cmd: 'hooks_save', hook: { id: '', name: name, event: event, enabled: false, timeout_ms: 10000 } })
+    // Blank event on purpose — the user must pick one from the combobox before it
+    // can fire (an empty event matches nothing). saveCurrent enforces the pick.
+    return nativeCall({ cmd: 'hooks_save', hook: { id: '', name: name, event: '', enabled: true, timeout_ms: 10000 } })
       .then(function (r) { return loadHooks().then(function () { return select(r.hook.id); }); })
       .catch(function (e) { toast(String(e), 'error'); });
   }
 
   function saveCurrent() {
     if (!_selectedId) return;
+    var event = (_eventCombo && _eventCombo.get()) || '';
+    if (!event) { toast('Pick an event first', 'error'); var eh = el('hookEventHost'); var ei = eh && eh.querySelector('.zg-combo-input'); if (ei) ei.focus(); return; }
     var hook = {
       id: _selectedId,
       name: el('hookName').value.trim() || 'hook',
-      event: el('hookEvent').value,
+      event: event,
       enabled: el('hookEnabled').checked,
       timeout_ms: 10000
     };

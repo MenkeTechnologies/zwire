@@ -191,6 +191,9 @@
     // drag; only an explicit click (announce) retries and reports.
     if (hostMissing && !announce) return;
     var spec = buildSpec();
+    // Fire the audio-eq-changed lifecycle hook on an explicit save only (not on
+    // every knob drag, which would spawn a host per move). Background relays it.
+    if (announce) { try { chrome.runtime.sendMessage({ type: 'zbFireHook', event: 'audio-eq-changed', payload: { spec: spec } }, function () { void chrome.runtime.lastError; }); } catch (e) {} }
     // FAST path: write the spec over the ALREADY-OPEN persistent meter port with a
     // direct fs_write. The old path did sendNativeMessage (spawns a fresh host
     // process) of an exec of /bin/sh (spawns a subshell) PER knob move — ~30-80ms

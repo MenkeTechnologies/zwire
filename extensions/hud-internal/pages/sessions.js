@@ -66,7 +66,14 @@
     } catch (e) { sessions = []; if (cb) cb(); }
   }
   function persist(cb) {
-    try { chrome.storage.local.set({ zb_tmux_sessions: sessions }, function () { void chrome.runtime.lastError; if (cb) cb(); }); }
+    try {
+      chrome.storage.local.set({ zb_tmux_sessions: sessions }, function () {
+        void chrome.runtime.lastError;
+        // Fire the session-saved lifecycle hook (background relays to the host).
+        try { chrome.runtime.sendMessage({ type: 'zbFireHook', event: 'session-saved', payload: { count: sessions.length } }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+        if (cb) cb();
+      });
+    }
     catch (e) { if (cb) cb(); }
   }
   function touch(s) { s.updated = stamp(); }
