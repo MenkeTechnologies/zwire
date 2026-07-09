@@ -1,0 +1,38 @@
+diff --git a/chrome/browser/ui/color/chrome_color_mixer.cc b/chrome/browser/ui/color/chrome_color_mixer.cc
+index be1f244686..029f1b12bf 100644
+--- a/chrome/browser/ui/color/chrome_color_mixer.cc
++++ b/chrome/browser/ui/color/chrome_color_mixer.cc
+@@ -1420,4 +1420,33 @@ void AddZwireHudFinalMixer(ui::ColorProvider* provider,
+   // Neon tab outline: cyan when focused, magenta when blurred.
+   mixer[kColorTabStrokeFrameActive] = {hs.cy};
+   mixer[kColorTabStrokeFrameInactive] = {hs.m};
++
++  // zwire HUD: native Views menus (the app / three-dot menu, context menus, and
++  // every dropdown) draw from the ui::kColorMenu* family. Neither the HUD block
++  // in AddChromeColorMixer nor the upstream ui menu mixer repoints that family
++  // at the HUD surfaces, so it keeps whatever the NativeTheme picked — and in
++  // HUD light mode that lands light menu text on a light menu background (the
++  // unreadable app menu). Don't hardcode a palette here: BIND the menu family to
++  // the same scheme-driven, light/dark-aware HUD Sys tokens the block above
++  // already sets (kColorSysBaseContainer/…OnSurface/…Outline). References — not
++  // literals — so the menu inherits the exact surfaces WebUI cards use and
++  // tracks the active scheme + light toggle for free.
++  mixer[ui::kColorMenuBackground] = {ui::kColorSysBaseContainer};
++  mixer[ui::kColorMenuButtonBackground] = {ui::kColorSysBaseContainer};
++  mixer[ui::kColorMenuItemBackgroundAlertedTarget] = {ui::kColorSysBaseContainer};
++  mixer[ui::kColorMenuBorder] = {ui::kColorSysOutline};
++  mixer[ui::kColorMenuSeparator] = {ui::kColorSysOutline};
++  mixer[ui::kColorMenuItemForeground] = {ui::kColorSysOnSurface};
++  mixer[ui::kColorMenuItemForegroundSelected] = {ui::kColorSysOnSurface};
++  mixer[ui::kColorMenuItemForegroundHighlighted] = {ui::kColorSysOnSurface};
++  mixer[ui::kColorMenuDropmarker] = {ui::kColorSysOnSurface};
++  mixer[ui::kColorMenuItemForegroundSecondary] = {ui::kColorSysOnSurfaceSubtle};
++  mixer[ui::kColorMenuItemForegroundDisabled] = {ui::kColorSysOnSurfaceSubtle};
++  mixer[ui::kColorMenuIcon] = {ui::kColorSysOnSurfaceSubtle};
++  mixer[ui::kColorMenuIconDisabled] = {ui::kColorSysOnSurfaceSubtle};
++  mixer[ui::kColorMenuItemBackgroundHighlighted] = {ui::kColorSysBaseContainerElevated};
++  mixer[ui::kColorMenuItemBackgroundSelected] = {ui::kColorSysBaseContainerElevated};
++  mixer[ui::kColorMenuSelectionBackground] = {ui::kColorSysBaseContainerElevated};
++  mixer[ui::kColorMenuItemBackgroundAlertedInitial] = {ui::kColorSysBaseContainerElevated};
++  mixer[ui::kColorMenuButtonBackgroundSelected] = {ui::kColorSysBaseContainerElevated};
+ }
