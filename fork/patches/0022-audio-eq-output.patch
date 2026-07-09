@@ -41,7 +41,7 @@ index 7ee20397dd..767932980d 100644
  #include "base/compiler_specific.h"
  #include "base/feature_list.h"
  #include "base/functional/bind.h"
-@@ -28,8 +29,530 @@
+@@ -28,8 +29,733 @@
  #include "media/media_buildflags.h"
  #include "services/audio/device_listener_output_stream.h"
  
@@ -106,6 +106,22 @@ index 7ee20397dd..767932980d 100644
 +  double comp_ratio = 1.0;
 +  double comp_attack_ms = 10.0;
 +  double comp_release_ms = 150.0;
++  // Stereo width (M/S): 1 = normal, 0 = mono-collapse, 2 = wide. Applied pre-pan.
++  double width = 1.0;
++  // Brickwall limiter (only active when a "ceiling" directive is present).
++  // Instant-attack, smoothed-release peak limiter; runs dead-last so nothing
++  // after it (pan's sqrt2 boost) can re-introduce an over.
++  bool limit_on = false;
++  double limit_ceiling_db = 0.0;   // dBFS ceiling, -30..0
++  double limit_release_ms = 50.0;
++  // Stereo feedback delay / echo (mix<=0 => bypass).
++  double delay_ms = 0.0;
++  double delay_feedback = 0.0;
++  double delay_mix = 0.0;
++  // Schroeder/Freeverb reverb (mix<=0 => bypass).
++  double reverb_mix = 0.0;
++  double reverb_room = 0.5;
++  double reverb_damp = 0.5;
 +  uint64_t generation = 0;
 +};
 +
@@ -161,6 +177,25 @@ index 7ee20397dd..767932980d 100644
 +        cfg->comp_attack_ms = std::clamp(v, 0.1, 500.0);
 +      } else if (f[0] == "release") {
 +        cfg->comp_release_ms = std::clamp(v, 1.0, 3000.0);
++      } else if (f[0] == "width") {
++        cfg->width = std::clamp(v, 0.0, 2.0);
++      } else if (f[0] == "ceiling") {
++        cfg->limit_on = true;
++        cfg->limit_ceiling_db = std::clamp(v, -30.0, 0.0);
++      } else if (f[0] == "limrelease") {
++        cfg->limit_release_ms = std::clamp(v, 1.0, 500.0);
++      } else if (f[0] == "delay") {
++        cfg->delay_ms = std::clamp(v, 0.0, 2000.0);
++      } else if (f[0] == "feedback") {
++        cfg->delay_feedback = std::clamp(v, 0.0, 0.95);
++      } else if (f[0] == "delaymix") {
++        cfg->delay_mix = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "reverb") {
++        cfg->reverb_mix = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "room") {
++        cfg->reverb_room = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "damp") {
++        cfg->reverb_damp = std::clamp(v, 0.0, 1.0);
 +      }
 +      continue;
 +    }
@@ -297,11 +332,40 @@ index 7ee20397dd..767932980d 100644
 +        }
 +      }
 +    }
-+    // Stereo strip (zdsp channel_strip.h): mono fold, else equal-power pan with a
-+    // unity-gain center (sqrt(2) normalized so pan=0 is transparent, not -3 dB).
++    // Time FX: stereo feedback delay/echo then Schroeder reverb, each an
++    // independent per-channel path (bypassed unless enabled). State + buffers are
++    // owned per stream, so every stream gets its own echo/tail.
++    if (delay_active_ || reverb_active_) {
++      const int nc = std::min(channels, 2);
++      for (int ch = 0; ch < nc; ++ch) {
++        base::span<float> d = bus->channel(ch);
++        for (int i = 0; i < frames; ++i) {
++          float x = d[i];
++          if (delay_active_) {
++            x = delay_[ch].Process(x);
++          }
++          if (reverb_active_) {
++            x = reverb_[ch].Process(x);
++          }
++          d[i] = x;
++        }
++      }
++    }
++    // Stereo strip (zdsp channel_strip.h): M/S width, then mono fold, else
++    // equal-power pan with a unity-gain center (sqrt(2) normalized so pan=0 is
++    // transparent, not -3 dB).
 +    if (channels >= 2) {
 +      base::span<float> l = bus->channel(0);
 +      base::span<float> r = bus->channel(1);
++      if (!mono_ && width_ != 1.0) {
++        const float w = static_cast<float>(width_);
++        for (int i = 0; i < frames; ++i) {
++          const float mid = 0.5f * (l[i] + r[i]);
++          const float side = 0.5f * (l[i] - r[i]) * w;
++          l[i] = mid + side;
++          r[i] = mid - side;
++        }
++      }
 +      if (mono_) {
 +        for (int i = 0; i < frames; ++i) {
 +          const float m = 0.5f * (l[i] + r[i]);
@@ -318,6 +382,30 @@ index 7ee20397dd..767932980d 100644
 +        }
 +      }
 +    }
++    // Brickwall limiter (last): stereo-linked peak detector on max(|L|,|R|),
++    // instant attack (never lets a sample exceed the ceiling), smoothed release.
++    if (limit_active_ && channels >= 1) {
++      base::span<float> l = bus->channel(0);
++      base::span<float> r = channels >= 2 ? bus->channel(1) : bus->channel(0);
++      for (int i = 0; i < frames; ++i) {
++        const double peak = std::max(std::fabs(static_cast<double>(l[i])),
++                                     std::fabs(static_cast<double>(r[i])));
++        double target = 1.0;
++        if (peak > limit_ceiling_lin_ && peak > 1e-9) {
++          target = limit_ceiling_lin_ / peak;
++        }
++        if (target < limit_env_) {
++          limit_env_ = target;   // attack: instantaneous
++        } else {
++          limit_env_ = limit_release_coeff_ * limit_env_ +
++                       (1.0 - limit_release_coeff_) * target;
++        }
++        l[i] = static_cast<float>(l[i] * limit_env_);
++        if (channels >= 2) {
++          r[i] = static_cast<float>(r[i] * limit_env_);
++        }
++      }
++    }
 +  }
 +
 + private:
@@ -326,6 +414,85 @@ index 7ee20397dd..767932980d 100644
 +  };
 +  struct BiquadState {
 +    double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
++  };
++  // Mono feedback delay line (one per channel). Wet/dry blend so mix=0 is a
++  // no-op and the dry stays unity. Buffer sized to the exact delay time.
++  struct DelayLine {
++    std::vector<float> buf;
++    size_t pos = 0;
++    float fb = 0.f, mix = 0.f;
++    void Init(int samples, double feedback, double m) {
++      buf.assign(static_cast<size_t>(std::max(1, samples)), 0.f);
++      pos = 0;
++      fb = static_cast<float>(feedback);
++      mix = static_cast<float>(m);
++    }
++    float Process(float in) {
++      float d = buf[pos];
++      buf[pos] = in + d * fb;
++      if (++pos >= buf.size()) {
++        pos = 0;
++      }
++      return in * (1.f - mix) + d * mix;
++    }
++  };
++  // Reduced Freeverb (4 combs + 2 series all-passes per channel). Freeverb comb
++  // tunings + damping/roomsize/fixedgain constants; the right channel offsets its
++  // buffer sizes by `spread` for stereo decorrelation. Public-domain algorithm.
++  struct Reverb {
++    static constexpr int kCombs = 4;
++    static constexpr int kAll = 2;
++    std::vector<float> comb[kCombs];
++    size_t comb_pos[kCombs] = {};
++    float comb_store[kCombs] = {};
++    std::vector<float> allp[kAll];
++    size_t all_pos[kAll] = {};
++    float feedback = 0.f, damp1 = 0.f, damp2 = 0.f, mix = 0.f, gain = 0.015f;
++    void Init(int sr, double room, double damp, double m, int spread) {
++      static const int ct[kCombs] = {1116, 1188, 1277, 1356};
++      static const int at[kAll] = {556, 441};
++      const double scale = sr / 44100.0;
++      for (int i = 0; i < kCombs; ++i) {
++        comb[i].assign(
++            static_cast<size_t>(std::max(1, static_cast<int>(ct[i] * scale) + spread)),
++            0.f);
++        comb_pos[i] = 0;
++        comb_store[i] = 0.f;
++      }
++      for (int i = 0; i < kAll; ++i) {
++        allp[i].assign(
++            static_cast<size_t>(std::max(1, static_cast<int>(at[i] * scale) + spread)),
++            0.f);
++        all_pos[i] = 0;
++      }
++      feedback = static_cast<float>(room * 0.28 + 0.7);   // Freeverb scaleroom/offsetroom
++      damp1 = static_cast<float>(damp * 0.4);             // Freeverb scaledamp
++      damp2 = 1.f - damp1;
++      mix = static_cast<float>(m);
++    }
++    float Process(float in) {
++      const float input = in * gain;
++      float out = 0.f;
++      for (int i = 0; i < kCombs; ++i) {
++        const float y = comb[i][comb_pos[i]];
++        comb_store[i] = y * damp2 + comb_store[i] * damp1;
++        comb[i][comb_pos[i]] = input + comb_store[i] * feedback;
++        if (++comb_pos[i] >= comb[i].size()) {
++          comb_pos[i] = 0;
++        }
++        out += y;
++      }
++      for (int i = 0; i < kAll; ++i) {
++        const float bufout = allp[i][all_pos[i]];
++        const float y = -out + bufout;
++        allp[i][all_pos[i]] = out + bufout * 0.5f;   // Freeverb allpass feedback
++        if (++all_pos[i] >= allp[i].size()) {
++          all_pos[i] = 0;
++        }
++        out = y;
++      }
++      return in * (1.f - mix) + out * mix;
++    }
 +  };
 +
 +  // Recompute this stream's biquad cascade for its own sample rate from the new
@@ -342,6 +509,31 @@ index 7ee20397dd..767932980d 100644
 +        -1.0 / std::max(1.0, cfg.comp_attack_ms * 0.001 * sample_rate_));
 +    comp_release_coeff_ = std::exp(
 +        -1.0 / std::max(1.0, cfg.comp_release_ms * 0.001 * sample_rate_));
++    width_ = cfg.width;
++    // Brickwall limiter.
++    limit_active_ = cfg.limit_on;
++    limit_ceiling_lin_ = std::pow(10.0, cfg.limit_ceiling_db / 20.0);
++    limit_release_coeff_ = std::exp(
++        -1.0 / std::max(1.0, cfg.limit_release_ms * 0.001 * sample_rate_));
++    limit_env_ = 1.0;
++    // Stereo delay/echo: (re)size the ring to the exact delay time; buffers are
++    // only allocated while enabled so a bypassed engine carries no delay memory.
++    delay_active_ = cfg.delay_mix > 1e-4 && cfg.delay_ms > 0.1;
++    if (delay_active_) {
++      const int n = std::max(
++          1, static_cast<int>(std::lround(cfg.delay_ms * 0.001 * sample_rate_)));
++      for (int ch = 0; ch < 2; ++ch) {
++        delay_[ch].Init(n, cfg.delay_feedback, cfg.delay_mix);
++      }
++    }
++    // Schroeder reverb: right channel offset by the Freeverb stereospread (23).
++    reverb_active_ = cfg.reverb_mix > 1e-4;
++    if (reverb_active_) {
++      reverb_[0].Init(sample_rate_, cfg.reverb_room, cfg.reverb_damp,
++                      cfg.reverb_mix, 0);
++      reverb_[1].Init(sample_rate_, cfg.reverb_room, cfg.reverb_damp,
++                      cfg.reverb_mix, 23);
++    }
 +    biquads_.clear();
 +    for (const ZwireEqBand& band : cfg.bands) {
 +      AddBand(band);
@@ -352,7 +544,9 @@ index 7ee20397dd..767932980d 100644
 +    VLOG(1) << "zwire-eq-rebuild: gen=" << cfg.generation
 +            << " preamp_db=" << cfg.preamp_db << " bands=" << cfg.bands.size()
 +            << " gain=" << gain_ << " pan=" << pan_ << " mono=" << mono_
-+            << " drive=" << drive_ << " sr=" << sample_rate_;
++            << " drive=" << drive_ << " width=" << width_
++            << " limit=" << limit_active_ << " delay=" << delay_active_
++            << " reverb=" << reverb_active_ << " sr=" << sample_rate_;
 +  }
 +
 +  void AddBand(const ZwireEqBand& band) {
@@ -410,6 +604,15 @@ index 7ee20397dd..767932980d 100644
 +  double comp_attack_coeff_ = 0.0;
 +  double comp_release_coeff_ = 0.0;
 +  double comp_env_ = 1.0;
++  double width_ = 1.0;
++  bool limit_active_ = false;
++  double limit_ceiling_lin_ = 1.0;
++  double limit_release_coeff_ = 0.0;
++  double limit_env_ = 1.0;
++  bool delay_active_ = false;
++  bool reverb_active_ = false;
++  DelayLine delay_[2];
++  Reverb reverb_[2];
 +  std::vector<Biquad> biquads_;
 +  std::vector<std::vector<BiquadState>> state_;
 +};
@@ -572,7 +775,7 @@ index 7ee20397dd..767932980d 100644
  namespace {
  
  // Requests data before reading in OutputController::OnMoreData, which may
-@@ -167,6 +690,8 @@ OutputController::OutputController(
+@@ -167,6 +893,8 @@ OutputController::OutputController(
      : id_(base::UnguessableToken::Create()),
        audio_manager_(audio_manager),
        params_(params),
@@ -581,7 +784,7 @@ index 7ee20397dd..767932980d 100644
        managed_device_output_stream_create_callback_(
            std::move(managed_device_output_stream_create_callback)),
        handler_(handler),
-@@ -483,6 +1008,20 @@ int OutputController::OnMoreData(base::TimeDelta delay,
+@@ -483,6 +1211,20 @@ int OutputController::OnMoreData(base::TimeDelta delay,
  
    const bool received_data = sync_reader_->Read(dest, is_mixing);
  

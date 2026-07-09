@@ -79,6 +79,12 @@
   // NOT the local web-audio preview). Ported from zdsp-core channel_strip.h.
   var engGain = 1.0, engPan = 0.0, engMono = false, engDrive = 0.0;
   var engThresh = 0.0, engRatio = 1.0;  // engine compressor (ratio<=1 = off)
+  // ENGINE space & glue (drive the always-on C++ engine): stereo width (M/S),
+  // feedback delay/echo, Schroeder reverb, brickwall limiter. Defaults = bypass.
+  var engWidth = 1.0;                                  // 1 = normal, 0 = mono, 2 = wide
+  var engDelayMs = 0.0, engDelayFb = 0.3, engDelayMix = 0.0;
+  var engReverbMix = 0.0, engRoom = 0.5, engDamp = 0.5;
+  var engLimit = false, engCeiling = -1.0;             // brickwall limiter (dBFS ceiling)
   var engBypass = false;  // master engine DSP bypass (A/B diff) — writes "off"
   var engMute = false;    // engine master mute (gain 0)
   // ENGINE meter feed — start it FIRST (connect is ~4ms) so meter frames are
@@ -155,6 +161,19 @@
     if (engMono) parts.push('mono,1');
     if (engDrive > 1e-3) parts.push('drive,' + engDrive.toFixed(3));
     if (engRatio > 1.001) { parts.push('thresh,' + engThresh.toFixed(1)); parts.push('ratio,' + engRatio.toFixed(2)); }
+    // Space & glue directives (only when engaged, keeps the spec tidy).
+    if (Math.abs(engWidth - 1) > 1e-3) parts.push('width,' + engWidth.toFixed(3));
+    if (engDelayMix > 1e-3 && engDelayMs > 0.5) {
+      parts.push('delay,' + engDelayMs.toFixed(1));
+      parts.push('feedback,' + engDelayFb.toFixed(3));
+      parts.push('delaymix,' + engDelayMix.toFixed(3));
+    }
+    if (engReverbMix > 1e-3) {
+      parts.push('reverb,' + engReverbMix.toFixed(3));
+      parts.push('room,' + engRoom.toFixed(3));
+      parts.push('damp,' + engDamp.toFixed(3));
+    }
+    if (engLimit) parts.push('ceiling,' + engCeiling.toFixed(2));
     return parts.join(';');
   }
   function stateDirShell() {
@@ -225,7 +244,11 @@
     var parts = String(spec || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean);
     if (!parts.length) return null;
     var pd = parseFloat(parts[0]); if (isNaN(pd)) pd = 0;
-    var bands = [], strip = { gain: 1, pan: 0, mono: false, drive: 0, thresh: 0, ratio: 1 };
+    var bands = [], strip = {
+      gain: 1, pan: 0, mono: false, drive: 0, thresh: 0, ratio: 1,
+      width: 1, delayMs: 0, delayFb: 0.3, delayMix: 0,
+      reverbMix: 0, room: 0.5, damp: 0.5, limit: false, ceiling: -1
+    };
     for (var i = 1; i < parts.length; i++) {
       var f = parts[i].split(',');
       if (f.length === 2) {  // channel-strip directive
@@ -236,6 +259,14 @@
         else if (nm === 'drive' && !isNaN(val)) strip.drive = val;
         else if (nm === 'thresh' && !isNaN(val)) strip.thresh = val;
         else if (nm === 'ratio' && !isNaN(val)) strip.ratio = val;
+        else if (nm === 'width' && !isNaN(val)) strip.width = val;
+        else if (nm === 'delay' && !isNaN(val)) strip.delayMs = val;
+        else if (nm === 'feedback' && !isNaN(val)) strip.delayFb = val;
+        else if (nm === 'delaymix' && !isNaN(val)) strip.delayMix = val;
+        else if (nm === 'reverb' && !isNaN(val)) strip.reverbMix = val;
+        else if (nm === 'room' && !isNaN(val)) strip.room = val;
+        else if (nm === 'damp' && !isNaN(val)) strip.damp = val;
+        else if (nm === 'ceiling' && !isNaN(val)) { strip.limit = true; strip.ceiling = val; }
         continue;
       }
       if (f.length < 4) continue;
@@ -260,6 +291,12 @@
       engGain = cfg.strip.gain; engPan = cfg.strip.pan; engMono = cfg.strip.mono; engDrive = cfg.strip.drive;
       engThresh = cfg.strip.thresh; engRatio = cfg.strip.ratio;
       if (comp) { comp.threshold.value = engThresh; comp.ratio.value = engRatio; }
+      // Space & glue (older saved specs won't have these — fall back to defaults).
+      engWidth = (cfg.strip.width == null ? 1 : cfg.strip.width);
+      engDelayMs = cfg.strip.delayMs || 0; engDelayFb = (cfg.strip.delayFb == null ? 0.3 : cfg.strip.delayFb); engDelayMix = cfg.strip.delayMix || 0;
+      engReverbMix = cfg.strip.reverbMix || 0; engRoom = (cfg.strip.room == null ? 0.5 : cfg.strip.room); engDamp = (cfg.strip.damp == null ? 0.5 : cfg.strip.damp);
+      engLimit = !!cfg.strip.limit; engCeiling = (cfg.strip.ceiling == null ? -1 : cfg.strip.ceiling);
+      if (spaceControls && spaceControls.sync) spaceControls.sync();
       if (engControls && engControls.sync) engControls.sync();
       if (typeof threshUnit !== 'undefined' && threshUnit && threshUnit.knob) {
         var tv = Math.max(0, Math.min(1, (engThresh + 60) / 60)); threshUnit.knob.set(tv); if (threshUnit.read) threshUnit.read.textContent = threshUnit.fmt(tv);
@@ -545,6 +582,58 @@
     '<b>BYPASS ENGINE DSP</b> A/B-diffs the whole chain (EQ + strip + compressor) on/off. Preamp + compressor drive the '
     + '<b>browser-wide engine</b> — saved to appdata, applied to every tab live (even with this page closed).'));
 
+  /* ---- ENGINE SPACE & GLUE — stereo width (M/S) · feedback delay/echo ·
+     Schroeder reverb · brickwall limiter. All engine-side (spec directives),
+     always-on + saved, applied to every tab live. Defaults = bypass. ---- */
+  var spaceControls = (function () {
+    var wrap = el('div');
+    var pct = function (v) { return Math.round(v * 100) + '%'; };
+    var widthU = knobUnit('WIDTH', engWidth / 2,
+      function (v) { return (v * 2).toFixed(2) + '×'; },
+      function (v) { engWidth = v * 2; persistDebounced(); });
+    var delayU = knobUnit('DELAY', engDelayMs / 2000,
+      function (v) { return Math.round(v * 2000) + ' ms'; },
+      function (v) { engDelayMs = v * 2000; persistDebounced(); });
+    var fbU = knobUnit('FEEDBACK', engDelayFb / 0.95,
+      function (v) { return pct(v * 0.95); },
+      function (v) { engDelayFb = v * 0.95; persistDebounced(); });
+    var dmixU = knobUnit('DLY MIX', engDelayMix, pct,
+      function (v) { engDelayMix = v; persistDebounced(); });
+    var revU = knobUnit('REVERB', engReverbMix, pct,
+      function (v) { engReverbMix = v; persistDebounced(); });
+    var roomU = knobUnit('ROOM', engRoom, pct,
+      function (v) { engRoom = v; persistDebounced(); });
+    var dampU = knobUnit('DAMP', engDamp, pct,
+      function (v) { engDamp = v; persistDebounced(); });
+    var ceilU = knobUnit('CEILING', (engCeiling + 30) / 30,
+      function (v) { return (v * 30 - 30).toFixed(1) + ' dB'; },
+      function (v) { engCeiling = v * 30 - 30; persistDebounced(); });
+    var row = el('div', 'az-knobs');
+    [widthU, delayU, fbU, dmixU, revU, roomU, dampU, ceilU].forEach(function (u) { row.appendChild(u.wrap); });
+    var limWrap = el('div'); limWrap.style.alignSelf = 'center';
+    var limTog = Z.ledToggle({ label: 'LIMITER', on: engLimit, color: 'cyan',
+      onChange: function (on) { engLimit = on; persistDebounced(); } });
+    limWrap.appendChild(limTog.el);
+    var rowB = el('div', 'az-row'); rowB.appendChild(row); rowB.appendChild(limWrap);
+    wrap.appendChild(rowB);
+    wrap.appendChild(el('div', 'az-note',
+      'Post-dynamics <b>space &amp; glue</b>: chain order is delay → reverb → M/S width → pan → <b>limiter</b> (last, '
+      + 'so nothing re-clips). Engine-side + saved to <b>$STATE/audio-eq</b>, live on every tab with this page closed.'));
+    function sync() {
+      var set = function (u, v, f) { if (u.knob.set) u.knob.set(Math.max(0, Math.min(1, v))); u.read.textContent = u.fmt(f == null ? v : f); };
+      set(widthU, engWidth / 2);
+      set(delayU, engDelayMs / 2000);
+      set(fbU, engDelayFb / 0.95);
+      set(dmixU, engDelayMix);
+      set(revU, engReverbMix);
+      set(roomU, engRoom);
+      set(dampU, engDamp);
+      set(ceilU, (engCeiling + 30) / 30);
+      if (limTog && limTog.set) limTog.set(engLimit);
+    }
+    return { el: Z.card({ title: '// ENGINE SPACE & GLUE  ·  width · delay · reverb · limiter  ·  always-on + saved', body: wrap }).el, sync: sync };
+  })();
+
   /* ---- transport / preview sources ---- */
   var transport = el('div', 'az-row');
   srcGroup = Z.buttonGroup({
@@ -620,7 +709,7 @@
   /* ---- assemble ---- */
   var grid = el('div', 'az-grid');
   var left = el('div', 'az-col');
-  [knobsCard, eqCard, engControls, specCard, sgCard, scCard, wfCard, wtCard, transportCard].forEach(function (c) { left.appendChild(c.el); });
+  [knobsCard, eqCard, engControls, spaceControls, specCard, sgCard, scCard, wfCard, wtCard, transportCard].forEach(function (c) { left.appendChild(c.el); });
   var right = el('div', 'az-col');
   [metersCard, lufsCard, gonioCard, corrCard, vuCard, masterCard].forEach(function (c) { right.appendChild(c.el); });
   grid.appendChild(left); grid.appendChild(right);

@@ -111,6 +111,7 @@
       setHostRows([
         ['Status', '<span style="color:var(--cyan,#05d9e8)">connected</span>', true],
         ['Manifest', HOST],
+        ['Version', r.version ? 'v' + esc(r.version) : '—', true],
         ['Active scheme', esc((r.scheme || '—'))],
         ['Effects', r.ui ? esc(Object.keys(r.ui).filter(function (k) { return r.ui[k]; }).join(', ') || 'none') : '—']
       ]);
