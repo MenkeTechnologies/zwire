@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 624" font-family="'Share Tech Mono', ui-monospace, monospace">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L8 4.5 L0 9 Z" fill="#05d9e8"/>
+    </marker>
+    <marker id="ahm" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L8 4.5 L0 9 Z" fill="#7a8ba8"/>
+    </marker>
+    <style>
+      .t     { fill:#e0f0ff; font-size:12px; }
+      .dim   { fill:#7a8ba8; font-size:11px; }
+      .cyan  { fill:#05d9e8; }
+      .mag   { fill:#d300c5; }
+      .pink  { fill:#ff6b9d; }
+      .green { fill:#39ff14; }
+      .title { font-family:'Orbitron', sans-serif; font-weight:700; }
+      .h     { fill:#05d9e8; font-size:13px; font-family:'Orbitron', sans-serif; font-weight:700; }
+      .box   { fill:#0d0d1a; stroke:#05d9e8; stroke-width:1.5; }
+      .jitbx { fill:#0d0d1a; stroke:#d300c5; stroke-width:1.5; }
+      .aotbx { fill:#0d0d1a; stroke:#ff2a6d; stroke-width:1.5; }
+      .optbx { fill:#0b140b; stroke:#39ff14; stroke-width:1.4; }
+      .chip  { fill:#10102a; stroke:#1a1a3e; stroke-width:1; }
+      .sub   { fill:#10102a; stroke:#2a1a4e; stroke-width:1; }
+      .arrow { stroke:#05d9e8; stroke-width:1.6; fill:none; marker-end:url(#ah); }
+      .dash  { stroke:#7a8ba8; stroke-width:1.1; stroke-dasharray:4 3; fill:none; marker-end:url(#ahm); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="624" fill="#0a0a14"/>
+  <rect x="2" y="2" width="996" height="620" fill="none" stroke="#1a1a3e" stroke-width="1"/>
+
+  <text x="24" y="34" class="title" fill="#05d9e8" font-size="19">ZWIRE &#8984;K PALETTE &#8212; TYPED COMMAND STEP-CHAINS (#168)</text>
+  <text x="24" y="52" class="dim">a custom command is NOT one action but a CHAIN of typed steps run top-to-bottom &#183; each step one of: url &#183; action &#183; scheme &#183; js &#183; shell &#183; host</text>
+
+  <!-- ===== LEFT: CRUD WIZARD ===== -->
+  <rect x="20" y="70" width="470" height="256" rx="4" class="box"/>
+  <text x="38" y="92" class="h">PER-STEP-TYPED CRUD WIZARD</text>
+  <text x="38" y="109" class="dim">each row: type dropdown &#183; value control &#183; reorder &#8593;&#8595; &#183; remove &#10005;</text>
+
+  <!-- row 1 -->
+  <rect x="38" y="120" width="434" height="30" rx="3" class="sub"/>
+  <rect x="46" y="126" width="78" height="18" rx="3" class="chip"/>
+  <text x="85" y="139" class="cyan" text-anchor="middle" font-size="11">url &#9662;</text>
+  <text x="132" y="139" class="t" font-size="11">https://&#8230;</text>
+  <text x="404" y="139" class="dim" font-size="11">&#8593;</text>
+  <text x="424" y="139" class="dim" font-size="11">&#8595;</text>
+  <text x="452" y="139" class="pink" font-size="11">&#10005;</text>
+
+  <!-- row 2 -->
+  <rect x="38" y="154" width="434" height="30" rx="3" class="sub"/>
+  <rect x="46" y="160" width="78" height="18" rx="3" class="chip"/>
+  <text x="85" y="173" class="cyan" text-anchor="middle" font-size="11">scheme &#9662;</text>
+  <text x="132" y="173" class="t" font-size="11">set dark</text>
+  <text x="404" y="173" class="dim" font-size="11">&#8593;</text>
+  <text x="424" y="173" class="dim" font-size="11">&#8595;</text>
+  <text x="452" y="173" class="pink" font-size="11">&#10005;</text>
+
+  <!-- row 3 -->
+  <rect x="38" y="188" width="434" height="30" rx="3" class="sub"/>
+  <rect x="46" y="194" width="78" height="18" rx="3" class="chip"/>
+  <text x="85" y="207" class="mag" text-anchor="middle" font-size="11">shell &#9662;</text>
+  <text x="132" y="207" class="t" font-size="11">git pull &amp;&amp; make</text>
+  <text x="404" y="207" class="dim" font-size="11">&#8593;</text>
+  <text x="424" y="207" class="dim" font-size="11">&#8595;</text>
+  <text x="452" y="207" class="pink" font-size="11">&#10005;</text>
+
+  <!-- row 4 -->
+  <rect x="38" y="222" width="434" height="30" rx="3" class="sub"/>
+  <rect x="46" y="228" width="78" height="18" rx="3" class="chip"/>
+  <text x="85" y="241" class="pink" text-anchor="middle" font-size="11">host &#9662;</text>
+  <text x="132" y="241" class="t" font-size="11">{&quot;cmd&quot;:&#8230;} JSON</text>
+  <text x="404" y="241" class="dim" font-size="11">&#8593;</text>
+  <text x="424" y="241" class="dim" font-size="11">&#8595;</text>
+  <text x="452" y="241" class="pink" font-size="11">&#10005;</text>
+
+  <!-- add step -->
+  <rect x="38" y="262" width="120" height="26" rx="3" class="chip"/>
+  <text x="98" y="279" class="green" text-anchor="middle" font-size="11">&#65291; Add step</text>
+  <text x="38" y="308" class="dim">types: url &#183; action (tab verbs) &#183; scheme &#183; js &#183; shell &#183; host</text>
+
+  <!-- ===== RIGHT: EXAMPLE CHAIN ===== -->
+  <rect x="510" y="70" width="470" height="256" rx="4" class="jitbx"/>
+  <text x="528" y="92" class="title" fill="#d300c5" font-size="13">EXAMPLE CHAIN &#8212; runs top &#8594; bottom</text>
+  <text x="528" y="109" class="dim">one command, four independently-typed steps executed in order</text>
+
+  <rect x="528" y="120" width="434" height="30" rx="3" class="sub"/>
+  <text x="540" y="139" class="cyan" font-size="11">1 &#183; url</text>
+  <text x="620" y="139" class="t" font-size="11">open-URL</text>
+  <path d="M745 150 L745 154" class="arrow"/>
+
+  <rect x="528" y="154" width="434" height="30" rx="3" class="sub"/>
+  <text x="540" y="173" class="cyan" font-size="11">2 &#183; scheme</text>
+  <text x="620" y="173" class="t" font-size="11">set-scheme</text>
+  <path d="M745 184 L745 188" class="arrow"/>
+
+  <rect x="528" y="188" width="434" height="30" rx="3" class="sub"/>
+  <text x="540" y="207" class="mag" font-size="11">3 &#183; shell</text>
+  <text x="620" y="207" class="t" font-size="11">run a shell command</text>
+  <path d="M745 218 L745 222" class="arrow"/>
+
+  <rect x="528" y="222" width="434" height="30" rx="3" class="sub"/>
+  <text x="540" y="241" class="pink" font-size="11">4 &#183; host</text>
+  <text x="620" y="241" class="t" font-size="11">send native-host JSON</text>
+
+  <text x="528" y="275" class="dim">shell step &#8594; native host <tspan class="mag">exec</tspan> (OS-selected /bin/sh -c &#183; cmd.exe), not a PTY</text>
+  <text x="528" y="294" class="dim">carries the native-host <tspan class="pink">privileged-local-process</tspan> trust model</text>
+  <text x="528" y="312" class="dim">inert without host &#8594; shell/host steps no-op on the new-tab page</text>
+
+  <!-- ===== BOTTOM: THREE CONTEXTS ===== -->
+  <path d="M255 326 L255 348" class="arrow"/>
+  <path d="M745 326 L745 348" class="arrow"/>
+
+  <rect x="20" y="350" width="960" height="196" rx="4" class="box"/>
+  <text x="38" y="372" class="h">SAME COMMAND &#8212; THREE ISOLATION CONTEXTS, ONE MODEL</text>
+  <text x="38" y="389" class="dim">the identical entry runs the same across all three surfaces, reconciled behind one <tspan class="cyan">entrySteps()</tspan> model</text>
+
+  <rect x="38" y="400" width="300" height="86" rx="4" class="sub"/>
+  <text x="52" y="421" class="cyan title" font-size="12">content scripts</text>
+  <text x="52" y="440" class="dim">web-page &#183; worker bus</text>
+  <text x="52" y="457" class="dim">zpalette.js runCustom /</text>
+  <text x="52" y="473" class="dim">runStep / runShell &#8594; zb-host relay</text>
+
+  <rect x="350" y="400" width="300" height="86" rx="4" class="sub"/>
+  <text x="364" y="421" class="cyan title" font-size="12">extension pages</text>
+  <text x="364" y="440" class="dim">chrome.tabs + native messaging</text>
+  <text x="364" y="457" class="dim">zg-boot.js runCustomBoot /</text>
+  <text x="364" y="473" class="dim">runStepBoot &#8594; direct host</text>
+
+  <rect x="662" y="400" width="300" height="86" rx="4" class="sub"/>
+  <text x="676" y="421" class="cyan title" font-size="12">newtab override</text>
+  <text x="676" y="440" class="dim">new-tab page &#183; no host access</text>
+  <text x="676" y="457" class="dim">newtab/palette.js chain exec</text>
+  <text x="676" y="473" class="dim">shell/host steps no-op here</text>
+
+  <path d="M188 486 L188 500 L500 500" class="arrow" marker-end="none"/>
+  <path d="M500 486 L500 500" class="arrow" marker-end="none"/>
+  <path d="M812 486 L812 500 L500 500" class="arrow" marker-end="none"/>
+  <path d="M500 500 L500 514" class="arrow"/>
+
+  <rect x="300" y="516" width="400" height="24" rx="3" class="chip"/>
+  <text x="500" y="533" class="green" text-anchor="middle" font-size="11">entrySteps() &#183; migrates shipped single-{type,value} defaults</text>
+
+  <text x="24" y="604" class="dim" font-size="10">launchers (Alfred, Raycast) chain actions; first-ness is browser-native + reaching the OS shell &#183; #168</text>
+</svg>

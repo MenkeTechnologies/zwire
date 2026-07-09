@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" font-family="'Share Tech Mono', ui-monospace, monospace">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L8 4.5 L0 9 Z" fill="#05d9e8"/>
+    </marker>
+    <marker id="ahm" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L8 4.5 L0 9 Z" fill="#7a8ba8"/>
+    </marker>
+    <style>
+      .t     { fill:#e0f0ff; font-size:12px; }
+      .dim   { fill:#7a8ba8; font-size:11px; }
+      .cyan  { fill:#05d9e8; }
+      .mag   { fill:#d300c5; }
+      .pink  { fill:#ff6b9d; }
+      .green { fill:#39ff14; }
+      .title { font-family:'Orbitron', sans-serif; font-weight:700; }
+      .h     { fill:#05d9e8; font-size:13px; font-family:'Orbitron', sans-serif; font-weight:700; }
+      .box   { fill:#0d0d1a; stroke:#05d9e8; stroke-width:1.5; }
+      .jitbx { fill:#0d0d1a; stroke:#d300c5; stroke-width:1.5; }
+      .aotbx { fill:#0d0d1a; stroke:#ff2a6d; stroke-width:1.5; }
+      .optbx { fill:#0b140b; stroke:#39ff14; stroke-width:1.4; }
+      .chip  { fill:#10102a; stroke:#1a1a3e; stroke-width:1; }
+      .sub   { fill:#10102a; stroke:#2a1a4e; stroke-width:1; }
+      .arrow { stroke:#05d9e8; stroke-width:1.6; fill:none; marker-end:url(#ah); }
+      .dash  { stroke:#7a8ba8; stroke-width:1.1; stroke-dasharray:4 3; fill:none; marker-end:url(#ahm); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="600" fill="#0a0a14"/>
+  <rect x="2" y="2" width="996" height="596" fill="none" stroke="#1a1a3e" stroke-width="1"/>
+
+  <text x="24" y="34" class="title" fill="#05d9e8" font-size="19">ZWIRE &#8212; DUAL TMUX ENGINE (#164)</text>
+  <text x="24" y="52" class="dim">one prefix-key content script feeds two independent tiling engines &#183; nested SESSION &#8594; WINDOWS &#8594; PANES inside a browser</text>
+
+  <!-- ===== PREFIX KEY (single input) ===== -->
+  <rect x="300" y="70" width="400" height="58" rx="4" class="box"/>
+  <text x="500" y="92" class="h" text-anchor="middle">PREFIX-KEY CONTENT SCRIPT</text>
+  <text x="500" y="111" class="dim" text-anchor="middle">Ctrl-b / &#8997;b &#183; <tspan class="cyan">isPrefix()</tspan> &#183; the single input source</text>
+
+  <!-- fan-out to the two engines -->
+  <path d="M420 128 L420 156 L254 156 L254 184" class="arrow"/>
+  <path d="M580 128 L580 156 L746 156 L746 184" class="arrow"/>
+
+  <!-- ===== LEFT: IN-PAGE IFRAME OVERLAY ===== -->
+  <rect x="20" y="186" width="468" height="230" rx="4" class="box"/>
+  <text x="38" y="210" class="h">IN-PAGE IFRAME OVERLAY</text>
+  <text x="38" y="227" class="dim">ztmux.js &#183; 777 L</text>
+  <rect x="38" y="238" width="432" height="34" rx="3" class="sub"/>
+  <text x="254" y="259" class="cyan" text-anchor="middle" font-size="12">every pane = a real webpage in an &lt;iframe&gt;</text>
+  <text x="38" y="298" class="dim">&#8250; any site frames &#8212; the fork's <tspan class="cyan">0008-allow-framing.patch</tspan></text>
+  <text x="38" y="318" class="dim">&#160;&#160;(<tspan class="cyan">ancestor_throttle.cc</tspan>) strips X-Frame-Options /</text>
+  <text x="38" y="338" class="dim">&#160;&#160;frame-ancestors so nothing can refuse to be framed</text>
+  <text x="38" y="366" class="dim">&#8250; nested <tspan class="cyan">tree</tspan> splits both ways, to any depth</text>
+  <text x="38" y="402" class="cyan" font-size="10.5">panes live inside one page</text>
+
+  <!-- ===== RIGHT: OS-WINDOW TILING ===== -->
+  <rect x="512" y="186" width="463" height="230" rx="4" class="jitbx"/>
+  <text x="530" y="210" class="title" fill="#d300c5" font-size="13">OS-WINDOW TILING</text>
+  <text x="530" y="227" class="dim">background.js &#183; 644 L</text>
+  <rect x="530" y="238" width="427" height="34" rx="3" class="sub"/>
+  <text x="743" y="259" class="cyan" text-anchor="middle" font-size="12">every pane = a real browser window</text>
+  <text x="530" y="298" class="dim">&#8250; tiled by <tspan class="cyan">chrome.windows</tspan> geometry</text>
+  <text x="530" y="318" class="dim">&#8250; cols / rows / main-v layouts</text>
+  <text x="530" y="338" class="dim">&#8250; <tspan class="cyan">rectsFor()</tspan> computes rects &#183; <tspan class="cyan">tile()</tspan> moves the windows</text>
+  <text x="530" y="366" class="dim">&#8250; the OS window manager is the compositor</text>
+  <text x="530" y="402" class="mag" font-size="10.5">panes are real OS windows</text>
+
+  <!-- both engines feed the shared model -->
+  <path d="M254 416 L254 448" class="arrow"/>
+  <path d="M743 416 L743 448" class="arrow"/>
+
+  <!-- ===== SHARED MODEL ===== -->
+  <rect x="20" y="450" width="955" height="98" rx="4" class="box"/>
+  <text x="38" y="474" class="h">BOTH ENGINES SHARE ONE TMUX MODEL</text>
+  <text x="38" y="497" class="dim">nested SESSION &#8594; WINDOWS &#8594; PANES &#183; named windows &#183; zoom &#183; synchronize-panes broadcast (<tspan class="cyan">toggleSync</tspan> / <tspan class="cyan">broadcastSync</tspan>)</text>
+  <text x="38" y="517" class="dim">&#183; copy-mode &#183; detach &#8212; and both survive MV3 service-worker eviction via persisted state (<tspan class="cyan">publishTmux()</tspan>)</text>
+  <text x="38" y="537" class="green" font-size="10.5">one prefix key in &#8594; two tiling engines out &#8594; the same session / window / pane tree, rehydrated after eviction</text>
+
+  <text x="24" y="578" class="dim" font-size="10">no shipping browser exposes the full tmux model built-in &#8212; &quot;none found,&quot; not proven &#183; zwire #164</text>
+</svg>

@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 680" font-family="'Share Tech Mono', ui-monospace, monospace">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L8 4.5 L0 9 Z" fill="#05d9e8"/>
+    </marker>
+    <marker id="ahm" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0 0 L8 4.5 L0 9 Z" fill="#7a8ba8"/>
+    </marker>
+    <style>
+      .t     { fill:#e0f0ff; font-size:12px; }
+      .dim   { fill:#7a8ba8; font-size:11px; }
+      .cyan  { fill:#05d9e8; }
+      .mag   { fill:#d300c5; }
+      .pink  { fill:#ff6b9d; }
+      .green { fill:#39ff14; }
+      .title { font-family:'Orbitron', sans-serif; font-weight:700; }
+      .h     { fill:#05d9e8; font-size:13px; font-family:'Orbitron', sans-serif; font-weight:700; }
+      .box   { fill:#0d0d1a; stroke:#05d9e8; stroke-width:1.5; }
+      .jitbx { fill:#0d0d1a; stroke:#d300c5; stroke-width:1.5; }
+      .aotbx { fill:#0d0d1a; stroke:#ff2a6d; stroke-width:1.5; }
+      .optbx { fill:#0b140b; stroke:#39ff14; stroke-width:1.4; }
+      .chip  { fill:#10102a; stroke:#1a1a3e; stroke-width:1; }
+      .sub   { fill:#10102a; stroke:#2a1a4e; stroke-width:1; }
+      .arrow { stroke:#05d9e8; stroke-width:1.6; fill:none; marker-end:url(#ah); }
+      .dash  { stroke:#7a8ba8; stroke-width:1.1; stroke-dasharray:4 3; fill:none; marker-end:url(#ahm); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="680" fill="#0a0a14"/>
+  <rect x="2" y="2" width="996" height="676" fill="none" stroke="#1a1a3e" stroke-width="1"/>
+
+  <text x="24" y="34" class="title" fill="#05d9e8" font-size="19">ZWIRE &#8212; THE NATIVE FORK STACK</text>
+  <text x="24" y="52" class="dim">a compiled Chromium fork + a HUD extension layer, launched by bin/zwire &#8212; one keyboard-driven browser</text>
+
+  <!-- ===== LAUNCHER ===== -->
+  <rect x="20" y="68" width="955" height="50" rx="4" class="box"/>
+  <text x="38" y="90" class="h">bin/zwire &#183; LAUNCHER</text>
+  <text x="38" y="108" class="dim">loads newtab + zpwrchrome + hud-internal against $ZWIRE_STATE/profile &#183; --extensions-on-chrome-urls &#183; seeds the audio EQ from $STATE/audio-eq</text>
+
+  <path d="M497 118 L497 144" class="arrow"/>
+  <text x="505" y="137" class="dim" font-size="10">launches</text>
+
+  <!-- ===== EXTENSION LAYER ===== -->
+  <rect x="20" y="146" width="955" height="152" rx="4" class="box"/>
+  <text x="38" y="168" class="h">EXTENSION LAYER &#183; MV3 content scripts on chrome://*/* + http(s), bridged to zwire-host</text>
+
+  <rect x="36" y="180" width="600" height="110" rx="4" class="sub"/>
+  <text x="48" y="200" class="cyan title" font-size="12.5">hud-internal &#8212; ~7,400 L &#183; 15 HUD pages &#183; 11 subsystems</text>
+  <text x="48" y="218" class="dim">&#8250; ztmux tiling overlay &#8212; panes / windows / sessions (durable CRUD)</text>
+  <text x="48" y="234" class="dim">&#8250; &#8984;K palette (zpalette) &#183; vim nav (zvim / zkeys) &#183; find (zfind)</text>
+  <text x="48" y="250" class="dim">&#8250; powerline statusbar (zstatus) &#183; 8-scheme picker (light/dark)</text>
+  <text x="48" y="266" class="dim">&#8250; HOST console &#8212; JSON REPL &#8594; zwire-host</text>
+  <text x="48" y="282" class="green" font-size="11">&#8250; live Audio page &#8212; EQ knobs + live meters</text>
+
+  <rect x="644" y="180" width="150" height="110" rx="4" class="sub"/>
+  <text x="719" y="200" class="cyan title" font-size="11.5" text-anchor="middle">newtab/</text>
+  <text x="719" y="220" class="dim" text-anchor="middle">chrome_url_</text>
+  <text x="719" y="234" class="dim" text-anchor="middle">overrides.newtab</text>
+  <text x="719" y="256" class="dim" text-anchor="middle">full HUD</text>
+  <text x="719" y="270" class="dim" text-anchor="middle">override page</text>
+
+  <rect x="802" y="180" width="157" height="110" rx="4" class="sub"/>
+  <text x="880" y="200" class="cyan title" font-size="11.5" text-anchor="middle">zpwrchrome</text>
+  <text x="880" y="220" class="dim" text-anchor="middle">MV3 power-tool</text>
+  <text x="880" y="236" class="dim" text-anchor="middle">submodule</text>
+  <text x="880" y="258" class="dim" text-anchor="middle">(reuse,</text>
+  <text x="880" y="272" class="dim" text-anchor="middle">not copy)</text>
+
+  <path d="M497 298 L497 326" class="arrow"/>
+  <text x="505" y="318" class="dim" font-size="10">sits on</text>
+
+  <!-- ===== FORK BASE ===== -->
+  <rect x="20" y="328" width="955" height="272" rx="4" class="box"/>
+  <text x="38" y="350" class="h">COMPILED CHROMIUM FORK &#183; pinned tag 150.0.7871.46 &#183; unbranded release</text>
+  <text x="38" y="368" class="dim">fork/patches &#8212; a 24-patch series restyling the chrome the extension layer can't reach</text>
+
+  <!-- row 1 -->
+  <rect x="36" y="380" width="300" height="56" rx="4" class="chip"/>
+  <text x="48" y="400" class="cyan" font-size="11.5">HUD skin &#183; 0001&#8211;07, 20, 21</text>
+  <text x="48" y="416" class="dim" font-size="10.5">tabs &#183; colors &#183; UI font &#183; toolbar</text>
+  <text x="48" y="430" class="dim" font-size="10.5">omnibox &#183; DevTools theme &#183; native menus</text>
+
+  <rect x="344" y="380" width="300" height="56" rx="4" class="chip"/>
+  <text x="356" y="400" class="cyan" font-size="11.5">allow-framing &#183; 0008, 12</text>
+  <text x="356" y="416" class="dim" font-size="10.5">strip X-Frame-Options / frame-ancestors</text>
+  <text x="356" y="430" class="dim" font-size="10.5">&#8594; tmux iframes embed any site</text>
+
+  <rect x="652" y="380" width="307" height="56" rx="4" class="chip"/>
+  <text x="664" y="400" class="cyan" font-size="11.5">palette focus &#183; 0009</text>
+  <text x="664" y="416" class="dim" font-size="10.5">hand focus to the page web contents</text>
+  <text x="664" y="430" class="dim" font-size="10.5">so the &#8984;K palette overlay is typeable</text>
+
+  <!-- row 2 -->
+  <rect x="36" y="444" width="300" height="56" rx="4" class="chip"/>
+  <text x="48" y="464" class="cyan" font-size="11.5">session restore &#183; 0013, 14</text>
+  <text x="48" y="480" class="dim" font-size="10.5">default = restore last session</text>
+  <text x="48" y="494" class="dim" font-size="10.5">&#183; no crash-restore bubble</text>
+
+  <rect x="344" y="444" width="300" height="56" rx="4" class="chip"/>
+  <text x="356" y="464" class="cyan" font-size="11.5">forced new tab &#183; 0010</text>
+  <text x="356" y="480" class="dim" font-size="10.5">chrome://newtab &#8594; zwire HUD</text>
+  <text x="356" y="494" class="dim" font-size="10.5">(never the Google NTP)</text>
+
+  <rect x="652" y="444" width="307" height="56" rx="4" class="optbx"/>
+  <text x="664" y="464" class="green" font-size="11.5">AUDIO EQ + live meters &#183; 0022 / 0024</text>
+  <text x="664" y="480" class="dim" font-size="10.5">browser-wide mastering DSP,</text>
+  <text x="664" y="494" class="dim" font-size="10.5">compiled into the audio service</text>
+
+  <!-- green feed: only the fork reaches the service -->
+  <path d="M805 500 L805 511" stroke="#39ff14" stroke-width="1.6" fill="none"/>
+  <path d="M801 507 L805 514 L809 507 Z" fill="#39ff14"/>
+
+  <!-- ===== AUDIO SERVICE ===== -->
+  <rect x="344" y="514" width="615" height="64" rx="4" class="optbx"/>
+  <text x="356" y="534" class="green title" font-size="11.5">Chromium audio service (sandboxed)</text>
+  <text x="356" y="552" class="dim" font-size="10.5">OutputController::OnMoreData() &#8212; per-stream output-mix chokepoint</text>
+  <text x="356" y="568" class="dim" font-size="10.5">preamp &#8594; RBJ EQ &#8594; comp &#8594; delay &#8594; reverb &#8594; width &#8594; pan &#8594; limiter</text>
+
+  <!-- blocked path: extension cannot reach the service directly -->
+  <text x="36" y="524" class="green" font-size="10.5">hud-internal Audio page</text>
+  <text x="258" y="512" class="dim" font-size="9.5" text-anchor="middle">no direct channel</text>
+  <path d="M120 540 L338 540" class="dash"/>
+  <text x="235" y="545" fill="#ff2a6d" font-size="15" font-weight="700" text-anchor="middle">&#10007;</text>
+  <text x="36" y="562" class="dim" font-size="9.5">reaches the engine only via $STATE files &amp; the browser process</text>
+
+  <text x="24" y="666" class="dim" font-size="10">a 24-patch Chromium fork + a ~7,400-line HUD extension layer, one keyboard-driven browser.</text>
+</svg>
