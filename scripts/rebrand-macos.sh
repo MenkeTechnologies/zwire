@@ -56,6 +56,12 @@ set_key NSCameraUsageDescription              "zwire lets sites you allow use th
 set_key NSMicrophoneUsageDescription          "zwire lets sites you allow use the microphone for audio capture and calls."
 set_key NSLocationWhenInUseUsageDescription   "zwire lets sites you allow access your location (Geolocation)."
 set_key NSLocationUsageDescription            "zwire lets sites you allow access your location (Geolocation)."
+set_key NSLocalNetworkUsageDescription        "zwire lets sites you allow reach devices on your local network (WebRTC, casting, local servers)."
+# NSBonjourServices (array): declare the mDNS types the app browses so macOS 15+
+# local-network privacy permits casting/discovery (mirrors Chrome's Cast service).
+pb "Delete :NSBonjourServices" 2>/dev/null || true
+pb "Add :NSBonjourServices array" 2>/dev/null || true
+pb "Add :NSBonjourServices:0 string _googlecast._tcp" 2>/dev/null || true
 
 # Re-seal the bundle: the top-level Info.plist/Resources changed, so re-sign
 # ad-hoc (nested frameworks/helpers keep their own valid seals). Without this,
