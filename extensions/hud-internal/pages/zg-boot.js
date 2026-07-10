@@ -72,6 +72,7 @@
     try {
       chrome.runtime.sendNativeMessage(HOST, { cmd: 'stryke_run', code: code }, function (reply) {
         var err = chrome.runtime.lastError;
+        drainZbAction();   // fire any browser.* action this script queued
         if (err) { bootToast('stryke: ' + err.message, 'error'); return; }
         var r = reply || {};
         if (r.ok === false) { bootToast('stryke: ' + (r.err || 'failed'), 'error'); return; }
@@ -452,6 +453,23 @@
     return function (t) { return (t == null ? '' : String(t)).toLowerCase().indexOf(lq) >= 0; };
   }
 
+  // A `browser.*` App::open call leaves its action in the host KV (__zbus_action) — the
+  // cross-process channel. After running any stryke from a HUD page, pull that action and hand
+  // it to the shared zb_cmd executor (chrome.storage write → background onChanged → chrome.tabs).
+  // Same-process, so it fires the tab/window op without waiting on the background sysinfo poll.
+  // Shared by every HUD surface (palette in zg-boot, ▶ Run in commands) — one implementation.
+  function drainZbAction() {
+    try {
+      chrome.runtime.sendNativeMessage(HOST, { cmd: 'kv_get', app: 'zwire', key: '__zbus_action' }, function (r) {
+        if (chrome.runtime.lastError) { void chrome.runtime.lastError; return; }
+        var v = r && r.value; if (!v || !v.a) return;
+        var q = {}; for (var k in v) { if (k !== '_n') q[k] = v[k]; } q._zbn = v._n || 1;
+        try { chrome.storage.local.set({ zb_cmd: q }); } catch (e) {}
+        try { chrome.runtime.sendNativeMessage(HOST, { cmd: 'kv_del', app: 'zwire', key: '__zbus_action' }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
   window.ZBHUD = { PAGES: PAGES, NATIVE_PAGES: NATIVE_PAGES, mount: mount, go: go,
-    navButton: navButton, HOST: HOST, publishUi: publishUi, matcher: matcher };
+    navButton: navButton, HOST: HOST, publishUi: publishUi, matcher: matcher, drainZbAction: drainZbAction };
 })();

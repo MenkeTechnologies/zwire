@@ -38,6 +38,23 @@ function mirror(scheme) {
   try { chrome.storage.local.set({ zb_scheme: scheme }); } catch (e) {}
 }
 
+// Pull a browser.* action a stryke script queued in the host KV (__zbus_action) and hand it to the
+// zb_cmd executor below (storage write → onChanged → chrome.tabs). One-shot sendNativeMessage so it
+// works from any SW entry point (the zb-host relay, hooks) without the streaming sysinfo port.
+function drainZbAction() {
+  try {
+    chrome.runtime.sendNativeMessage(HOST, { cmd: 'kv_get', app: 'zwire', key: '__zbus_action' }, function (r) {
+      if (chrome.runtime.lastError) { void chrome.runtime.lastError; return; }
+      var v = r && r.value; if (!v || !v.a) return;
+      var n = +v._n || 0; if (n <= (self._zbLastN || 0)) return;   // dedup vs the sysinfo poll
+      self._zbLastN = n;
+      var q = {}; for (var k in v) { if (k !== '_n') q[k] = v[k]; } q._zbn = n;
+      try { chrome.storage.local.set({ zb_cmd: q }); } catch (e) {}
+      try { chrome.runtime.sendNativeMessage(HOST, { cmd: 'kv_del', app: 'zwire', key: '__zbus_action' }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    });
+  } catch (e) {}
+}
+
 // Apply a theme frame pushed by the host into chrome.storage (drives every
 // hud-internal surface via storage.onChanged). Tracked so the storage->host
 // writer below recognises the echo and skips it.
@@ -535,6 +552,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     try {
       chrome.runtime.sendNativeMessage(HOST, msg.req, function (reply) {
         if (chrome.runtime.lastError) { sendResponse({ ok: false, err: chrome.runtime.lastError.message }); return; }
+        // A relayed stryke_run (global palette on a web page — content scripts can't reach the
+        // native host or chrome.tabs) may have queued a browser.* action in the host KV. Drain it
+        // here so the tab/window op fires without waiting on the sysinfo poll.
+        if (msg.req.cmd === 'stryke_run') drainZbAction();
         sendResponse({ ok: true, reply: reply });
       });
     } catch (e) { sendResponse({ ok: false, err: String(e) }); }
