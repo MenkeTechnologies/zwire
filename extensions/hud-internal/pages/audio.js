@@ -116,6 +116,7 @@
   var engFxBypass = false; // FX I block bypass (A/B) — suppresses gate…phaser directives
   var engFx2Bypass = false; // FX II block bypass (A/B) — suppresses waveshaper…auto-wah directives
   var engDynBypass = false; // dynamics bypass (A/B) — neutralizes preamp + compressor
+  var engSpaceBypass = false; // space & glue bypass (A/B) — suppresses width/delay/reverb/limiter
   var engBypass = false;  // master engine DSP bypass (A/B diff) — writes "off"
   var engMute = false;    // engine master mute (gain 0)
   // ENGINE meter feed — start it FIRST (connect is ~4ms) so meter frames are
@@ -193,7 +194,9 @@
     if (engMono) parts.push('mono,1');
     if (engDrive > 1e-3) parts.push('drive,' + engDrive.toFixed(3));
     if (!engDynBypass && engRatio > 1.001) { parts.push('thresh,' + engThresh.toFixed(1)); parts.push('ratio,' + engRatio.toFixed(2)); }
-    // Space & glue directives (only when engaged, keeps the spec tidy).
+    // Space & glue directives (only when engaged, keeps the spec tidy). SPACE
+    // BYPASS A/Bs the whole width/delay/reverb/limiter block.
+    if (!engSpaceBypass) {
     if (Math.abs(engWidth - 1) > 1e-3) parts.push('width,' + engWidth.toFixed(3));
     if (engDelayMix > 1e-3 && engDelayMs > 0.5) {
       parts.push('delay,' + engDelayMs.toFixed(1));
@@ -205,6 +208,7 @@
       parts.push('room,' + engRoom.toFixed(3));
       parts.push('damp,' + engDamp.toFixed(3));
     }
+    }  // end !engSpaceBypass (width/delay/reverb; limiter below shares the guard)
     // zdsp-core expansion — dynamics/saturation · spatial · modulation. The FX
     // BYPASS toggle A/B's the whole expansion block by simply not emitting its
     // directives (each effect stays at its unity/bypass default in the engine).
@@ -265,7 +269,7 @@
     }  // end !engFx2Bypass (FX II)
     // CEILING auto-engages the limiter: a set ceiling emits the directive even
     // if the LED toggle wasn't flipped (else the knob silently does nothing).
-    if (engLimit || engCeiling < -0.05) parts.push('ceiling,' + engCeiling.toFixed(2));
+    if (!engSpaceBypass && (engLimit || engCeiling < -0.05)) parts.push('ceiling,' + engCeiling.toFixed(2));
     return parts.join(';');
   }
   function stateDirShell() {
@@ -774,7 +778,11 @@
     var limTog = Z.ledToggle({ label: 'LIMITER', on: engLimit, color: 'cyan',
       onChange: function (on) { engLimit = on; persistDebounced(); } });
     limWrap.appendChild(limTog.el);
-    var rowB = el('div', 'az-row'); rowB.appendChild(row); rowB.appendChild(limWrap);
+    var spcBypWrap = el('div'); spcBypWrap.style.alignSelf = 'center';
+    var spcBypTog = Z.ledToggle({ label: 'SPACE BYPASS', on: engSpaceBypass, color: 'amber',
+      onChange: function (on) { engSpaceBypass = on; persistDebounced(); } });
+    spcBypWrap.appendChild(spcBypTog.el);
+    var rowB = el('div', 'az-row'); rowB.appendChild(row); rowB.appendChild(limWrap); rowB.appendChild(spcBypWrap);
     wrap.appendChild(rowB);
     wrap.appendChild(el('div', 'az-note',
       'Post-dynamics <b>space &amp; glue</b>: chain order is delay → reverb → M/S width → pan → <b>limiter</b> (last, '
