@@ -624,7 +624,11 @@
     onChange: function () { if (ctx) syncFilters(eq.get()); persistDebounced(); }
   });
   eqWrap.appendChild(eq.el);
-  var eqCard = Z.card({ title: '// PARAMETRIC EQ (EQ8)  ·  8 bands · drag · alt-drag/scroll Q · right-click type · dbl-click reset', body: eqWrap });
+  var eqTools = el('div', 'az-row'); eqTools.style.marginTop = '6px';
+  eqTools.appendChild(Z.button({ label: '⟲ Reset EQ', variant: 'mini',
+    onClick: function () { eq.reset(); toast('EQ reset to defaults', ''); } }));
+  eqWrap.appendChild(eqTools);
+  var eqCard = Z.card({ title: '// PARAMETRIC EQ (EQ8)  ·  8 bands · drag · alt-drag/scroll Q · right-click type · dbl-click node/empty = reset', body: eqWrap });
 
   /* ---- ENGINE STRIP — controls that modify the ALWAYS-ON browser-wide C++
      engine. Saved to appdata ($STATE/audio-eq) and applied to every tab live,
