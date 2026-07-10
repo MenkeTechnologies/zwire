@@ -30,7 +30,7 @@ index edab63d18f..bca0100284 100644
    std::unique_ptr<metrics::ClientInfo> client_info =
        GoogleUpdateSettings::LoadMetricsClientInfo();
 diff --git a/services/audio/output_controller.cc b/services/audio/output_controller.cc
-index 7ee20397dd..8566cf116b 100644
+index 7ee20397dd..30f7d30980 100644
 --- a/services/audio/output_controller.cc
 +++ b/services/audio/output_controller.cc
 @@ -2,6 +2,12 @@
@@ -54,7 +54,7 @@ index 7ee20397dd..8566cf116b 100644
  #include "base/compiler_specific.h"
  #include "base/feature_list.h"
  #include "base/functional/bind.h"
-@@ -28,8 +35,1275 @@
+@@ -28,8 +35,1282 @@
  #include "media/media_buildflags.h"
  #include "services/audio/device_listener_output_stream.h"
  
@@ -1008,8 +1008,15 @@ index 7ee20397dd..8566cf116b 100644
 +    for (const ZwireEqBand& band : cfg.bands) {
 +      AddBand(band);
 +    }
-+    state_.assign(static_cast<size_t>(channels_),
-+                  std::vector<BiquadState>(biquads_.size()));
++    // Preserve the biquad filter memory (x1/x2/y1/y2) across a rebuild when the
++    // cascade size is unchanged — dragging an EQ node changes coefficients, not
++    // the band count, and zeroing the filter state every edit clicks/glitches the
++    // audio. Only (re)allocate when the channel or band count actually changes.
++    if (state_.size() != static_cast<size_t>(channels_) || state_.empty() ||
++        state_.front().size() != biquads_.size()) {
++      state_.assign(static_cast<size_t>(channels_),
++                    std::vector<BiquadState>(biquads_.size()));
++    }
 +    cached_gen_ = cfg.generation;
 +    VLOG(1) << "zwire-eq-rebuild: gen=" << cfg.generation
 +            << " preamp_db=" << cfg.preamp_db << " bands=" << cfg.bands.size()
@@ -1330,7 +1337,7 @@ index 7ee20397dd..8566cf116b 100644
  namespace {
  
  // Requests data before reading in OutputController::OnMoreData, which may
-@@ -167,6 +1441,8 @@ OutputController::OutputController(
+@@ -167,6 +1448,8 @@ OutputController::OutputController(
      : id_(base::UnguessableToken::Create()),
        audio_manager_(audio_manager),
        params_(params),
@@ -1339,7 +1346,7 @@ index 7ee20397dd..8566cf116b 100644
        managed_device_output_stream_create_callback_(
            std::move(managed_device_output_stream_create_callback)),
        handler_(handler),
-@@ -483,6 +1759,20 @@ int OutputController::OnMoreData(base::TimeDelta delay,
+@@ -483,6 +1766,20 @@ int OutputController::OnMoreData(base::TimeDelta delay,
  
    const bool received_data = sync_reader_->Read(dest, is_mixing);
  
