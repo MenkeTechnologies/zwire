@@ -214,8 +214,8 @@
           showActions(verbs);
         });
       }});
-      actBtn.el.title = 'Insert an App::open("zwire") call';
-      bar.appendChild(actBtn.el);
+      actBtn.title = 'Insert an App::open("zwire") call';
+      bar.appendChild(actBtn);
     }
     // Self-contained searchable popup of the zwire bus verbs (inline styles — extension pages allow
     // them, unlike Tauri release CSP). Click a row to append the call to this editor.
