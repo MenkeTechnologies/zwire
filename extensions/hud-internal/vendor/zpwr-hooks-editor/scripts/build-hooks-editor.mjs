@@ -78,11 +78,21 @@ await build({
     outfile: join(lib, 'hooks-editor.bundle.js'),
 });
 
-// Monaco base web worker.
+// Monaco base web worker (serves the stryke editor).
 await build({
     ...common,
     entryPoints: [join(src, 'hooks-editor-worker-entry.mjs')],
     outfile: join(lib, 'hooks-editor.worker.js'),
 });
 
-console.log(`Wrote ${lib}/hooks-editor.bundle.{js,css} + hooks-editor.worker.js`);
+// Monaco TypeScript/JavaScript language worker (serves JS IntelliSense for the
+// plain, non-LSP editor). Skipped cleanly if the entry is absent (older checkout).
+if (existsSync(join(src, 'hooks-editor-ts-worker-entry.mjs'))) {
+    await build({
+        ...common,
+        entryPoints: [join(src, 'hooks-editor-ts-worker-entry.mjs')],
+        outfile: join(lib, 'hooks-editor.ts.worker.js'),
+    });
+}
+
+console.log(`Wrote ${lib}/hooks-editor.bundle.{js,css} + hooks-editor.worker.js + hooks-editor.ts.worker.js`);

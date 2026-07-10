@@ -12,6 +12,15 @@
   var cmds = [];
   var editingId = null;
   var filter = '', matchFn = function () { return true; };
+  // stryke steps use the shared Monaco editor (window.HooksEditor) with stryke-LSP
+  // completion — same facade pages/hooks.js mounts. Native-host bridge for the LSP.
+  var HOST = (window.ZBHUD && window.ZBHUD.HOST) || 'com.zwire.hud';
+  var MODE_KEY = 'zw.hooks.editorMode';
+  var _lspStarted = false, _lspPort = null, _strykeSeq = 0;
+  // Page-global LSP status ('off'|'connecting'|'ready'|'error') mirrored onto every
+  // stryke step's status pill, and the set of live Monaco editors so a mode change
+  // applies to all of them at once (the Hooks-tab editor toolbar, one LSP per page).
+  var _lspState = 'off', _lspPills = [], _strykeEditors = [], _modeSels = [];
 
   var TYPES = [
     { value: 'url', label: 'Open URL' },
@@ -92,12 +101,121 @@
   var stepCtls = [];
   var stepsHost = el('div', 'zb-cmd-steps');
 
+  // Editor keybinding mode (Default / Vim / Emacs), shared with the Hooks tab via
+  // the same localStorage key so the choice is consistent across both editors.
+  function getEditorMode() { try { return localStorage.getItem(MODE_KEY) || 'default'; } catch (e) { return 'default'; } }
+  function storeEditorMode(m) { try { localStorage.setItem(MODE_KEY, m); } catch (e) {} }
+  function applyModeAll(m) {
+    _strykeEditors.forEach(function (h) { if (h && h.setMode) { try { h.setMode(m); } catch (e) {} } });
+    // Keep every stryke step's Mode select in sync (one page-wide keybinding choice).
+    _modeSels.forEach(function (s) { if (s && s.get && s.get() !== m && s.set) { try { s.set(m); } catch (e) {} } });
+  }
+  // stryke-LSP status pill (○ connecting / ● ready / ○ unavailable). Same states +
+  // text as pages/hooks.js. Stored globally and painted onto every live pill so a
+  // pill created after the handshake still shows the current state.
+  var LSP_TEXT = { off: '○ LSP off', connecting: '○ connecting…', ready: '● stryke LSP', error: '○ LSP unavailable' };
+  function paintPill(pill, state) {
+    if (!pill) return;
+    pill.textContent = LSP_TEXT[state] || LSP_TEXT.off;
+    pill.className = 'zb-lsp' + (state === 'ready' ? ' ok' : state === 'error' ? ' bad' : '');
+  }
+  function setLspStatus(state) {
+    _lspState = state;
+    _lspPills.forEach(function (p) { paintPill(p, state); });
+  }
+  // Start the stryke language server once and wire it to the shared Monaco
+  // HooksEditor LSP client so the stryke step editors get completion/hover/
+  // diagnostics. Mirrors pages/hooks.js: one connectNative owns one `stryke --lsp`;
+  // framed replies arrive as {ev:'stryke-lsp-rx', message}; we send via stryke_lsp_send.
+  function ensureLsp() {
+    if (_lspStarted || !window.HooksEditor) return;
+    setLspStatus('connecting');
+    try {
+      _lspPort = chrome.runtime.connectNative(HOST);
+      _lspPort.onMessage.addListener(function (m) {
+        if (!m) return;
+        if (m.ev === 'stryke-lsp-rx' && typeof m.message === 'string') {
+          try { window.HooksEditor.receive(m.message); } catch (e) {}
+        } else if (m.ev === 'stryke-lsp-exit') {
+          setLspStatus('error');
+        }
+      });
+      _lspPort.onDisconnect.addListener(function () { _lspStarted = false; _lspPort = null; setLspStatus('error'); });
+      _lspPort.postMessage({ id: 'lsp', cmd: 'stryke_lsp_start' });
+      window.HooksEditor.initClient(function (message) {
+        try { if (_lspPort) _lspPort.postMessage({ cmd: 'stryke_lsp_send', message: message }); } catch (e) {}
+      });
+      _lspStarted = true;
+      // Green only once stryke answers `initialize` (not just on spawn).
+      if (typeof window.HooksEditor.whenReady === 'function') {
+        window.HooksEditor.whenReady().then(function (ok) { setLspStatus(ok ? 'ready' : 'error'); });
+      } else {
+        setLspStatus('ready');
+      }
+    } catch (e) { setLspStatus('error'); /* LSP is optional — the editor still works without it */ }
+  }
+  // A stryke/JS step's value control is the shared Monaco editor, not a plain
+  // textarea. Both carry the Hooks-tab toolbar (Mode select + vim/emacs status);
+  // stryke additionally shows the LSP status pill and gets completion from the
+  // stryke LSP, while JS gets IntelliSense from Monaco's built-in TS language
+  // service (HooksEditor.createPlain). Degrades to a textarea when the editor bundle
+  // (or, for JS, createPlain) is absent — source-only checkout / stale bundle.
+  // Returns a zgui-shaped control { el, get(), _dispose() }; _dispose tears down the
+  // Monaco instance so a steps redraw doesn't leak editors or collide model URIs.
+  function makeMonacoControl(kind, val) {
+    var isStryke = kind === 'stryke';
+    var placeholder = isStryke ? 'p "hello {q}"   # stryke — print with p, {q} = arg' : "alert('hi ' + q + '!')";
+    var canEdit = window.HooksEditor && typeof window.HooksEditor.create === 'function' &&
+      (isStryke || typeof window.HooksEditor.createPlain === 'function');
+    if (!canEdit) return Z.textarea({ placeholder: placeholder, rows: 4, value: val || '' });
+    if (isStryke) ensureLsp();
+    var wrap = el('div', 'zb-chain-ed');
+    // Toolbar: Mode select (+ LSP status pill for stryke), matching the Hooks tab.
+    var bar = el('div', 'zb-chain-edbar');
+    bar.appendChild(el('span', 'zb-chain-edlbl', 'Mode'));
+    var modeSel = Z.select({
+      options: [{ value: 'default', label: 'Default' }, { value: 'vim', label: 'Vim' }, { value: 'emacs', label: 'Emacs' }],
+      value: getEditorMode(),
+      onChange: function () { var m = modeSel.get(); storeEditorMode(m); applyModeAll(m); }
+    });
+    modeSel.el.title = 'Editor keybindings';
+    _modeSels.push(modeSel);
+    bar.appendChild(modeSel.el);
+    var pill = null;
+    if (isStryke) {
+      pill = el('span', 'zb-lsp'); pill.title = 'stryke language server';
+      paintPill(pill, _lspState); _lspPills.push(pill);
+      bar.appendChild(pill);
+    }
+    var mount = el('div', 'zb-chain-monaco');
+    var vimStatus = el('div', 'zb-chain-vim');
+    wrap.appendChild(bar); wrap.appendChild(mount); wrap.appendChild(vimStatus);
+    // Unique in-memory doc URI per editor — Monaco models must not collide. For
+    // stryke the LSP opens each as its own buffer; for JS the URI just names the
+    // TS-service model. Not a real file.
+    var uri = 'file:///zwire/commands/step-' + (++_strykeSeq) + (isStryke ? '.stryke' : '.js');
+    var handle = isStryke
+      ? window.HooksEditor.create(mount, { uri: uri, doc: val || '', mode: getEditorMode(), statusBar: vimStatus })
+      : window.HooksEditor.createPlain(mount, { language: 'javascript', uri: uri, doc: val || '', mode: getEditorMode(), statusBar: vimStatus });
+    _strykeEditors.push(handle);
+    return {
+      el: wrap,
+      get: function () { return handle.getValue(); },
+      _dispose: function () {
+        var i = _strykeEditors.indexOf(handle); if (i >= 0) _strykeEditors.splice(i, 1);
+        var j = pill ? _lspPills.indexOf(pill) : -1; if (j >= 0) _lspPills.splice(j, 1);
+        var k = _modeSels.indexOf(modeSel); if (k >= 0) _modeSels.splice(k, 1);
+        try { handle.destroy(); } catch (e) {}
+      }
+    };
+  }
+
   // One value control for a step of a given type — a ZGui widget with .el + .get().
   function makeValueControl(type, val) {
     if (type === 'action') return Z.select({ options: opt(ACTIONS), value: val || 'newTab' });
     if (type === 'scheme') return Z.select({ options: opt(SCHEMES), value: val || 'cyberpunk' });
-    if (type === 'js') return Z.textarea({ placeholder: "alert('hi ' + q + '!')", rows: 4, value: val || '' });
-    if (type === 'stryke') return Z.textarea({ placeholder: 'p "hello {q}"   # stryke — print with p, {q} = arg', rows: 4, value: val || '' });
+    if (type === 'js') return makeMonacoControl('js', val);
+    if (type === 'stryke') return makeMonacoControl('stryke', val);
     if (type === 'host') return Z.textarea({ placeholder: '{"cmd":"notify","title":"hi {q}"}', rows: 3, value: val || '' });
     return Z.textfield({ placeholder: type === 'shell' ? 'git status   ({q} for args)' : 'https://example.com   ({q} optional)', value: val || '' });
   }
@@ -134,7 +252,15 @@
     stepCtls[i] = { tSel: tSel, valCtl: valCtl };
     return rEl;
   }
+  // Tear down any Monaco (stryke) editors before a redraw so they don't leak or
+  // collide model URIs. Callers already syncSteps() first, so values are captured.
+  function disposeStepEditors() {
+    stepCtls.forEach(function (c) {
+      if (c && c.valCtl && typeof c.valCtl._dispose === 'function') { try { c.valCtl._dispose(); } catch (e) {} }
+    });
+  }
   function drawSteps() {
+    disposeStepEditors();
     stepsHost.innerHTML = ''; stepCtls = [];
     if (!steps.length) { stepsHost.appendChild(el('div', 'zb-cmd-hint', 'No steps yet. Add one — steps run top to bottom.')); return; }
     steps.forEach(function (s, i) { stepsHost.appendChild(stepRow(s, i)); });
@@ -338,6 +464,18 @@
       '.zb-chain-head>select{flex:0 0 130px;}',
       '.zb-chain-valhost{flex:1 1 0;min-width:0;}',
       '.zb-chain-valhost input,.zb-chain-valhost select,.zb-chain-valhost textarea{width:100%;box-sizing:border-box;}',
+      // stryke steps mount the Monaco editor with a toolbar (Mode select + LSP pill)
+      // and a vim/emacs status line, matching the Hooks tab editor.
+      '.zb-chain-ed{display:flex;flex-direction:column;gap:6px;}',
+      '.zb-chain-edbar{display:flex;align-items:center;gap:8px;}',
+      '.zb-chain-edlbl{font-size:11px;color:var(--text-dim);letter-spacing:.04em;}',
+      '.zb-chain-edbar select{flex:0 0 auto;width:auto;min-width:96px;}',
+      '.zb-lsp{margin-left:auto;font:10px/1 var(--mono,"Share Tech Mono",monospace);color:var(--text-muted,#3d4f6a);}',
+      '.zb-lsp.ok{color:var(--green,#39ff14);}.zb-lsp.bad{color:var(--accent,#ff2a6d);}',
+      // Monaco sizes to its container; automaticLayout handles width. overflow:hidden
+      // so the editor chrome stays inside the rounded step card.
+      '.zb-chain-monaco{height:200px;width:100%;box-sizing:border-box;border:1px solid var(--border,rgba(5,217,232,.25));border-radius:4px;overflow:hidden;}',
+      '.zb-chain-vim{min-height:14px;font:10px/1.4 var(--mono,"Share Tech Mono",monospace);color:var(--text-dim,#8aa);}',
       '.zb-chain-ctrls{flex:0 0 auto;display:inline-flex;gap:4px;align-self:flex-start;}',
       '.zb-chain-mini{min-width:30px;padding-left:6px;padding-right:6px;}',
       '.zb-chain-help{margin-top:6px;}',

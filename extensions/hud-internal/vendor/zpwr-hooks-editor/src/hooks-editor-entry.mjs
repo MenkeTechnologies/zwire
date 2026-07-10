@@ -28,16 +28,32 @@
 // ourselves from the Perl basic-language below).
 import * as monaco from 'monaco-editor/esm/vs/editor/edcore.main.js';
 import { conf as perlConf, language as perlLang } from 'monaco-editor/esm/vs/basic-languages/perl/perl.js';
+// JavaScript language service — powers IntelliSense (completion / hover / signature)
+// for the non-LSP plain editor (the ⌘K "Run JavaScript" command step). The Monarch
+// grammar below handles colorization; the TS worker handles the language features.
+import 'monaco-editor/esm/vs/language/typescript/monaco.contribution';
+import { conf as jsConf, language as jsLang } from 'monaco-editor/esm/vs/basic-languages/javascript/javascript.js';
 import { initVimMode } from 'monaco-vim';
 import { EmacsExtension } from 'monaco-emacs';
 import { createLspCore } from './lsp-client-core.mjs';
 
-// Monaco needs a worker factory. Only the base editor worker is used; resolve it
-// relative to the document base so it works under both the web root and Tauri's
-// custom protocol (CSP worker-src 'self' covers the same-origin URL).
+// Monaco needs a worker factory. Resolve workers relative to THIS bundle's own URL,
+// not document.baseURI: the bundle and its workers ship side-by-side in one lib/
+// dir, but the HTML that loads them may live elsewhere (e.g. an extension's pages/),
+// so baseURI would mis-resolve the worker path. The base editor worker serves the
+// stryke editor (LSP intelligence is main-thread); the typescript worker serves JS
+// IntelliSense for the plain editor. (CSP worker-src 'self' covers the same origin.)
+const _bundleUrl =
+    (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) ||
+    (typeof self !== 'undefined' && self.location && self.location.href) ||
+    '';
 self.MonacoEnvironment = {
-    getWorker() {
-        return new Worker(new URL('lib/hooks-editor.worker.js', document.baseURI));
+    getWorker(_moduleId, label) {
+        const file =
+            label === 'typescript' || label === 'javascript'
+                ? 'hooks-editor.ts.worker.js'
+                : 'hooks-editor.worker.js';
+        return new Worker(new URL(file, _bundleUrl));
     },
 };
 
@@ -45,6 +61,28 @@ const LANG_ID = 'stryke';
 monaco.languages.register({ id: LANG_ID });
 monaco.languages.setMonarchTokensProvider(LANG_ID, perlLang);
 monaco.languages.setLanguageConfiguration(LANG_ID, perlConf);
+
+// JavaScript: edcore bundles no languages, and the ts contribution only lazily
+// hooks `onLanguage('javascript')` — it does NOT register the language. So register
+// it ourselves (which fires that hook and wires the worker-backed language service),
+// then overlay the Monarch grammar for colorization and relax diagnostics so
+// referencing host globals (chrome, q) doesn't red-squiggle while genuine syntax
+// errors still surface.
+const JS_LANG_ID = 'javascript';
+monaco.languages.register({ id: JS_LANG_ID, extensions: ['.js', '.mjs', '.cjs'], aliases: ['JavaScript', 'javascript', 'js'] });
+monaco.languages.setMonarchTokensProvider(JS_LANG_ID, jsLang);
+monaco.languages.setLanguageConfiguration(JS_LANG_ID, jsConf);
+if (monaco.languages.typescript && monaco.languages.typescript.javascriptDefaults) {
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+        target: monaco.languages.typescript.ScriptTarget.ESNext,
+        allowNonTsExtensions: true,
+        allowJs: true,
+    });
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: false,
+    });
+}
 
 // Cyberpunk theme — neon on near-black, matching the apps' aesthetic. Also styles
 // the suggest/hover widgets explicitly so the completion popup is clearly visible.
@@ -100,6 +138,47 @@ function overflowWidgetsNode() {
         document.body.appendChild(_overflowNode);
     }
     return _overflowNode;
+}
+
+// Editor construction options shared by the stryke (LSP) editor and the plain JS
+// editor. Per-editor extras (the model, the overflow node, semantic highlighting)
+// are merged in at create time.
+const BASE_EDITOR_OPTS = {
+    theme: THEME,
+    automaticLayout: true,
+    fontSize: 13,
+    minimap: { enabled: true },
+    scrollBeyondLastLine: false,
+    tabSize: 2,
+    renderWhitespace: 'selection',
+    // Render suggest/hover popups in a body-level node so the editor's
+    // overflow:hidden container can't clip them (the "no popup ever" bug).
+    fixedOverflowWidgets: true,
+    // Completion: auto-popup on typing everywhere + trigger chars.
+    quickSuggestions: { other: true, comments: true, strings: true },
+    suggestOnTriggerCharacters: true,
+    tabCompletion: 'on',
+};
+
+// Attach modal (vim/emacs) editing to an editor. Returns { applyMode(mode), dispose() }.
+// Shared by both editors so Default/Vim/Emacs switching behaves identically.
+function attachModal(editor, statusBar) {
+    let modal = null;
+    const applyMode = (m) => {
+        if (modal) {
+            try { modal.dispose(); } catch (_) {}
+            modal = null;
+            if (statusBar) statusBar.textContent = '';
+        }
+        if (m === 'vim') {
+            modal = initVimMode(editor, statusBar || undefined);
+        } else if (m === 'emacs') {
+            const ext = new EmacsExtension(editor);
+            ext.start();
+            modal = ext;
+        }
+    };
+    return { applyMode, dispose() { if (modal) { try { modal.dispose(); } catch (_) {} } } };
 }
 
 // ── LSP client ───────────────────────────────────────────────────────────────
@@ -601,23 +680,9 @@ const HooksEditor = {
         if (uri) modelUris.set(model, uri);
 
         const editor = monaco.editor.create(parent, {
+            ...BASE_EDITOR_OPTS,
             model,
-            theme: THEME,
-            automaticLayout: true,
-            fontSize: 13,
-            minimap: { enabled: true },
-            scrollBeyondLastLine: false,
-            tabSize: 2,
-            renderWhitespace: 'selection',
-            // Render suggest/hover popups in a body-level node so the editor's
-            // overflow:hidden container can't clip them (the "no popup ever" bug).
-            fixedOverflowWidgets: true,
             overflowWidgetsDomNode: overflowWidgetsNode(),
-            // Completion: auto-popup on typing everywhere (incl. comments/strings,
-            // since the sample is comment-heavy) + trigger chars.
-            quickSuggestions: { other: true, comments: true, strings: true },
-            suggestOnTriggerCharacters: true,
-            tabCompletion: 'on',
             // Use server-provided semantic tokens for highlighting (overlaid on Monarch).
             'semanticHighlighting.enabled': true,
         });
@@ -646,34 +711,58 @@ const HooksEditor = {
             }
         });
 
-        let modal = null;
-        const applyMode = (m) => {
-            if (modal) {
-                try { modal.dispose(); } catch (_) {}
-                modal = null;
-                if (statusBar) statusBar.textContent = '';
-            }
-            if (m === 'vim') {
-                modal = initVimMode(editor, statusBar || undefined);
-            } else if (m === 'emacs') {
-                const ext = new EmacsExtension(editor);
-                ext.start();
-                modal = ext;
-            }
-        };
-        applyMode(mode || 'default');
+        const modal = attachModal(editor, statusBar);
+        modal.applyMode(mode || 'default');
 
         return {
             getValue: () => model.getValue(),
             setValue: (text) => model.setValue(text == null ? '' : text),
             focus: () => editor.focus(),
-            setMode: (m) => applyMode(m),
+            setMode: (m) => modal.applyMode(m),
             destroy: () => {
-                if (modal) { try { modal.dispose(); } catch (_) {} }
+                modal.dispose();
                 changeSub.dispose();
                 if (lsp.connected() && uri) lsp.notify('textDocument/didClose', { textDocument: { uri } });
                 monaco.editor.setModelMarkers(model, 'stryke', []);
                 modelUris.delete(model);
+                editor.dispose();
+                model.dispose();
+            },
+        };
+    },
+
+    /**
+     * Mount a PLAIN editor (no LSP) for a Monaco-registered language — used for the
+     * JavaScript command step, which gets IntelliSense from Monaco's built-in TS
+     * language service rather than the stryke LSP. Same handle shape as create().
+     *  - `language`: a registered language id (e.g. 'javascript')
+     *  - `uri`, `doc`, `onChange(text)`, `mode`, `statusBar` — as create()
+     */
+    createPlain(parent, { language, uri, doc, onChange, mode, statusBar } = {}) {
+        const model = monaco.editor.createModel(
+            doc || '',
+            language || 'javascript',
+            uri ? monaco.Uri.parse(uri) : undefined,
+        );
+        const editor = monaco.editor.create(parent, {
+            ...BASE_EDITOR_OPTS,
+            model,
+            overflowWidgetsDomNode: overflowWidgetsNode(),
+        });
+        const changeSub = model.onDidChangeContent(() => {
+            if (typeof onChange === 'function') onChange(model.getValue());
+        });
+        const modal = attachModal(editor, statusBar);
+        modal.applyMode(mode || 'default');
+
+        return {
+            getValue: () => model.getValue(),
+            setValue: (text) => model.setValue(text == null ? '' : text),
+            focus: () => editor.focus(),
+            setMode: (m) => modal.applyMode(m),
+            destroy: () => {
+                modal.dispose();
+                changeSub.dispose();
                 editor.dispose();
                 model.dispose();
             },
