@@ -113,7 +113,9 @@
   var engTremolo = 0.0, engTremRate = 5.0;             // tremolo (LFO amplitude)
   var engAutopan = 0.0, engPanRate = 1.0;              // auto-pan (LFO stereo)
   var engWah = 0.0, engWahSens = 0.5, engWahBase = 400.0;  // auto-wah (envelope band-pass)
-  var engFxBypass = false; // FX-block bypass (A/B) — suppresses the zdsp-core expansion directives only
+  var engFxBypass = false; // FX I block bypass (A/B) — suppresses gate…phaser directives
+  var engFx2Bypass = false; // FX II block bypass (A/B) — suppresses waveshaper…auto-wah directives
+  var engDynBypass = false; // dynamics bypass (A/B) — neutralizes preamp + compressor
   var engBypass = false;  // master engine DSP bypass (A/B diff) — writes "off"
   var engMute = false;    // engine master mute (gain 0)
   // ENGINE meter feed — start it FIRST (connect is ~4ms) so meter frames are
@@ -181,7 +183,8 @@
   function buildSpec() {
     if (engBypass) return 'off';  // whole-engine bypass for A/B diff (C++ passes audio through)
     var bands = eq ? eq.get() : flat();
-    var parts = [preampDb.toFixed(2)];
+    // DYN BYPASS neutralizes the dynamics section (preamp → 0 dB, compressor off).
+    var parts = [(engDynBypass ? '0.00' : preampDb.toFixed(2))];
     bands.forEach(function (b) { parts.push(b.type + ',' + Math.round(b.freq) + ',' + (+b.gain).toFixed(2) + ',' + (+b.q).toFixed(3)); });
     // Channel-strip directives (only when non-default, keeps the spec tidy).
     var effGain = engMute ? 0 : engGain;
@@ -189,7 +192,7 @@
     if (Math.abs(engPan) > 1e-3) parts.push('pan,' + engPan.toFixed(3));
     if (engMono) parts.push('mono,1');
     if (engDrive > 1e-3) parts.push('drive,' + engDrive.toFixed(3));
-    if (engRatio > 1.001) { parts.push('thresh,' + engThresh.toFixed(1)); parts.push('ratio,' + engRatio.toFixed(2)); }
+    if (!engDynBypass && engRatio > 1.001) { parts.push('thresh,' + engThresh.toFixed(1)); parts.push('ratio,' + engRatio.toFixed(2)); }
     // Space & glue directives (only when engaged, keeps the spec tidy).
     if (Math.abs(engWidth - 1) > 1e-3) parts.push('width,' + engWidth.toFixed(3));
     if (engDelayMix > 1e-3 && engDelayMs > 0.5) {
@@ -235,7 +238,9 @@
       parts.push('phaserrate,' + engPhaserRate.toFixed(3));
       parts.push('phaserdepth,' + engPhaserDepth.toFixed(3));
     }
-    // zdsp-core expansion II — saturation/sweep/amplitude.
+    }  // end !engFxBypass (FX I)
+    // zdsp-core expansion II — saturation/sweep/amplitude. FX II BYPASS A/Bs this block.
+    if (!engFx2Bypass) {
     if (engShaper > 1e-3) {
       parts.push('shaper,' + engShaper.toFixed(3));
       parts.push('shapertype,' + engShaperType);
@@ -257,7 +262,7 @@
       parts.push('wahsens,' + engWahSens.toFixed(3));
       parts.push('wahbase,' + Math.round(engWahBase));
     }
-    }  // end !engFxBypass
+    }  // end !engFx2Bypass (FX II)
     // CEILING auto-engages the limiter: a set ceiling emits the directive even
     // if the LED toggle wasn't flipped (else the knob silently does nothing).
     if (engLimit || engCeiling < -0.05) parts.push('ceiling,' + engCeiling.toFixed(2));
@@ -729,7 +734,9 @@
   // through (A/B diff). Settings are retained; toggling back re-applies them.
   var engBypassTog = Z.ledToggle({ label: 'BYPASS ENGINE DSP', on: engBypass, color: 'magenta',
     onChange: function (on) { engBypass = on; persistDebounced(); toast(on ? 'Engine DSP BYPASSED — raw audio (A/B)' : 'Engine DSP active', ''); } });
-  var bypassRow = el('div', 'az-row'); bypassRow.appendChild(engBypassTog.el);
+  var dynBypassTog = Z.ledToggle({ label: 'DYN BYPASS', on: engDynBypass, color: 'cyan',
+    onChange: function (on) { engDynBypass = on; persistDebounced(); toast(on ? 'Dynamics bypassed (preamp + compressor)' : 'Dynamics active', ''); } });
+  var bypassRow = el('div', 'az-row'); bypassRow.appendChild(engBypassTog.el); bypassRow.appendChild(dynBypassTog.el);
   knobsCard.body.insertBefore(bypassRow, knobsCard.body.firstChild);
   knobsCard.body.appendChild(el('div', 'az-note',
     '<b>BYPASS ENGINE DSP</b> A/B-diffs the whole chain (EQ + strip + compressor) on/off. Preamp + compressor drive the '
@@ -910,12 +917,17 @@
     var units = [shpU, shtU, rngU, rngFU, trmU, trmRU, apU, apRU, wahU, wahSU, wahBU];
     var row = el('div', 'az-knobs');
     units.forEach(function (u) { row.appendChild(u.wrap); });
-    wrap.appendChild(row);
+    var byp2Wrap = el('div'); byp2Wrap.style.alignSelf = 'center';
+    var byp2Tog = Z.ledToggle({ label: 'FX II BYPASS', on: engFx2Bypass, color: 'amber',
+      onChange: function (on) { engFx2Bypass = on; persistDebounced(); } });
+    byp2Wrap.appendChild(byp2Tog.el);
+    var rowB2 = el('div', 'az-row'); rowB2.appendChild(row); rowB2.appendChild(byp2Wrap);
+    wrap.appendChild(rowB2);
     wrap.appendChild(el('div', 'az-note',
       '<b>zdsp-core</b> expansion II — <b>saturation</b> (waveshaper: arctan/fold/clip) · '
       + '<b>ring-mod</b> · <b>tremolo</b> (LFO amplitude) · <b>auto-pan</b> (LFO stereo) · '
       + '<b>auto-wah</b> (envelope-swept band-pass). Chain: shaper after drive → auto-wah after comp → '
-      + 'ring-mod/tremolo after phaser → auto-pan before width. Covered by <b>FX BYPASS</b>. Defaults = bypass.'));
+      + 'ring-mod/tremolo after phaser → auto-pan before width. <b>FX II BYPASS</b> A/Bs this block. Defaults = bypass.'));
     function sync() {
       var set = function (u, v) { var c = Math.max(0, Math.min(1, v)); if (u.knob.set) u.knob.set(c); u.read.textContent = u.fmt(c); };
       set(shpU, engShaper);
