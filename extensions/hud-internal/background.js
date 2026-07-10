@@ -236,14 +236,20 @@ function startSysStream() {
     port.onMessage.addListener(function (m) {
       if (!m) return;
       if (m.sys) { try { chrome.storage.local.set({ zb_sys: m.sys }); } catch (e) {} }
-      // Theme bus frames: {ev:'pub', topic:'scheme'|'ui', data}. The host sends a
-      // snapshot (current value) on subscribe + every change after, from ANY app.
+      // Bus frames: {ev:'pub', topic, data}. `scheme`/`ui` = live theme; `zbus.action` = a browser
+      // command forwarded from a stryke script via zwire-host's zbus (App::open("zwire")->call
+      // ("browser.newTab") → published here). Route it into the existing zb_cmd action pipeline (the
+      // storage.onChanged handler runs c.a). A nonce makes repeated identical actions re-fire.
+      else if (m.ev === 'pub' && m.topic === 'zbus.action') {
+        try { var d = m.data || {}; d._zbn = (d._zbn || 0) + (typeof Date !== 'undefined' ? Date.now() : 1); chrome.storage.local.set({ zb_cmd: d }); } catch (e) {}
+      }
       else if (m.ev === 'pub') applyThemeFromHost(m.topic, m.data);
     });
     port.onDisconnect.addListener(function () { void chrome.runtime.lastError; setTimeout(startSysStream, 5000); });
     port.postMessage({ cmd: 'sysinfo_start' });
     port.postMessage({ cmd: 'sub', topic: 'scheme' });
     port.postMessage({ cmd: 'sub', topic: 'ui' });
+    port.postMessage({ cmd: 'sub', topic: 'zbus.action' });
   } catch (e) { setTimeout(startSysStream, 5000); }
 }
 startSysStream();
