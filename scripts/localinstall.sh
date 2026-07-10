@@ -267,6 +267,17 @@ cat > "$DEST/Contents/Info.plist" <<EOF
   <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>10.15</string>
   <key>NSHighResolutionCapable</key><true/>
+  <!-- TCC purpose strings. macOS SIGABRTs the process (TCC namespace abort) when a
+       privacy-gated web API is hit with no NS*UsageDescription. The launched app is
+       THIS outer wrapper, so TCC reads THIS Info.plist (not just the nested browser
+       bundle) — e.g. Gmail passkey sign-in uses Web Bluetooth (caBLE/hybrid). Keys
+       must live here too, mirroring the nested-bundle injection above. -->
+  <key>NSBluetoothAlwaysUsageDescription</key><string>zwire lets sites you allow connect to nearby Bluetooth devices (Web Bluetooth), including passkey sign-in across devices.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key><string>zwire lets sites you allow connect to nearby Bluetooth devices (Web Bluetooth), including passkey sign-in across devices.</string>
+  <key>NSCameraUsageDescription</key><string>zwire lets sites you allow use the camera for video capture and calls.</string>
+  <key>NSMicrophoneUsageDescription</key><string>zwire lets sites you allow use the microphone for audio capture and calls.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>zwire lets sites you allow access your location (Geolocation).</string>
+  <key>NSLocationUsageDescription</key><string>zwire lets sites you allow access your location (Geolocation).</string>
 </dict>
 </plist>
 EOF
