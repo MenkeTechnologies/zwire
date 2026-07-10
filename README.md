@@ -148,12 +148,14 @@ no relaunch. The chain, in order:
 - **EQ** — preamp + RBJ-biquad cascade; band types `lowshelf` · `peaking` ·
   `highshelf` · `lowpass` · `highpass` · `bandpass` · `notch` · `allpass`.
 - **Channel strip** — gain · drive (tanh soft-clip) · equal-power pan · mono-fold.
-- **Saturation / dynamics** — harmonic exciter · bit-crusher + decimator · noise
-  gate · stereo-linked feed-forward compressor.
+- **Saturation / dynamics** — waveshaper (arctan/foldback/hard-clip) · harmonic
+  exciter · bit-crusher + decimator · noise gate · stereo-linked feed-forward
+  compressor · auto-wah (envelope-swept resonant band-pass).
 - **Modulation** — chorus · flanger (with feedback) · phaser (LFO-swept all-pass
-  cascade), each with rate/depth controls.
+  cascade) · ring modulator · tremolo (LFO amplitude), each with rate/depth.
 - **Time** — stereo feedback delay/echo · reduced-Freeverb reverb.
-- **Spatial** — Haas widener · headphone cross-feed · M/S stereo width.
+- **Spatial** — Haas widener · headphone cross-feed · auto-pan (LFO stereo) ·
+  M/S stereo width.
 - **Limiter** — brickwall peak limiter, dead-last so nothing re-clips.
 
 Every block is unity/bypass by default and per-stream (own buffers), so the engine

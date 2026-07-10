@@ -30,7 +30,7 @@ index edab63d18f..bca0100284 100644
    std::unique_ptr<metrics::ClientInfo> client_info =
        GoogleUpdateSettings::LoadMetricsClientInfo();
 diff --git a/services/audio/output_controller.cc b/services/audio/output_controller.cc
-index 7ee20397dd..38528972a9 100644
+index 7ee20397dd..8566cf116b 100644
 --- a/services/audio/output_controller.cc
 +++ b/services/audio/output_controller.cc
 @@ -2,6 +2,12 @@
@@ -54,7 +54,7 @@ index 7ee20397dd..38528972a9 100644
  #include "base/compiler_specific.h"
  #include "base/feature_list.h"
  #include "base/functional/bind.h"
-@@ -28,8 +35,1094 @@
+@@ -28,8 +35,1275 @@
  #include "media/media_buildflags.h"
  #include "services/audio/device_listener_output_stream.h"
  
@@ -165,6 +165,23 @@ index 7ee20397dd..38528972a9 100644
 +  double phaser_mix = 0.0;
 +  double phaser_rate_hz = 0.5;
 +  double phaser_depth = 0.7;       // 0..1 sweep depth
++  // zdsp-core expansion II — saturation/sweep/amplitude --------------------
++  // Waveshaper (amount<=0 => bypass): memoryless nonlinearity, curve by type.
++  double shaper_amount = 0.0;      // 0..1
++  double shaper_type = 0.0;        // 0=arctan(soft) 1=foldback 2=hard-clip
++  // Ring modulator (mix<=0 => bypass): multiply by a sine carrier.
++  double ringmod_mix = 0.0;
++  double ringmod_freq = 500.0;     // carrier Hz
++  // Tremolo (depth<=0 => bypass): LFO amplitude modulation.
++  double tremolo_depth = 0.0;      // 0..1
++  double tremolo_rate_hz = 5.0;
++  // Auto-pan (depth<=0 => bypass): LFO stereo pan.
++  double autopan_depth = 0.0;      // 0..1
++  double autopan_rate_hz = 1.0;
++  // Auto-wah (mix<=0 => bypass): envelope-swept resonant band-pass.
++  double autowah_mix = 0.0;
++  double autowah_sens = 0.5;       // 0..1 envelope sensitivity
++  double autowah_base = 400.0;     // sweep floor Hz
 +  uint64_t generation = 0;
 +};
 +
@@ -277,6 +294,28 @@ index 7ee20397dd..38528972a9 100644
 +        cfg->phaser_rate_hz = std::clamp(v, 0.05, 10.0);
 +      } else if (f[0] == "phaserdepth") {
 +        cfg->phaser_depth = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "shaper") {
++        cfg->shaper_amount = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "shapertype") {
++        cfg->shaper_type = std::clamp(v, 0.0, 2.0);
++      } else if (f[0] == "ringmod") {
++        cfg->ringmod_mix = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "ringfreq") {
++        cfg->ringmod_freq = std::clamp(v, 20.0, 8000.0);
++      } else if (f[0] == "tremolo") {
++        cfg->tremolo_depth = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "tremrate") {
++        cfg->tremolo_rate_hz = std::clamp(v, 0.05, 20.0);
++      } else if (f[0] == "autopan") {
++        cfg->autopan_depth = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "panrate") {
++        cfg->autopan_rate_hz = std::clamp(v, 0.05, 10.0);
++      } else if (f[0] == "autowah") {
++        cfg->autowah_mix = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "wahsens") {
++        cfg->autowah_sens = std::clamp(v, 0.0, 1.0);
++      } else if (f[0] == "wahbase") {
++        cfg->autowah_base = std::clamp(v, 100.0, 2000.0);
 +      }
 +      continue;
 +    }
@@ -388,6 +427,21 @@ index 7ee20397dd..38528972a9 100644
 +          const double k = 1.0 + drive_ * 8.0;  // tanh soft-clip, unity-normalized
 +          x = std::tanh(x * k) / std::tanh(k);
 +        }
++        if (shaper_active_) {
++          // Memoryless waveshaper: arctan (soft), foldback, or hard-clip.
++          if (shaper_type_ == 0) {
++            const double d = 1.0 + shaper_amt_ * 12.0;
++            x = std::atan(x * d) / std::atan(d);
++          } else if (shaper_type_ == 1) {
++            double t = x * (1.0 + shaper_amt_ * 4.0);
++            while (t > 1.0 || t < -1.0) {
++              t = (t > 1.0) ? 2.0 - t : -2.0 - t;  // reflect at the rails
++            }
++            x = t;
++          } else {
++            x = std::clamp(x * (1.0 + shaper_amt_ * 12.0), -1.0, 1.0);
++          }
++        }
 +        if (exciter_active_ && ch < 2) {
 +          // High-pass the signal, soft-clip the high band, add harmonics back.
 +          BiquadState& hs = exciter_hp_state_[ch];
@@ -455,6 +509,41 @@ index 7ee20397dd..38528972a9 100644
 +        }
 +      }
 +    }
++    // Auto-wah (zdsp-core): a resonant band-pass whose center frequency tracks
++    // the signal envelope. Coeffs rebuilt once per block from the running
++    // envelope (cheap); the envelope keeps following per-sample for the next.
++    if (autowah_active_ && channels >= 1) {
++      double fc = autowah_base_ +
++                  autowah_sens_ * 3500.0 * std::min(1.0, wah_env_ * 4.0);
++      fc = std::clamp(fc, 60.0, sample_rate_ * 0.45);
++      const double w0 = 2.0 * M_PI * fc / sample_rate_;
++      const double cw = std::cos(w0), sw = std::sin(w0);
++      const double alpha = sw / (2.0 * 3.0);  // Q = 3
++      const double a0 = 1 + alpha;
++      const Biquad bp{alpha / a0, 0.0, -alpha / a0, -2 * cw / a0,
++                      (1 - alpha) / a0};
++      const int nc = std::min(channels, 2);
++      base::span<float> l = bus->channel(0);
++      base::span<float> r = channels >= 2 ? bus->channel(1) : bus->channel(0);
++      for (int i = 0; i < frames; ++i) {
++        const double peak = std::max(std::fabs(static_cast<double>(l[i])),
++                                     std::fabs(static_cast<double>(r[i])));
++        const double coeff = peak > wah_env_ ? wah_atk_ : wah_rel_;
++        wah_env_ = coeff * wah_env_ + (1.0 - coeff) * peak;
++        for (int ch = 0; ch < nc; ++ch) {
++          base::span<float> d = ch == 0 ? l : r;
++          BiquadState& s = wah_state_[ch];
++          const double in = d[i];
++          const double y = bp.b0 * in + bp.b1 * s.x1 + bp.b2 * s.x2 -
++                           bp.a1 * s.y1 - bp.a2 * s.y2;
++          s.x2 = s.x1;
++          s.x1 = in;
++          s.y2 = s.y1;
++          s.y1 = y;
++          d[i] = static_cast<float>(in * (1.0 - autowah_mix_) + y * autowah_mix_);
++        }
++      }
++    }
 +    // Modulation (zdsp-core): chorus/flanger (LFO-swept fractional delay) then
 +    // phaser (LFO-swept all-pass cascade). One LFO phase per effect, advanced
 +    // once per frame so both channels share a coherent sweep.
@@ -491,6 +580,39 @@ index 7ee20397dd..38528972a9 100644
 +        if (flanger_phase_ >= 1.0) flanger_phase_ -= 1.0;
 +        phaser_phase_ += phaser_rate_;
 +        if (phaser_phase_ >= 1.0) phaser_phase_ -= 1.0;
++      }
++    }
++    // Ring modulator (zdsp-core): multiply by a sine carrier (metallic/clangorous
++    // wet blended with dry). One carrier phase advanced per frame.
++    if (ringmod_active_) {
++      const int nc = std::min(channels, 2);
++      base::span<float> ch0 = bus->channel(0);
++      base::span<float> ch1 = channels >= 2 ? bus->channel(1) : bus->channel(0);
++      for (int i = 0; i < frames; ++i) {
++        const float c = static_cast<float>(std::sin(2.0 * M_PI * ring_phase_));
++        for (int ch = 0; ch < nc; ++ch) {
++          base::span<float> d = ch == 0 ? ch0 : ch1;
++          d[i] = d[i] * (1.f - ring_mix_) + d[i] * c * ring_mix_;
++        }
++        ring_phase_ += ring_rate_;
++        if (ring_phase_ >= 1.0) ring_phase_ -= 1.0;
++      }
++    }
++    // Tremolo (zdsp-core): LFO amplitude modulation, stereo-linked so the image
++    // stays put (auto-pan handles moving it). Sine LFO, unity at the crest.
++    if (tremolo_active_) {
++      const int nc = std::min(channels, 2);
++      base::span<float> ch0 = bus->channel(0);
++      base::span<float> ch1 = channels >= 2 ? bus->channel(1) : bus->channel(0);
++      for (int i = 0; i < frames; ++i) {
++        const float g = static_cast<float>(
++            1.0 - tremolo_depth_ * (0.5 - 0.5 * std::cos(2.0 * M_PI * trem_phase_)));
++        for (int ch = 0; ch < nc; ++ch) {
++          base::span<float> d = ch == 0 ? ch0 : ch1;
++          d[i] *= g;
++        }
++        trem_phase_ += trem_rate_;
++        if (trem_phase_ >= 1.0) trem_phase_ -= 1.0;
 +      }
 +    }
 +    // Time FX: stereo feedback delay/echo then Schroeder reverb, each an
@@ -539,6 +661,20 @@ index 7ee20397dd..38528972a9 100644
 +        const float nr = (r[i] + a * cf_lp_[1]) * norm;
 +        l[i] = nl;
 +        r[i] = nr;
++      }
++    }
++    // Auto-pan (zdsp-core spatial): equal-power pan swept by a sine LFO, before
++    // the static width/pan strip so a moving image still gets width applied.
++    if (autopan_active_ && channels >= 2) {
++      base::span<float> l = bus->channel(0);
++      base::span<float> r = bus->channel(1);
++      for (int i = 0; i < frames; ++i) {
++        const double p = autopan_depth_ * std::sin(2.0 * M_PI * autopan_phase_);
++        const double ang = (p + 1.0) * M_PI / 4.0;
++        l[i] = static_cast<float>(l[i] * std::cos(ang) * M_SQRT2);
++        r[i] = static_cast<float>(r[i] * std::sin(ang) * M_SQRT2);
++        autopan_phase_ += autopan_rate_;
++        if (autopan_phase_ >= 1.0) autopan_phase_ -= 1.0;
 +      }
 +    }
 +    // Stereo strip (zdsp channel_strip.h): M/S width, then mono fold, else
@@ -840,6 +976,34 @@ index 7ee20397dd..38528972a9 100644
 +        }
 +      }
 +    }
++    // Waveshaper (memoryless).
++    shaper_active_ = cfg.shaper_amount > 1e-4;
++    shaper_amt_ = cfg.shaper_amount;
++    shaper_type_ = static_cast<int>(std::lround(cfg.shaper_type));
++    // Ring modulator.
++    ringmod_active_ = cfg.ringmod_mix > 1e-4;
++    ring_mix_ = static_cast<float>(cfg.ringmod_mix);
++    ring_rate_ = cfg.ringmod_freq / sample_rate_;
++    // Tremolo.
++    tremolo_active_ = cfg.tremolo_depth > 1e-4;
++    tremolo_depth_ = cfg.tremolo_depth;
++    trem_rate_ = cfg.tremolo_rate_hz / sample_rate_;
++    // Auto-pan.
++    autopan_active_ = cfg.autopan_depth > 1e-4;
++    autopan_depth_ = cfg.autopan_depth;
++    autopan_rate_ = cfg.autopan_rate_hz / sample_rate_;
++    // Auto-wah: envelope-swept band-pass (attack/release on the follower).
++    autowah_active_ = cfg.autowah_mix > 1e-4;
++    autowah_mix_ = cfg.autowah_mix;
++    autowah_base_ = cfg.autowah_base;
++    autowah_sens_ = cfg.autowah_sens;
++    wah_atk_ = std::exp(-1.0 / std::max(1.0, 0.005 * sample_rate_));   // ~5ms
++    wah_rel_ = std::exp(-1.0 / std::max(1.0, 0.080 * sample_rate_));   // ~80ms
++    if (autowah_active_) {
++      for (int ch = 0; ch < 2; ++ch) {
++        wah_state_[ch] = BiquadState{};
++      }
++    }
 +    biquads_.clear();
 +    for (const ZwireEqBand& band : cfg.bands) {
 +      AddBand(band);
@@ -987,6 +1151,23 @@ index 7ee20397dd..38528972a9 100644
 +  double phaser_phase_ = 0.0, phaser_rate_ = 0.0, phaser_depth_ = 0.0;
 +  float phaser_mix_ = 0.f;
 +  AllpassStage phaser_stages_[2][kPhaserStages];
++  // zdsp-core expansion II — saturation/sweep/amplitude.
++  bool shaper_active_ = false;
++  double shaper_amt_ = 0.0;
++  int shaper_type_ = 0;
++  bool ringmod_active_ = false;
++  float ring_mix_ = 0.f;
++  double ring_phase_ = 0.0, ring_rate_ = 0.0;
++  bool tremolo_active_ = false;
++  double tremolo_depth_ = 0.0;
++  double trem_phase_ = 0.0, trem_rate_ = 0.0;
++  bool autopan_active_ = false;
++  double autopan_depth_ = 0.0;
++  double autopan_phase_ = 0.0, autopan_rate_ = 0.0;
++  bool autowah_active_ = false;
++  double autowah_mix_ = 0.0, autowah_base_ = 400.0, autowah_sens_ = 0.5;
++  double wah_env_ = 0.0, wah_atk_ = 0.0, wah_rel_ = 0.0;
++  BiquadState wah_state_[2];
 +  std::vector<Biquad> biquads_;
 +  std::vector<std::vector<BiquadState>> state_;
 +};
@@ -1149,7 +1330,7 @@ index 7ee20397dd..38528972a9 100644
  namespace {
  
  // Requests data before reading in OutputController::OnMoreData, which may
-@@ -167,6 +1260,8 @@ OutputController::OutputController(
+@@ -167,6 +1441,8 @@ OutputController::OutputController(
      : id_(base::UnguessableToken::Create()),
        audio_manager_(audio_manager),
        params_(params),
@@ -1158,7 +1339,7 @@ index 7ee20397dd..38528972a9 100644
        managed_device_output_stream_create_callback_(
            std::move(managed_device_output_stream_create_callback)),
        handler_(handler),
-@@ -483,6 +1578,20 @@ int OutputController::OnMoreData(base::TimeDelta delay,
+@@ -483,6 +1759,20 @@ int OutputController::OnMoreData(base::TimeDelta delay,
  
    const bool received_data = sync_reader_->Read(dest, is_mixing);
  

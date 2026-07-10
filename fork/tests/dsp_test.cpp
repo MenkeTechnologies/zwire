@@ -391,6 +391,115 @@ int main() {
           finite && changed && e > 1e-3);
   }
 
+  // 14) Waveshaper (hard-clip, type 2): a hot input is bounded to +/-1.
+  {
+    const int N = 2048;
+    auto c = mkcfg();
+    c->shaper_amount = 1.0;
+    c->shaper_type = 2.0;  // hard clip
+    g_cfg = c;
+    ZwireAudioEq eq(SR, CH);
+    media::AudioBus out(CH, N), ref(CH, N);
+    fill_sine(out, 300.0, SR, 0.9);
+    fill_sine(ref, 300.0, SR, 0.9);
+    eq.Process(&out);
+    bool bounded = true, changed = false;
+    for (int i = 0; i < N; ++i) {
+      if (std::fabs(out.channel(0)[i]) > 1.0001f) bounded = false;
+      if (out.channel(0)[i] != ref.channel(0)[i]) changed = true;
+    }
+    check("waveshaper: hard-clip bounds to +/-1 and alters signal",
+          bounded && changed);
+  }
+
+  // 15) Ring modulator: alters the signal, stays finite and non-silent.
+  {
+    const int N = 4096;
+    auto c = mkcfg();
+    c->ringmod_mix = 1.0;
+    c->ringmod_freq = 500.0;
+    g_cfg = c;
+    ZwireAudioEq eq(SR, CH);
+    media::AudioBus out(CH, N), ref(CH, N);
+    fill_sine(out, 440.0, SR, 0.5);
+    fill_sine(ref, 440.0, SR, 0.5);
+    eq.Process(&out);
+    bool finite = true, changed = false;
+    for (int i = 0; i < N; ++i) {
+      if (!std::isfinite(out.channel(0)[i])) finite = false;
+      if (std::fabs(out.channel(0)[i] - ref.channel(0)[i]) > 1e-4f) changed = true;
+    }
+    check("ring-mod: alters signal, finite, non-silent",
+          finite && changed && rms(out, 0, 0, N) > 1e-3);
+  }
+
+  // 16) Tremolo: amplitude-only modulation — output never exceeds the dry peak
+  //     yet dips well below it at an LFO trough.
+  {
+    const int N = 8192;
+    auto c = mkcfg();
+    c->tremolo_depth = 1.0;
+    c->tremolo_rate_hz = 40.0;
+    g_cfg = c;
+    ZwireAudioEq eq(SR, CH);
+    media::AudioBus out(CH, N);
+    fill_sine(out, 1000.0, SR, 0.5);
+    eq.Process(&out);
+    float peak = 0;
+    double trough_rms = 1e9;
+    for (int w = 0; w + 256 <= N; w += 256) {
+      double s = 0;
+      for (int i = w; i < w + 256; ++i) {
+        peak = std::max(peak, std::fabs(out.channel(0)[i]));
+        s += out.channel(0)[i] * out.channel(0)[i];
+      }
+      trough_rms = std::min(trough_rms, std::sqrt(s / 256));
+    }
+    std::printf("       trem_peak=%.4f trough_rms=%.6f\n", peak, trough_rms);
+    check("tremolo: bounded by dry peak, dips to a near-silent trough",
+          peak <= 0.5001f && trough_rms < 0.05);
+  }
+
+  // 17) Auto-pan: a mono input diverges into distinct L/R as the pan sweeps.
+  {
+    const int N = 8192;
+    auto c = mkcfg();
+    c->autopan_depth = 1.0;
+    c->autopan_rate_hz = 4.0;
+    g_cfg = c;
+    ZwireAudioEq eq(SR, CH);
+    media::AudioBus out(CH, N);
+    fill_sine(out, 437.0, SR, 0.5);  // identical L/R
+    eq.Process(&out);
+    double diff = 0;
+    for (int i = 0; i < N; ++i)
+      diff += std::fabs(out.channel(0)[i] - out.channel(1)[i]);
+    std::printf("       autopan_LR_divergence=%.2f\n", diff);
+    check("auto-pan: mono input sweeps into distinct L/R", diff > 1.0);
+  }
+
+  // 18) Auto-wah: envelope-swept band-pass alters the signal and stays finite.
+  {
+    const int N = 8192;
+    auto c = mkcfg();
+    c->autowah_mix = 1.0;
+    c->autowah_sens = 0.8;
+    c->autowah_base = 400.0;
+    g_cfg = c;
+    ZwireAudioEq eq(SR, CH);
+    media::AudioBus out(CH, N), ref(CH, N);
+    fill_sine(out, 1200.0, SR, 0.5);
+    fill_sine(ref, 1200.0, SR, 0.5);
+    eq.Process(&out);
+    bool finite = true, changed = false;
+    for (int i = 0; i < N; ++i) {
+      if (!std::isfinite(out.channel(0)[i])) finite = false;
+      if (std::fabs(out.channel(0)[i] - ref.channel(0)[i]) > 1e-4f) changed = true;
+    }
+    check("auto-wah: envelope band-pass alters signal, finite",
+          finite && changed);
+  }
+
   std::printf("\n%s (%d failure%s)\n", g_fails == 0 ? "ALL PASS" : "FAILURES",
               g_fails, g_fails == 1 ? "" : "s");
   return g_fails == 0 ? 0 : 1;

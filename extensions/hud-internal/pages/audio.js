@@ -41,10 +41,10 @@
       '.az-note{font:11px/1.4 var(--mono,monospace);color:var(--text-dim,#8aa);margin-top:8px;}',
       '.az-note b{color:var(--accent);}',
       '.az-master{display:flex;justify-content:center;}',
-      '.az-flow{display:flex;flex-wrap:wrap;align-items:center;gap:5px 7px;font:11px/1.4 var(--mono,monospace);letter-spacing:.5px;}',
-      '.az-flow .fs{color:var(--text-dim,#8aa);}',
-      '.az-flow .fa{color:var(--accent);font-weight:bold;}',
-      '.az-flow .fe{color:var(--accent);font-weight:bold;padding:1px 7px;border:1px solid var(--accent);border-radius:3px;}',
+      '.az-flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 3px;font:11px/1.6 var(--mono,monospace);letter-spacing:.5px;}',
+      '.az-flow .fs{color:var(--text,#cde);background:var(--bg-hover,#14141f);border:1px solid var(--border,#2a2a3a);border-radius:3px;padding:2px 7px;}',
+      '.az-flow .fa{color:var(--accent);font-weight:bold;font-size:15px;margin:0 2px;}',
+      '.az-flow .fe{color:#06060e;background:var(--accent);font-weight:bold;padding:2px 9px;border-radius:3px;}',
       '@media(max-width:1000px){.az-grid{grid-template-columns:minmax(0,1fr);}}'
     ].join('');
     document.head.appendChild(s);
@@ -101,6 +101,12 @@
   var engChorus = 0.0, engChorusRate = 1.5, engChorusDepth = 5.0;
   var engFlanger = 0.0, engFlangerRate = 0.5, engFlangerDepth = 2.0, engFlangerFb = 0.3;
   var engPhaser = 0.0, engPhaserRate = 0.5, engPhaserDepth = 0.7;
+  // zdsp-core expansion II — saturation/sweep/amplitude. Defaults = bypass.
+  var engShaper = 0.0, engShaperType = 0;              // waveshaper (0=arctan 1=fold 2=clip)
+  var engRing = 0.0, engRingFreq = 500.0;              // ring modulator
+  var engTremolo = 0.0, engTremRate = 5.0;             // tremolo (LFO amplitude)
+  var engAutopan = 0.0, engPanRate = 1.0;              // auto-pan (LFO stereo)
+  var engWah = 0.0, engWahSens = 0.5, engWahBase = 400.0;  // auto-wah (envelope band-pass)
   var engFxBypass = false; // FX-block bypass (A/B) — suppresses the zdsp-core expansion directives only
   var engBypass = false;  // master engine DSP bypass (A/B diff) — writes "off"
   var engMute = false;    // engine master mute (gain 0)
@@ -223,6 +229,28 @@
       parts.push('phaserrate,' + engPhaserRate.toFixed(3));
       parts.push('phaserdepth,' + engPhaserDepth.toFixed(3));
     }
+    // zdsp-core expansion II — saturation/sweep/amplitude.
+    if (engShaper > 1e-3) {
+      parts.push('shaper,' + engShaper.toFixed(3));
+      parts.push('shapertype,' + engShaperType);
+    }
+    if (engRing > 1e-3) {
+      parts.push('ringmod,' + engRing.toFixed(3));
+      parts.push('ringfreq,' + Math.round(engRingFreq));
+    }
+    if (engTremolo > 1e-3) {
+      parts.push('tremolo,' + engTremolo.toFixed(3));
+      parts.push('tremrate,' + engTremRate.toFixed(3));
+    }
+    if (engAutopan > 1e-3) {
+      parts.push('autopan,' + engAutopan.toFixed(3));
+      parts.push('panrate,' + engPanRate.toFixed(3));
+    }
+    if (engWah > 1e-3) {
+      parts.push('autowah,' + engWah.toFixed(3));
+      parts.push('wahsens,' + engWahSens.toFixed(3));
+      parts.push('wahbase,' + Math.round(engWahBase));
+    }
     }  // end !engFxBypass
     // CEILING auto-engages the limiter: a set ceiling emits the directive even
     // if the LED toggle wasn't flipped (else the knob silently does nothing).
@@ -308,7 +336,10 @@
       haas: 0, crossfeed: 0,
       chorus: 0, chorusRate: 1.5, chorusDepth: 5,
       flanger: 0, flangerRate: 0.5, flangerDepth: 2, flangerFb: 0.3,
-      phaser: 0, phaserRate: 0.5, phaserDepth: 0.7
+      phaser: 0, phaserRate: 0.5, phaserDepth: 0.7,
+      shaper: 0, shaperType: 0, ring: 0, ringFreq: 500,
+      tremolo: 0, tremRate: 5, autopan: 0, panRate: 1,
+      wah: 0, wahSens: 0.5, wahBase: 400
     };
     for (var i = 1; i < parts.length; i++) {
       var f = parts[i].split(',');
@@ -345,6 +376,17 @@
         else if (nm === 'phaser' && !isNaN(val)) strip.phaser = val;
         else if (nm === 'phaserrate' && !isNaN(val)) strip.phaserRate = val;
         else if (nm === 'phaserdepth' && !isNaN(val)) strip.phaserDepth = val;
+        else if (nm === 'shaper' && !isNaN(val)) strip.shaper = val;
+        else if (nm === 'shapertype' && !isNaN(val)) strip.shaperType = val;
+        else if (nm === 'ringmod' && !isNaN(val)) strip.ring = val;
+        else if (nm === 'ringfreq' && !isNaN(val)) strip.ringFreq = val;
+        else if (nm === 'tremolo' && !isNaN(val)) strip.tremolo = val;
+        else if (nm === 'tremrate' && !isNaN(val)) strip.tremRate = val;
+        else if (nm === 'autopan' && !isNaN(val)) strip.autopan = val;
+        else if (nm === 'panrate' && !isNaN(val)) strip.panRate = val;
+        else if (nm === 'autowah' && !isNaN(val)) strip.wah = val;
+        else if (nm === 'wahsens' && !isNaN(val)) strip.wahSens = val;
+        else if (nm === 'wahbase' && !isNaN(val)) strip.wahBase = val;
         continue;
       }
       if (f.length < 4) continue;
@@ -385,8 +427,14 @@
       engChorus = s.chorus || 0; engChorusRate = (s.chorusRate == null ? 1.5 : s.chorusRate); engChorusDepth = (s.chorusDepth == null ? 5 : s.chorusDepth);
       engFlanger = s.flanger || 0; engFlangerRate = (s.flangerRate == null ? 0.5 : s.flangerRate); engFlangerDepth = (s.flangerDepth == null ? 2 : s.flangerDepth); engFlangerFb = (s.flangerFb == null ? 0.3 : s.flangerFb);
       engPhaser = s.phaser || 0; engPhaserRate = (s.phaserRate == null ? 0.5 : s.phaserRate); engPhaserDepth = (s.phaserDepth == null ? 0.7 : s.phaserDepth);
+      engShaper = s.shaper || 0; engShaperType = (s.shaperType == null ? 0 : Math.round(s.shaperType));
+      engRing = s.ring || 0; engRingFreq = (s.ringFreq == null ? 500 : s.ringFreq);
+      engTremolo = s.tremolo || 0; engTremRate = (s.tremRate == null ? 5 : s.tremRate);
+      engAutopan = s.autopan || 0; engPanRate = (s.panRate == null ? 1 : s.panRate);
+      engWah = s.wah || 0; engWahSens = (s.wahSens == null ? 0.5 : s.wahSens); engWahBase = (s.wahBase == null ? 400 : s.wahBase);
       if (spaceControls && spaceControls.sync) spaceControls.sync();
       if (fxControls && fxControls.sync) fxControls.sync();
+      if (fx2Controls && fx2Controls.sync) fx2Controls.sync();
       if (engControls && engControls.sync) engControls.sync();
       if (typeof threshUnit !== 'undefined' && threshUnit && threshUnit.knob) {
         var tv = Math.max(0, Math.min(1, (engThresh + 60) / 60)); threshUnit.knob.set(tv); if (threshUnit.read) threshUnit.read.textContent = threshUnit.fmt(tv);
@@ -814,6 +862,67 @@
     return { el: Z.card({ title: '// ENGINE FX  ·  gate · crush · exciter · Haas · cross-feed · chorus · flanger · phaser  ·  always-on + saved', body: wrap }).el, sync: sync };
   })();
 
+  /* ---- ENGINE FX II — zdsp-core expansion II: waveshaper · ring-mod · tremolo ·
+     auto-pan · auto-wah. Also covered by the FX BYPASS toggle above. ---- */
+  var fx2Controls = (function () {
+    var wrap = el('div');
+    var pct = function (v) { return Math.round(v * 100) + '%'; };
+    var hz = function (min, max, d) { return function (v) { return (min + v * (max - min)).toFixed(d == null ? 0 : d) + ' Hz'; }; };
+    var SHAPES = ['arctan', 'fold', 'clip'];
+    // saturation
+    var shpU = knobUnit('SHAPER', engShaper, pct,
+      function (v) { engShaper = v; persistDebounced(); });
+    var shtU = knobUnit('SHAPE', engShaperType / 2,
+      function (v) { return SHAPES[Math.round(v * 2)]; },
+      function (v) { engShaperType = Math.round(v * 2); persistDebounced(); });
+    // ring modulator
+    var rngU = knobUnit('RING', engRing, pct,
+      function (v) { engRing = v; persistDebounced(); });
+    var rngFU = knobUnit('RING HZ', (engRingFreq - 20) / 7980, hz(20, 8000),
+      function (v) { engRingFreq = 20 + v * 7980; persistDebounced(); });
+    // tremolo
+    var trmU = knobUnit('TREM', engTremolo, pct,
+      function (v) { engTremolo = v; persistDebounced(); });
+    var trmRU = knobUnit('TREM HZ', (engTremRate - 0.05) / 19.95, hz(0.05, 20, 2),
+      function (v) { engTremRate = 0.05 + v * 19.95; persistDebounced(); });
+    // auto-pan
+    var apU = knobUnit('A-PAN', engAutopan, pct,
+      function (v) { engAutopan = v; persistDebounced(); });
+    var apRU = knobUnit('PAN HZ', (engPanRate - 0.05) / 9.95, hz(0.05, 10, 2),
+      function (v) { engPanRate = 0.05 + v * 9.95; persistDebounced(); });
+    // auto-wah
+    var wahU = knobUnit('WAH', engWah, pct,
+      function (v) { engWah = v; persistDebounced(); });
+    var wahSU = knobUnit('WAH SENS', engWahSens, pct,
+      function (v) { engWahSens = v; persistDebounced(); });
+    var wahBU = knobUnit('WAH HZ', (engWahBase - 100) / 1900, hz(100, 2000),
+      function (v) { engWahBase = 100 + v * 1900; persistDebounced(); });
+    var units = [shpU, shtU, rngU, rngFU, trmU, trmRU, apU, apRU, wahU, wahSU, wahBU];
+    var row = el('div', 'az-knobs');
+    units.forEach(function (u) { row.appendChild(u.wrap); });
+    wrap.appendChild(row);
+    wrap.appendChild(el('div', 'az-note',
+      '<b>zdsp-core</b> expansion II — <b>saturation</b> (waveshaper: arctan/fold/clip) · '
+      + '<b>ring-mod</b> · <b>tremolo</b> (LFO amplitude) · <b>auto-pan</b> (LFO stereo) · '
+      + '<b>auto-wah</b> (envelope-swept band-pass). Chain: shaper after drive → auto-wah after comp → '
+      + 'ring-mod/tremolo after phaser → auto-pan before width. Covered by <b>FX BYPASS</b>. Defaults = bypass.'));
+    function sync() {
+      var set = function (u, v) { var c = Math.max(0, Math.min(1, v)); if (u.knob.set) u.knob.set(c); u.read.textContent = u.fmt(c); };
+      set(shpU, engShaper);
+      set(shtU, engShaperType / 2);
+      set(rngU, engRing);
+      set(rngFU, (engRingFreq - 20) / 7980);
+      set(trmU, engTremolo);
+      set(trmRU, (engTremRate - 0.05) / 19.95);
+      set(apU, engAutopan);
+      set(apRU, (engPanRate - 0.05) / 9.95);
+      set(wahU, engWah);
+      set(wahSU, engWahSens);
+      set(wahBU, (engWahBase - 100) / 1900);
+    }
+    return { el: Z.card({ title: '// ENGINE FX II  ·  waveshaper · ring-mod · tremolo · auto-pan · auto-wah  ·  always-on + saved', body: wrap }).el, sync: sync };
+  })();
+
   /* ---- transport / preview sources ---- */
   var transport = el('div', 'az-row');
   srcGroup = Z.buttonGroup({
@@ -891,9 +1000,10 @@
   // Signal-flow breadcrumb — the ACTUAL engine chain order (the control cards are
   // grouped by function, not signal order, so this makes direction unambiguous).
   var flowCard = (function () {
-    var stages = ['PREAMP', 'EQ', 'GAIN', 'DRIVE', 'EXCITER', 'CRUSH', 'GATE',
-      'COMP', 'CHORUS', 'FLANGER', 'PHASER', 'DELAY', 'REVERB', 'HAAS',
-      'X-FEED', 'WIDTH', 'PAN', 'LIMITER'];
+    var stages = ['PREAMP', 'EQ', 'GAIN', 'DRIVE', 'SHAPER', 'EXCITER', 'CRUSH',
+      'GATE', 'COMP', 'AUTO-WAH', 'CHORUS', 'FLANGER', 'PHASER', 'RING-MOD',
+      'TREMOLO', 'DELAY', 'REVERB', 'HAAS', 'X-FEED', 'AUTO-PAN', 'WIDTH',
+      'PAN', 'LIMITER'];
     var f = el('div', 'az-flow');
     f.appendChild(el('span', 'fe', 'IN'));
     stages.forEach(function (s) {
@@ -906,7 +1016,7 @@
   })();
 
   var left = el('div', 'az-col');
-  [flowCard, knobsCard, eqCard, engControls, spaceControls, fxControls, specCard, sgCard, scCard, wfCard, wtCard, transportCard].forEach(function (c) { left.appendChild(c.el); });
+  [flowCard, knobsCard, eqCard, engControls, spaceControls, fxControls, fx2Controls, specCard, sgCard, scCard, wfCard, wtCard, transportCard].forEach(function (c) { left.appendChild(c.el); });
   var right = el('div', 'az-col');
   [metersCard, lufsCard, gonioCard, corrCard, vuCard, masterCard].forEach(function (c) { right.appendChild(c.el); });
   grid.appendChild(left); grid.appendChild(right);
