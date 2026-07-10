@@ -175,11 +175,14 @@
     var isStryke = kind === 'stryke';
     var isOsa = kind === 'applescript';
     var isBat = kind === 'batch';
-    var LANG = { js: 'javascript', applescript: 'plaintext', batch: 'bat' };  // Monaco has no AppleScript grammar; 'bat' for batch
-    var EXT = { js: '.js', applescript: '.applescript', batch: '.bat' };
+    var isSh = kind === 'shell';
+    var LANG = { js: 'javascript', applescript: 'plaintext', batch: 'bat', shell: 'shell' };  // Monaco has no AppleScript grammar; 'bat' for batch, 'shell' for sh
+    var EXT = { js: '.js', applescript: '.applescript', batch: '.bat', shell: '.sh' };
     var placeholder = isStryke ? 'p "hello {q}"   # stryke — print with p, {q} = arg'
       : isOsa ? 'tell application "Music" to playpause   -- {q} = arg'
-      : isBat ? 'echo hi {q} & start "" .   :: {q} = arg' : "alert('hi ' + q + '!')";
+      : isBat ? 'echo hi {q} & start "" .   :: {q} = arg'
+      : isSh ? 'git status   # {q} = arg (else appended); runs in the OS shell via zwire-host'
+      : "alert('hi ' + q + '!')";
     var canEdit = window.HooksEditor && typeof window.HooksEditor.create === 'function' &&
       (isStryke || typeof window.HooksEditor.createPlain === 'function');
     if (!canEdit) return Z.textarea({ placeholder: placeholder, rows: 4, value: val || '' });
@@ -285,8 +288,9 @@
     if (type === 'stryke') return makeMonacoControl('stryke', val);
     if (type === 'applescript') return makeMonacoControl('applescript', val);
     if (type === 'batch') return makeMonacoControl('batch', val);
+    if (type === 'shell') return makeMonacoControl('shell', val);
     if (type === 'host') return Z.textarea({ placeholder: '{"cmd":"notify","title":"hi {q}"}', rows: 3, value: val || '' });
-    return Z.textfield({ placeholder: type === 'shell' ? 'git status   ({q} for args)' : 'https://example.com   ({q} optional)', value: val || '' });
+    return Z.textfield({ placeholder: 'https://example.com   ({q} optional)', value: val || '' });
   }
   // Pull each row's current type + value back into the `steps` model. Must run
   // before any splice/reorder/type-change so a redraw doesn't lose typed text.
