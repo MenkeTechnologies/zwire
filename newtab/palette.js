@@ -183,7 +183,9 @@
       else if (v === 'cycleScheme') { cycleScheme(); }
       return;   // worker-backed tab verbs (newTab/closeTab/…) are HUD-only; inert here
     }
-    if (type === 'shell' || type === 'host') return;   // no terminal / native host on the new tab page
+    // Native-host / backend steps (terminal, host, stryke sidecar, osascript, cmd)
+    // have no bridge on the new tab page — inert here; they run in the HUD palette.
+    if (type === 'shell' || type === 'host' || type === 'stryke' || type === 'applescript' || type === 'batch') return;
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
     if (url) goCurrent(url);
   }

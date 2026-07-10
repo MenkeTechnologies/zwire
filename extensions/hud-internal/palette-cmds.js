@@ -76,7 +76,7 @@
     };
   }
 
-  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', action: 'action', scheme: 'scheme', host: 'host' };
+  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', scheme: 'scheme', host: 'host' };
   function typeLabel(t) { return TYPE_LABEL[t] || 'custom'; }
   function isDefaultCmd(e) { return String((e && e.id) || '').indexOf('def-') === 0; }
   // A command is a chain of typed steps (steps[]) or a legacy single {type,value};

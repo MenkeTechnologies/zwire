@@ -263,6 +263,22 @@
       });
     } catch (err) { hostToast('applescript: ' + err, true); }
   }
+  // Batch steps run through zwire-host via `cmd.exe /d /s /c` (Windows only). Output
+  // (base64) is decoded and toasted, like the shell step.
+  function runBatch(cmd) {
+    var req = { cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', cmd] };
+    try {
+      chrome.runtime.sendMessage({ type: 'zb-host', req: req }, function (res) {
+        void chrome.runtime.lastError;
+        if (!res || !res.ok) { hostToast('batch: ' + ((res && res.err) || 'no response'), true); return; }
+        var r = res.reply || {};
+        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
+        var bad = r.code != null && r.code !== 0;
+        var text = out || er;
+        hostToast('cmd> ' + cmd + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
+      });
+    } catch (err) { hostToast('batch: ' + err, true); }
+  }
   // stryke steps run inline stryke code through zwire-host (`stryke -E`, using the
   // bundled sidecar — no PATH needed). stdout/stderr come back as plain strings.
   function runStryke(code) {
@@ -294,6 +310,11 @@
     if (type === 'applescript') {
       var as = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
       runOsa(as);
+      return;
+    }
+    if (type === 'batch') {
+      var bc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      runBatch(bc);
       return;
     }
     if (type === 'js') {

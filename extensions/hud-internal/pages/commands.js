@@ -22,17 +22,23 @@
   // applies to all of them at once (the Hooks-tab editor toolbar, one LSP per page).
   var _lspState = 'off', _lspPills = [], _strykeEditors = [], _modeSels = [];
 
+  // AppleScript is macOS-only, batch is Windows-only — offer the one this OS can run.
+  var _plat = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase();
+  var IS_MAC = /mac|darwin/.test(_plat), IS_WIN = /win/.test(_plat);
   var TYPES = [
     { value: 'url', label: 'Open URL' },
     { value: 'shell', label: 'Run shell command' },
     { value: 'stryke', label: 'Run stryke script' },
-    { value: 'js', label: 'Run JavaScript' },
-    { value: 'applescript', label: 'Run AppleScript (macOS)' },
-    { value: 'action', label: 'Browser action' },
-    { value: 'scheme', label: 'Set color scheme' },
-    { value: 'host', label: 'zwire-host (JSON)' }
-  ];
-  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', action: 'action', scheme: 'scheme', host: 'host' };
+    { value: 'js', label: 'Run JavaScript' }
+  ]
+    .concat(IS_MAC ? [{ value: 'applescript', label: 'Run AppleScript (macOS)' }] : [])
+    .concat(IS_WIN ? [{ value: 'batch', label: 'Run batch script (Windows)' }] : [])
+    .concat([
+      { value: 'action', label: 'Browser action' },
+      { value: 'scheme', label: 'Set color scheme' },
+      { value: 'host', label: 'zwire-host (JSON)' }
+    ]);
+  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', scheme: 'scheme', host: 'host' };
   var ACTIONS = [
     ['newTab', 'New tab'], ['newWindow', 'New window'], ['duplicateTab', 'Duplicate tab'],
     ['reopenTab', 'Reopen closed tab'], ['closeTab', 'Close tab'], ['closeOthers', 'Close other tabs'],
@@ -49,6 +55,7 @@
     stryke: 'Runs an inline stryke script via zwire-host (stryke -E) using the bundled stryke sidecar — no PATH needed — and toasts stdout. Print with `p`. {q} = the typed argument; otherwise it is appended.',
     js: 'JavaScript run in the extension isolated world (has chrome.*). The variable `q` holds the typed argument.',
     applescript: 'Runs via zwire-host through osascript (macOS only) — each line becomes an -e arg, so multi-line scripts work with no temp file. {q} = the typed argument. E.g. tell application "Music" to playpause, or display notification "{q}".',
+    batch: 'Runs via zwire-host through cmd.exe /c (Windows only) and toasts the output. {q} = the typed argument. E.g. echo hi {q} & start "" .',
     action: 'Trigger a built-in browser action under your own name.',
     scheme: 'Switch the whole browser color scheme.',
     host: 'Sends a JSON message to zwire-host and shows the reply. Use {q} for the typed argument — e.g. {"cmd":"notify","title":"{q}"} or {"cmd":"exec","argv":["say","{q}"]}. See the HOST tab to explore commands.'
@@ -167,10 +174,12 @@
   function makeMonacoControl(kind, val) {
     var isStryke = kind === 'stryke';
     var isOsa = kind === 'applescript';
-    var LANG = { js: 'javascript', applescript: 'plaintext' };  // Monaco has no AppleScript grammar
-    var EXT = { js: '.js', applescript: '.applescript' };
+    var isBat = kind === 'batch';
+    var LANG = { js: 'javascript', applescript: 'plaintext', batch: 'bat' };  // Monaco has no AppleScript grammar; 'bat' for batch
+    var EXT = { js: '.js', applescript: '.applescript', batch: '.bat' };
     var placeholder = isStryke ? 'p "hello {q}"   # stryke — print with p, {q} = arg'
-      : isOsa ? 'tell application "Music" to playpause   -- {q} = arg' : "alert('hi ' + q + '!')";
+      : isOsa ? 'tell application "Music" to playpause   -- {q} = arg'
+      : isBat ? 'echo hi {q} & start "" .   :: {q} = arg' : "alert('hi ' + q + '!')";
     var canEdit = window.HooksEditor && typeof window.HooksEditor.create === 'function' &&
       (isStryke || typeof window.HooksEditor.createPlain === 'function');
     if (!canEdit) return Z.textarea({ placeholder: placeholder, rows: 4, value: val || '' });
@@ -223,6 +232,7 @@
     if (type === 'js') return makeMonacoControl('js', val);
     if (type === 'stryke') return makeMonacoControl('stryke', val);
     if (type === 'applescript') return makeMonacoControl('applescript', val);
+    if (type === 'batch') return makeMonacoControl('batch', val);
     if (type === 'host') return Z.textarea({ placeholder: '{"cmd":"notify","title":"hi {q}"}', rows: 3, value: val || '' });
     return Z.textfield({ placeholder: type === 'shell' ? 'git status   ({q} for args)' : 'https://example.com   ({q} optional)', value: val || '' });
   }
