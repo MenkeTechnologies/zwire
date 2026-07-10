@@ -254,35 +254,18 @@ function startSysStream() {
     var port = chrome.runtime.connectNative(HOST);
     port.onMessage.addListener(function (m) {
       if (!m) return;
-      if (m.sys) {
-        try { chrome.storage.local.set({ zb_sys: m.sys }); } catch (e) {}
-        // Poll for a cross-process browser action queued by a stryke script
-        // (App::open("zwire")->call("browser.*") writes it to the file-backed kv, since the host that
-        // answered the socket usually isn't this subscribed one). The sysinfo stream is our keep-alive.
-        try { port.postMessage({ cmd: 'kv_get', app: 'zwire', key: '__zbus_action', id: 'zbAction' }); } catch (e) {}
-      }
-      // Reply to the __zbus_action poll: run any action newer than the last we ran, then DELETE it from
-      // the kv so it can't re-fire. `_zbLastN` (0 by default) guards against a double-read racing the
-      // delete — it does NOT baseline-skip, so a freshly-queued action runs on the very first poll.
-      else if (m.id === 'zbAction' && m.value && m.value.a) {
-        var n = +m.value._n || 0;
-        if (n > (self._zbLastN || 0)) {
-          self._zbLastN = n;
-          try { var q = {}; for (var k in m.value) { if (k !== '_n') q[k] = m.value[k]; } q._zbn = n; chrome.storage.local.set({ zb_cmd: q }); } catch (e) {}
-          try { port.postMessage({ cmd: 'kv_del', app: 'zwire', key: '__zbus_action' }); } catch (e) {}
-        }
-      }
-      // Live theme bus (scheme/ui) + the same-process zbus.action fast path.
-      else if (m.ev === 'pub' && m.topic === 'zbus.action') {
-        try { var d = m.data || {}; d._zbn = (d._zbn || 0) + (typeof Date !== 'undefined' ? Date.now() : 1); chrome.storage.local.set({ zb_cmd: d }); } catch (e) {}
-      }
+      if (m.sys) { try { chrome.storage.local.set({ zb_sys: m.sys }); } catch (e) {} }
+      // Live theme bus (scheme/ui). Browser actions are deliberately NOT consumed on this port: the
+      // explicit drains (HUD-page after a run, and the zb-host relay for the global palette) are the
+      // single consumer of __zbus_action. Draining here too — plus the same-process pub — raced them
+      // (the streaming-port kv_del is unreliable and _zbLastN could get ahead), so a run would execute,
+      // double, or drop at random ("only works sometimes"). One consumer = deterministic.
       else if (m.ev === 'pub') applyThemeFromHost(m.topic, m.data);
     });
     port.onDisconnect.addListener(function () { void chrome.runtime.lastError; setTimeout(startSysStream, 5000); });
     port.postMessage({ cmd: 'sysinfo_start' });
     port.postMessage({ cmd: 'sub', topic: 'scheme' });
     port.postMessage({ cmd: 'sub', topic: 'ui' });
-    port.postMessage({ cmd: 'sub', topic: 'zbus.action' });
   } catch (e) { setTimeout(startSysStream, 5000); }
 }
 startSysStream();
