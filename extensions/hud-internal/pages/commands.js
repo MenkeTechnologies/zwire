@@ -82,8 +82,8 @@
   // .show(msg, dur, type) so error/success toasts actually render (a bare
   // Z.toast(m) threw and got swallowed, so no toast ever appeared here).
   function toast(m, type) { try { if (Z.toast && Z.toast.show) Z.toast.show(m, 2600, type || ''); else if (window.showToast) window.showToast(m); } catch (e) {} }
-  // Drain a queued browser.* action into the shared zb_cmd executor (defined once in zg-boot).
-  function drainZbAction() { try { if (window.ZBHUD && window.ZBHUD.drainZbAction) window.ZBHUD.drainZbAction(); } catch (e) {} }
+  // Execute a browser.* action the host piggybacked on a stryke_run reply (shared impl in zg-boot).
+  function runZbAction(a) { try { if (a && window.ZBHUD && window.ZBHUD.runZbAction) window.ZBHUD.runZbAction(a); } catch (e) {} }
   function persist(cb) {
     try { var o = {}; o[KEY] = cmds; chrome.storage.local.set(o, function () { void chrome.runtime.lastError; if (cb) cb(); }); }
     catch (e) { if (cb) cb(); }
@@ -214,10 +214,9 @@
         runBtn.disabled = true;
         chrome.runtime.sendNativeMessage(HOST, { cmd: 'stryke_run', code: code }, function (reply) {
           runBtn.disabled = false;
-          // Drain any browser.* action the script queued into the host KV. Runs from this HUD page
-          // (which has chrome.tabs/storage) so the tab/window op fires even if the background worker
-          // is asleep or running a stale build — writing zb_cmd wakes it and its onChanged executor runs.
-          drainZbAction();
+          // Fire the browser.* action the host piggybacked on the reply (reply.zbAction). Writing zb_cmd
+          // wakes the background worker and its onChanged executor runs it — no separate kv round-trip.
+          if (reply && reply.zbAction) runZbAction(reply.zbAction);
           if (chrome.runtime.lastError) { toast('run: ' + chrome.runtime.lastError.message, 'error'); return; }
           var r = reply || {};
           if (r.ok === false) { toast('stryke: ' + (r.err || 'failed'), 'error'); return; }

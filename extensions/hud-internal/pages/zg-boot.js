@@ -72,7 +72,7 @@
     try {
       chrome.runtime.sendNativeMessage(HOST, { cmd: 'stryke_run', code: code }, function (reply) {
         var err = chrome.runtime.lastError;
-        drainZbAction();   // fire any browser.* action this script queued
+        if (reply && reply.zbAction) runZbAction(reply.zbAction);   // fire the browser.* action the host attached
         if (err) { bootToast('stryke: ' + err.message, 'error'); return; }
         var r = reply || {};
         if (r.ok === false) { bootToast('stryke: ' + (r.err || 'failed'), 'error'); return; }
@@ -453,27 +453,21 @@
     return function (t) { return (t == null ? '' : String(t)).toLowerCase().indexOf(lq) >= 0; };
   }
 
-  // A `browser.*` App::open call leaves its action in the host KV (__zbus_action) — the
-  // cross-process channel. After running any stryke from a HUD page, pull that action and hand
-  // it to the shared zb_cmd executor (chrome.storage write → background onChanged → chrome.tabs).
-  // Same-process, so it fires the tab/window op without waiting on the background sysinfo poll.
+  // Execute a browser.* action the host piggybacked on a stryke_run reply (reply.zbAction). We hand
+  // it to the background worker through zb_cmd (the bus every build of the worker listens on) with a
+  // unique _zbn per write so storage.onChanged fires every time. No kv round-trip — the action already
+  // rode back with the run's reply, so delivery is as reliable as the run itself.
   // Shared by every HUD surface (palette in zg-boot, ▶ Run in commands) — one implementation.
-  function drainZbAction() {
+  function runZbAction(a) {
+    if (!a || !a.a) return;
     try {
-      chrome.runtime.sendNativeMessage(HOST, { cmd: 'kv_get', app: 'zwire', key: '__zbus_action' }, function (r) {
-        if (chrome.runtime.lastError) { void chrome.runtime.lastError; return; }
-        var v = r && r.value; if (!v || !v.a) return;
-        try { chrome.runtime.sendNativeMessage(HOST, { cmd: 'kv_del', app: 'zwire', key: '__zbus_action' }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-        // Write zb_cmd (the bus the background worker always listens on). A unique _zbn per write makes
-        // storage.onChanged fire every time, so the action never silently no-ops on a repeat.
-        var q = {}; for (var k in v) { if (k !== '_n') q[k] = v[k]; }
-        window.__zbSeq = (window.__zbSeq || 0) + 1;
-        q._zbn = (v._n || 0) + ':' + window.__zbSeq;
-        try { chrome.storage.local.set({ zb_cmd: q }); } catch (e) {}
-      });
+      var q = {}; for (var k in a) { if (k !== '_n') q[k] = a[k]; }
+      window.__zbSeq = (window.__zbSeq || 0) + 1;
+      q._zbn = (a._n || 0) + ':' + window.__zbSeq;
+      chrome.storage.local.set({ zb_cmd: q });
     } catch (e) {}
   }
 
   window.ZBHUD = { PAGES: PAGES, NATIVE_PAGES: NATIVE_PAGES, mount: mount, go: go,
-    navButton: navButton, HOST: HOST, publishUi: publishUi, matcher: matcher, drainZbAction: drainZbAction };
+    navButton: navButton, HOST: HOST, publishUi: publishUi, matcher: matcher, runZbAction: runZbAction };
 })();
