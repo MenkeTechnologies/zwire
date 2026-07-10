@@ -28,7 +28,10 @@
       '.az-row .az-spacer{flex:1;}',
       '.az-eqwrap{position:relative;}',
       '.az-canvas{width:100%;border-radius:4px;display:block;background:#06060e;}',
-      '.az-knobs{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;}',
+      '.az-knobs{display:flex;flex-wrap:wrap;gap:22px 28px;align-items:flex-start;justify-content:space-evenly;}',
+      // Knob rows nested next to a slider/toggle take the leftover width so their
+      // knobs distribute across the card instead of clumping on the left.
+      '.az-row>.az-knobs{flex:1 1 auto;}',
       '.az-knob{display:flex;flex-direction:column;align-items:center;gap:4px;}',
       '.az-knob .az-read{font:11px/1.2 var(--mono,monospace);color:var(--accent);letter-spacing:.5px;}',
       '.az-meters{display:flex;gap:14px;align-items:flex-end;justify-content:center;flex-wrap:wrap;}',
@@ -38,6 +41,10 @@
       '.az-note{font:11px/1.4 var(--mono,monospace);color:var(--text-dim,#8aa);margin-top:8px;}',
       '.az-note b{color:var(--accent);}',
       '.az-master{display:flex;justify-content:center;}',
+      '.az-flow{display:flex;flex-wrap:wrap;align-items:center;gap:5px 7px;font:11px/1.4 var(--mono,monospace);letter-spacing:.5px;}',
+      '.az-flow .fs{color:var(--text-dim,#8aa);}',
+      '.az-flow .fa{color:var(--accent);font-weight:bold;}',
+      '.az-flow .fe{color:var(--accent);font-weight:bold;padding:1px 7px;border:1px solid var(--accent);border-radius:3px;}',
       '@media(max-width:1000px){.az-grid{grid-template-columns:minmax(0,1fr);}}'
     ].join('');
     document.head.appendChild(s);
@@ -94,6 +101,7 @@
   var engChorus = 0.0, engChorusRate = 1.5, engChorusDepth = 5.0;
   var engFlanger = 0.0, engFlangerRate = 0.5, engFlangerDepth = 2.0, engFlangerFb = 0.3;
   var engPhaser = 0.0, engPhaserRate = 0.5, engPhaserDepth = 0.7;
+  var engFxBypass = false; // FX-block bypass (A/B) — suppresses the zdsp-core expansion directives only
   var engBypass = false;  // master engine DSP bypass (A/B diff) — writes "off"
   var engMute = false;    // engine master mute (gain 0)
   // ENGINE meter feed — start it FIRST (connect is ~4ms) so meter frames are
@@ -182,7 +190,10 @@
       parts.push('room,' + engRoom.toFixed(3));
       parts.push('damp,' + engDamp.toFixed(3));
     }
-    // zdsp-core expansion — dynamics/saturation.
+    // zdsp-core expansion — dynamics/saturation · spatial · modulation. The FX
+    // BYPASS toggle A/B's the whole expansion block by simply not emitting its
+    // directives (each effect stays at its unity/bypass default in the engine).
+    if (!engFxBypass) {
     if (engGate > -89.5) parts.push('gate,' + engGate.toFixed(1));
     if (engCrushBits < 15.5 || engDownsample > 1.0) {
       parts.push('crush,' + engCrushBits.toFixed(1));
@@ -212,6 +223,7 @@
       parts.push('phaserrate,' + engPhaserRate.toFixed(3));
       parts.push('phaserdepth,' + engPhaserDepth.toFixed(3));
     }
+    }  // end !engFxBypass
     // CEILING auto-engages the limiter: a set ceiling emits the directive even
     // if the LED toggle wasn't flipped (else the knob silently does nothing).
     if (engLimit || engCeiling < -0.05) parts.push('ceiling,' + engCeiling.toFixed(2));
@@ -769,7 +781,12 @@
       chorU, chorRU, chorDU, flU, flRU, flDU, flFbU, phU, phRU, phDU];
     var row = el('div', 'az-knobs');
     units.forEach(function (u) { row.appendChild(u.wrap); });
-    wrap.appendChild(row);
+    var bypWrap = el('div'); bypWrap.style.alignSelf = 'center';
+    var bypTog = Z.ledToggle({ label: 'FX BYPASS', on: engFxBypass, color: 'amber',
+      onChange: function (on) { engFxBypass = on; persistDebounced(); } });
+    bypWrap.appendChild(bypTog.el);
+    var rowB = el('div', 'az-row'); rowB.appendChild(row); rowB.appendChild(bypWrap);
+    wrap.appendChild(rowB);
     wrap.appendChild(el('div', 'az-note',
       '<b>zdsp-core</b> expansion — <b>dynamics/sat</b> (gate · bit-crush · decimate · exciter) · '
       + '<b>spatial</b> (Haas widener · headphone cross-feed) · <b>modulation</b> (chorus · flanger · phaser). '
@@ -871,8 +888,25 @@
 
   /* ---- assemble ---- */
   var grid = el('div', 'az-grid');
+  // Signal-flow breadcrumb — the ACTUAL engine chain order (the control cards are
+  // grouped by function, not signal order, so this makes direction unambiguous).
+  var flowCard = (function () {
+    var stages = ['PREAMP', 'EQ', 'GAIN', 'DRIVE', 'EXCITER', 'CRUSH', 'GATE',
+      'COMP', 'CHORUS', 'FLANGER', 'PHASER', 'DELAY', 'REVERB', 'HAAS',
+      'X-FEED', 'WIDTH', 'PAN', 'LIMITER'];
+    var f = el('div', 'az-flow');
+    f.appendChild(el('span', 'fe', 'IN'));
+    stages.forEach(function (s) {
+      f.appendChild(el('span', 'fa', '→'));
+      f.appendChild(el('span', 'fs', s));
+    });
+    f.appendChild(el('span', 'fa', '→'));
+    f.appendChild(el('span', 'fe', 'OUT'));
+    return Z.card({ title: '// SIGNAL CHAIN  ·  flows left → right, top card → bottom', body: f });
+  })();
+
   var left = el('div', 'az-col');
-  [knobsCard, eqCard, engControls, spaceControls, fxControls, specCard, sgCard, scCard, wfCard, wtCard, transportCard].forEach(function (c) { left.appendChild(c.el); });
+  [flowCard, knobsCard, eqCard, engControls, spaceControls, fxControls, specCard, sgCard, scCard, wfCard, wtCard, transportCard].forEach(function (c) { left.appendChild(c.el); });
   var right = el('div', 'az-col');
   [metersCard, lufsCard, gonioCard, corrCard, vuCard, masterCard].forEach(function (c) { right.appendChild(c.el); });
   grid.appendChild(left); grid.appendChild(right);
