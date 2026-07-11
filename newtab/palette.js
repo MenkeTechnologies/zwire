@@ -173,6 +173,51 @@
     var cur = document.documentElement.getAttribute('data-hud-scheme') || 'cyberpunk';
     var i = ORDER.indexOf(cur); setScheme(ORDER[(i + 1 + ORDER.length) % ORDER.length] || ORDER[0]);
   }
+  // Cross-extension bridge to hud-internal's worker. The new-tab page is a separate extension: it can't
+  // reach the worker's zb_cmd storage bus (isolated storage) and lacks the windows/sessions perms. So
+  // host-backed steps (stryke/shell/host/osa/cmd) and worker tab verbs (newTab/closeTab/…) are relayed to
+  // hud-internal's onMessageExternal, which runs them with full permissions (stryke_run over the persistent
+  // port; browser.* actions via execZbCmd). Mirrors the in-page palette's zb-host relay, just cross-ext.
+  function bridgeHost(req, cb) {   // HUD_ID = hud-internal, defined below; set before any palette interaction
+    try { chrome.runtime.sendMessage(HUD_ID, { type: 'zb-host', req: req }, function (res) { void chrome.runtime.lastError; if (cb) cb(res); }); }
+    catch (err) { if (cb) cb({ ok: false, err: String(err) }); }
+  }
+  function bridgeAction(action) {
+    try { chrome.runtime.sendMessage(HUD_ID, { type: 'zbAction', action: action }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+  }
+  function osKind() {
+    var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase();
+    if (p.indexOf('win') >= 0) return 'win';
+    if (p.indexOf('mac') >= 0 || p.indexOf('darwin') >= 0) return 'mac';
+    return 'nix';
+  }
+  function shellReq(cmd) {
+    var os = osKind();
+    if (os === 'win') return { cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', cmd] };
+    var path = (os === 'mac')
+      ? '/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+      : '/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin';
+    return { cmd: 'exec', program: '/bin/sh', args: ['-c', cmd], env: { PATH: path } };
+  }
+  function b64dec(s) { try { return s ? decodeURIComponent(escape(atob(s))) : ''; } catch (e) { try { return s ? atob(s) : ''; } catch (x) { return ''; } } }
+  function hostToast(text, bad) {
+    try { if (window.ZGui && ZGui.toast) { ZGui.toast.show(text); return; } } catch (e) {}
+    var d = document.createElement('div'); d.textContent = text;
+    d.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;background:#0a0d16;color:' + (bad ? '#ff2a6d' : '#05d9e8') + ';border:1px solid currentColor;padding:8px 12px;font:12px "Share Tech Mono",monospace;border-radius:4px;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    (document.body || document.documentElement).appendChild(d); setTimeout(function () { try { d.remove(); } catch (e) {} }, 3200);
+  }
+  // Toast a host reply. `b64` decodes exec stdout/stderr (shell/osa/cmd); stryke output is plain and
+  // carries its own ok/err envelope.
+  function toastReply(label, prefix, res, b64) {
+    if (!res || !res.ok) { hostToast(label + ': ' + ((res && res.err) || 'no response'), true); return; }
+    var r = res.reply || {};
+    if (!b64 && r.ok === false) { hostToast(label + ': ' + (r.err || 'error'), true); return; }
+    var dec = b64 ? b64dec : function (s) { return s || ''; };
+    var out = dec(r.stdout).trim(), er = dec(r.stderr).trim();
+    var bad = (r.code != null && r.code !== 0) || r.timedOut;
+    var text = out || er;
+    hostToast(prefix + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
+  }
   function runStep(type, v, arg) {
     v = v || '';
     if (type === 'scheme') { setScheme(v); return; }
@@ -181,11 +226,40 @@
       if (v === 'reload') { try { location.reload(); } catch (x) {} }
       else if (v === 'copyUrl') { try { navigator.clipboard.writeText(location.href); } catch (x) {} }
       else if (v === 'cycleScheme') { cycleScheme(); }
-      return;   // worker-backed tab verbs (newTab/closeTab/…) are HUD-only; inert here
+      else { bridgeAction({ a: v }); }   // worker tab verbs (newTab/closeTab/nextTab/…) run in hud's worker
+      return;
     }
-    // Native-host / backend steps (terminal, host, stryke sidecar, osascript, cmd)
-    // have no bridge on the new tab page — inert here; they run in the HUD palette.
-    if (type === 'shell' || type === 'host' || type === 'stryke' || type === 'applescript' || type === 'batch') return;
+    if (type === 'stryke') {
+      var sc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      bridgeHost({ cmd: 'stryke_run', code: sc }, function (res) { toastReply('stryke', '⟨stryke⟩', res, false); });
+      return;
+    }
+    if (type === 'shell') {
+      var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      bridgeHost(shellReq(c), function (res) { toastReply('shell', '$ ' + c, res, true); });
+      return;
+    }
+    if (type === 'applescript') {
+      if (osKind() !== 'mac') { hostToast('applescript: macOS only', true); return; }
+      var as = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
+      var aargs = []; String(as).split('\n').forEach(function (line) { aargs.push('-e'); aargs.push(line); });
+      bridgeHost({ cmd: 'exec', program: 'osascript', args: aargs }, function (res) { toastReply('applescript', '⟨osa⟩', res, true); });
+      return;
+    }
+    if (type === 'batch') {
+      var bc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      bridgeHost({ cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', bc] }, function (res) { toastReply('batch', 'cmd> ' + bc, res, true); });
+      return;
+    }
+    if (type === 'host') {
+      var raw = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
+      var obj; try { obj = JSON.parse(raw); } catch (err) { hostToast('host: invalid JSON', true); return; }
+      bridgeHost(obj, function (res) {
+        if (!res || !res.ok) { hostToast('host: ' + ((res && res.err) || 'no response'), true); return; }
+        var r = res.reply; hostToast('host ◂ ' + (r && typeof r === 'object' ? JSON.stringify(r).slice(0, 140) : String(r)));
+      });
+      return;
+    }
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
     if (url) goCurrent(url);
   }

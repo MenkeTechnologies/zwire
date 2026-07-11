@@ -75,6 +75,13 @@ try {
       catch (e) { sendResponse({ cmds: [] }); }
       return true; // async sendResponse
     }
+    // The new-tab page is a separate extension: its HUD content scripts are excluded on chrome://newtab
+    // and its own storage is isolated from the worker's zb_cmd bus, so palette automation there had no
+    // path to the host. Bridge it through the SAME relay the in-page palette uses — stryke_run over the
+    // persistent port, browser.* actions run here with full tab/window permissions (newtab lacks the
+    // `windows`/`sessions` perms, so a local executor there couldn't do newWindow/reopenTab).
+    if (msg.type === 'zb-host' && msg.req) { relayHost(msg.req, sendResponse); return true; }
+    if (msg.type === 'zbAction' && msg.action) { execZbCmd(msg.action); sendResponse({ ok: true }); return; }
     // (theme toggles used to come through here from newtab; newtab now writes the
     // host directly, so those handlers are gone.)
   });
@@ -521,6 +528,48 @@ chrome.storage.onChanged.addListener(function (changes, area) {
   execZbCmd(changes.zb_cmd.newValue);
 });
 
+// Relay a zb-host `req` to the native host and answer via `respond({ok, reply|err})`. The single
+// entry for every non-privileged caller — page content scripts (onMessage) AND the new-tab palette
+// (onMessageExternal, a separate extension). stryke_run takes the persistent-port path (survives the
+// MV3 worker teardown that zeroes the one-shot on external pages); every other command is a plain
+// one-shot. Any browser.* action the host stamps on a stryke_run reply is executed here via execZbCmd,
+// so it runs with the worker's full tab/window permissions regardless of which surface triggered it.
+function relayStrykeRun(req, respond) {
+  fireHook('zt', { at: 'relay-port' });   // DIAG: relay reached (worker alive at start)
+  function fallback() {   // port momentarily down (reconnecting) — best-effort one-shot so a run isn't dropped
+    try {
+      chrome.runtime.sendNativeMessage(HOST, req, function (reply) {
+        var le = chrome.runtime.lastError;
+        fireHook('zt', { at: 'cb', err: le ? le.message : '', za: !!(reply && reply.zbAction) });
+        if (!le && reply && reply.zbAction) { fireHook('zt', { at: 'exec', a: reply.zbAction.a }); execZbCmd(reply.zbAction); }
+      });
+    } catch (e) { reportErr('relay-stryke', e); }
+  }
+  if (!sysPort) { fallback(); respond({ ok: true }); return; }
+  var rid = 'r' + (++zbRun.seq);
+  var out = { cmd: 'stryke_run', code: req.code, id: rid };
+  if (req.stdin != null) out.stdin = req.stdin;
+  zbRun.pend[rid] = {
+    respond: respond,
+    timer: setTimeout(function () {
+      if (!zbRun.pend[rid]) return;
+      delete zbRun.pend[rid];
+      try { respond({ ok: false, err: 'stryke_run timeout' }); } catch (e) {}
+    }, 12000)
+  };
+  try { sysPort.postMessage(out); }
+  catch (e) { clearTimeout(zbRun.pend[rid].timer); delete zbRun.pend[rid]; reportErr('relay-stryke-post', e); fallback(); respond({ ok: true }); }
+}
+function relayHost(req, respond) {
+  if (req && req.cmd === 'stryke_run') { relayStrykeRun(req, respond); return; }
+  try {
+    chrome.runtime.sendNativeMessage(HOST, req, function (reply) {
+      if (chrome.runtime.lastError) { respond({ ok: false, err: chrome.runtime.lastError.message }); return; }
+      respond({ ok: true, reply: reply });
+    });
+  } catch (e) { respond({ ok: false, err: String(e) }); }
+}
+
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // HUD pages fire their own lifecycle events (palette-command, session-saved,
   // pane-split, audio-eq-changed, …) through this relay so all hook firing goes
@@ -544,50 +593,11 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     mirror(msg.scheme);
     return;
   }
-  // zwire-host relay: content scripts can't call sendNativeMessage, so custom
-  // `host`-type commands (and anything else in a page) send the JSON here and we
-  // forward it to the native host, returning its JSON reply.
+  // zwire-host relay: content scripts (and the new-tab palette, cross-extension) can't call
+  // sendNativeMessage, so custom `host`-type commands send the JSON here and we forward it.
   if (msg && msg.type === 'zb-host' && msg.req) {
     fireHook('zt', { at: 'zbhost', cmd: msg.req.cmd, tab: sender && sender.tab ? sender.tab.id : 'none' });   // DIAG: zb-host reached the worker
-    // stryke_run drives external browser.* automation from a page's palette. A one-shot sendNativeMessage
-    // loses its callback because the MV3 worker is torn down mid round-trip (external = 0%). Send it over
-    // the PERSISTENT sysinfo port instead — that channel keeps the worker alive and the reply lands on an
-    // already-open connection. The reply is correlated by `id` and executed in startSysStream's onMessage.
-    if (msg.req.cmd === 'stryke_run') {
-      fireHook('zt', { at: 'relay-port' });   // DIAG: relay reached (worker alive at start)
-      var rid = 'r' + (++zbRun.seq);
-      // Fallback: if the persistent port is momentarily down (reconnecting), fall back to the one-shot so
-      // a run isn't silently dropped. Best-effort — the port path is the reliable one.
-      function fallback() {
-        try {
-          chrome.runtime.sendNativeMessage(HOST, msg.req, function (reply) {
-            var le = chrome.runtime.lastError;
-            fireHook('zt', { at: 'cb', err: le ? le.message : '', za: !!(reply && reply.zbAction) });
-            if (!le && reply && reply.zbAction) { fireHook('zt', { at: 'exec', a: reply.zbAction.a }); execZbCmd(reply.zbAction); }
-          });
-        } catch (e) { reportErr('relay-stryke', e); }
-      }
-      if (!sysPort) { fallback(); sendResponse({ ok: true }); return true; }
-      var req = { cmd: 'stryke_run', code: msg.req.code, id: rid };
-      if (msg.req.stdin != null) req.stdin = msg.req.stdin;
-      zbRun.pend[rid] = {
-        respond: sendResponse,
-        timer: setTimeout(function () {
-          if (!zbRun.pend[rid]) return;
-          delete zbRun.pend[rid];
-          try { sendResponse({ ok: false, err: 'stryke_run timeout' }); } catch (e) {}
-        }, 12000)
-      };
-      try { sysPort.postMessage(req); }
-      catch (e) { clearTimeout(zbRun.pend[rid].timer); delete zbRun.pend[rid]; reportErr('relay-stryke-post', e); fallback(); sendResponse({ ok: true }); }
-      return true;
-    }
-    try {
-      chrome.runtime.sendNativeMessage(HOST, msg.req, function (reply) {
-        if (chrome.runtime.lastError) { sendResponse({ ok: false, err: chrome.runtime.lastError.message }); return; }
-        sendResponse({ ok: true, reply: reply });
-      });
-    } catch (e) { sendResponse({ ok: false, err: String(e) }); }
+    relayHost(msg.req, sendResponse);
     return true;   // async sendResponse
   }
   // Command-palette navigation: a content script can't open chrome://, an
