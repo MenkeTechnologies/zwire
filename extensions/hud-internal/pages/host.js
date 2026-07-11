@@ -166,7 +166,7 @@
     if (s.io) tiles.push(tile('Disk I/O', '↓' + fmtBytes(s.io.r) + '/s', '↑' + fmtBytes(s.io.w) + '/s'));
     if (s.load) tiles.push(tile('Load', s.load[0], s.load.join('  '), null));
     if (s.temp != null) tiles.push(tile('Temp', s.temp + '°C', null, s.temp));
-    if (s.batt) tiles.push(tile('Battery', s.batt.p + '%', s.batt.c ? 'charging' : 'on battery', s.batt.p));
+    if (s.batt) tiles.push(tile('Battery', s.batt.p + '%', s.batt.c ? 'charging' : (s.batt.ac ? 'on AC' : 'on battery'), s.batt.p));
     if (s.uptime != null) tiles.push(tile('Uptime', fmtDur(s.uptime), null, null));
     if (s.host) tiles.push(tile('Host', s.host, s.lip || '', null));
     liveInner.innerHTML = ''; tiles.forEach(function (t) { liveInner.appendChild(t); });
