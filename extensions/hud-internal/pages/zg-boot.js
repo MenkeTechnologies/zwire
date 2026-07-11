@@ -181,9 +181,16 @@
   }
 
   /* ---- colorscheme <-> native host bridge -------------------------------- */
-  var applyingExternal = false, currentScheme = null, lastPick = 0;
+  var applyingExternal = false, currentScheme = null, lastPick = 0, lastPresetWrite = 0;
   function bridge() {
     if (!window.ZGui || !ZGui.colorscheme) return;
+    // Mirror the saved-scheme LIBRARY (every custom scheme's name + colours) to the
+    // host so ~/.zwire/global.toml stores them all and the whole fleet can read them.
+    ZGui.colorscheme.onPresets(function (list) {
+      if (applyingExternal || window.__zbApplyingExternal) return;
+      lastPresetWrite = Date.now();
+      try { chrome.runtime.sendNativeMessage(HOST, { schemes: list || [] }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    });
     // any pick in the shell settings (or a custom scheme) -> native + storage.
     ZGui.colorscheme.onApply(function (name) {
       currentScheme = name;
@@ -238,12 +245,33 @@
           // almost certainly a stale read racing our own not-yet-flushed write.
           if (s && s !== currentScheme && Date.now() - lastPick > 2500) {
             applyingExternal = true;
-            try { ZGui.colorscheme.apply(s); } finally { applyingExternal = false; }
+            try {
+              // A custom scheme ('custom' / 'custom-N') has no baked table — render it
+              // from the host's resolved palette so another fleet app's custom scheme
+              // converges here too. `apply(s)` would be a no-op and leave stale colours.
+              if (/^custom(-\d+)?$/.test(s) && r.palette && Object.keys(r.palette).length) {
+                ZGui.colorscheme.applyVars(r.palette);
+                currentScheme = s;   // applyVars doesn't fire onApply, so track it here
+              } else {
+                ZGui.colorscheme.apply(s);
+              }
+            } finally { applyingExternal = false; }
             // keep any rendered scheme picker's highlight in sync with the
             // native (file) scheme, not just zgui's localStorage.
             document.querySelectorAll('.scheme-btn,.zs-scheme-btn').forEach(function (b) {
               if (b.dataset && b.dataset.scheme) b.classList.toggle('active', b.dataset.scheme === s);
             });
+          }
+          // Hydrate the saved-scheme LIBRARY from the shared store — another surface
+          // (or another machine) may have added/renamed/removed one. Skip briefly after
+          // a local library write so we don't clobber an edit that's still flushing.
+          if (Array.isArray(r.schemes) && Date.now() - lastPresetWrite > 2500) {
+            try {
+              if (JSON.stringify(r.schemes) !== JSON.stringify(ZGui.colorscheme.presets())) {
+                applyingExternal = true;
+                try { ZGui.colorscheme.setPresets(r.schemes); } finally { applyingExternal = false; }
+              }
+            } catch (e) {}
           }
         });
       } catch (e) {}

@@ -54,6 +54,24 @@
     if (window.ZGui.colorscheme) {
       // app-store style picker (added to zgui-core as ZGui.colorscheme.buildSchemeCards)
       inner.appendChild(ZGui.colorscheme.buildSchemeCards(function () { /* native bridge in zg-boot onApply */ }));
+      // Custom-scheme CRUD — the SAME wiring as the shared appShell settings modal
+      // (lib/zgui-core/webui/app-shell.js openSettings). A <details> holding the
+      // per-token color editor + saved-preset chips. buildEditor persists as
+      // 'custom' and fires the zg-boot onApply native bridge, so a custom scheme
+      // syncs to the host + new-tab page exactly like a built-in preset does.
+      if (ZGui.colorscheme.buildEditor) {
+        var cd = el('details', 'zg-shell-custom');
+        cd.appendChild(el('summary', null, 'Custom scheme…'));
+        var editHost = el('div');
+        try { ZGui.colorscheme.buildEditor(editHost); } catch (e) {}
+        cd.appendChild(editHost);
+        if (ZGui.colorscheme.buildPresetChips) {
+          var chips = el('div');
+          try { ZGui.colorscheme.buildPresetChips(chips); } catch (e) {}
+          cd.appendChild(chips);
+        }
+        inner.appendChild(cd);
+      }
       var lrow = el('label', 'xt-switch full');
       lrow.appendChild(el('span', null, 'Light mode'));
       var lt = ZGui.toggle({ checked: ZGui.colorscheme.isLight(), onChange: function (on) { ZGui.colorscheme.setLight(on); publishUi(); } });
