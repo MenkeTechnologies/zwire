@@ -62,7 +62,7 @@
   // (storage.onChanged reliably wakes the worker). A ticking counter guarantees
   // the value changes so onChanged always fires.
   var cmdN = 0;
-  function cmd(obj) { try { chrome.runtime.sendMessage({ type: 'zbTrace', tag: 'cmd:' + obj.a }); } catch (e) {} try { obj.n = ++cmdN + '.' + (window.__zbTick = (window.__zbTick || 0) + 1); chrome.storage.local.set({ zb_cmd: obj }); } catch (e) {} }
+  function cmd(obj) { try { obj.n = ++cmdN + '.' + (window.__zbTick = (window.__zbTick || 0) + 1); chrome.storage.local.set({ zb_cmd: obj }); } catch (e) {} }
   // When the tmux overlay is open, navigate the ACTIVE PANE (ztmux shares this
   // top-frame world) instead of breaking out into a new browser tab.
   function open(url) {
@@ -282,7 +282,6 @@
   // stryke steps run inline stryke code through zwire-host (`stryke -E`, using the
   // bundled sidecar — no PATH needed). stdout/stderr come back as plain strings.
   function runStryke(code) {
-    try { chrome.runtime.sendMessage({ type: 'zbTrace', tag: 'runStryke' }); } catch (e) {}
     try {
       chrome.runtime.sendMessage({ type: 'zb-host', req: { cmd: 'stryke_run', code: code } }, function (res) {
         void chrome.runtime.lastError;
