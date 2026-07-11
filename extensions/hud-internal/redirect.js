@@ -16,6 +16,11 @@
     ['chrome://version', 'pages/version.html']
   ];
   var here = location.href;
+  // Escape hatch: `?native` (or `#native`) leaves Chrome's REAL WebUI page in place instead of the
+  // HUD shadow. Needed for things a content-script reimplementation can't do — chiefly the native
+  // "Inspect views: service worker" DevTools link on chrome://extensions, which is a privileged
+  // browser action. Visit chrome://extensions/?native to inspect the HUD's own service worker.
+  if (/[?#&]native\b/.test(here)) return;
   // About / help isn't a pref surface — route it to the HUD System page (our About).
   if (/chrome:\/\/settings\/(help|about)\b/.test(here)) {
     var v = chrome.runtime.getURL('pages/version.html');

@@ -285,12 +285,9 @@
     try {
       chrome.runtime.sendMessage({ type: 'zb-host', req: { cmd: 'stryke_run', code: code } }, function (res) {
         void chrome.runtime.lastError;
-        // The worker routes stryke_run to the persistent offscreen document, which runs it and executes
-        // any browser.* action itself. We only render the toast. res.reply.offscreen means it was handed
-        // off (no stdout to show); a direct reply (other host cmds) still toasts normally.
+        // The worker runs stryke and executes any browser.* action from the reply. We only toast.
         if (!res || !res.ok) { hostToast('stryke: ' + ((res && res.err) || 'no response'), true); return; }
         var r = res.reply || {};
-        if (r.offscreen) { hostToast('⟨stryke⟩ ▶', false); return; }
         if (!r.ok) { hostToast('stryke: ' + (r.err || 'error'), true); return; }
         var out = (r.stdout || '').trim(), er = (r.stderr || '').trim();
         var bad = (r.code != null && r.code !== 0) || r.timedOut;

@@ -10,32 +10,17 @@
  */
 var HOST = 'com.zwire.hud';
 
-// A persistent offscreen document runs stryke for EXTERNAL pages (see offscreen.js). The service
-// worker can't reliably survive the ~200ms native round-trip when a content script drives it, so the
-// slow work lives in a page that isn't torn down; the worker only executes the fast browser action it
-// sends back. ensureOffscreen() creates the doc on demand (idempotent, guarded against concurrent
-// creates), then the caller broadcasts { type:'zbOffStryke', code } which the doc picks up.
-var _offCreating = null;
-function ensureOffscreen() {
-  return (async function () {
-    try {
-      if (chrome.offscreen && chrome.offscreen.hasDocument && await chrome.offscreen.hasDocument()) return;
-      if (!_offCreating) {
-        _offCreating = chrome.offscreen.createDocument({
-          url: 'offscreen.html',
-          reasons: ['WORKERS'],
-          justification: 'Run stryke automation scripts via native messaging off the ephemeral service worker.'
-        }).catch(function () {}).finally(function () { _offCreating = null; });
-      }
-      await _offCreating;
-    } catch (e) {}
-  })();
+// DIAG: surface worker errors to the host log (readable), since the SW DevTools console is
+// unavailable. fireHook is the one worker->host channel proven to log reliably.
+function reportErr(where, e) {
+  try {
+    var m = (e && (e.message || (e.reason && (e.reason.message || e.reason)))) || e;
+    var st = (e && (e.stack || (e.reason && e.reason.stack))) || '';
+    fireHook('zerror', { where: where, msg: String(m).slice(0, 300), stack: String(st).slice(0, 400) });
+  } catch (x) {}
 }
-function runStrykeOffscreen(code) {
-  ensureOffscreen().then(function () {
-    try { chrome.runtime.sendMessage({ type: 'zbOffStryke', code: code }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-  });
-}
+try { self.addEventListener('error', function (ev) { reportErr('error', ev.error || ev); }); } catch (e) {}
+try { self.addEventListener('unhandledrejection', function (ev) { reportErr('unhandledrejection', ev); }); } catch (e) {}
 // Fire a lifecycle event to the native host so user stryke hooks run (see the
 // lifecycle-hooks IIFE below + hooks.rs). Top-level so every listener/handler in
 // this worker can call it. Best-effort: the host no-ops when no enabled hook is
@@ -553,10 +538,18 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     // survive the ~200ms native round-trip when a content script drives it (external = 0%). Hand it to
     // the persistent offscreen document, which runs stryke and sends the resulting action back as a
     // zbExec message we execute below. Ack the content script immediately (toast is cosmetic).
-    if (msg.req.cmd === 'stryke_run' && msg.req.code) {
-      runStrykeOffscreen(msg.req.code);
-      sendResponse({ ok: true, reply: { ok: true, offscreen: true } });
-      return;
+    if (msg.req.cmd === 'stryke_run') {
+      fireHook('zt', { at: 'relay' });   // DIAG: relay reached (worker alive at start)
+      try {
+        chrome.runtime.sendNativeMessage(HOST, msg.req, function (reply) {
+          var le = chrome.runtime.lastError;
+          fireHook('zt', { at: 'cb', err: le ? le.message : '', za: !!(reply && reply.zbAction) }); // DIAG: callback fired (worker survived round-trip)
+          if (le) { sendResponse({ ok: false, err: le.message }); return; }
+          if (reply && reply.zbAction) { fireHook('zt', { at: 'exec', a: reply.zbAction.a }); execZbCmd(reply.zbAction); }
+          sendResponse({ ok: true, reply: reply });
+        });
+      } catch (e) { reportErr('relay-stryke', e); sendResponse({ ok: false, err: String(e) }); }
+      return true;
     }
     try {
       chrome.runtime.sendNativeMessage(HOST, msg.req, function (reply) {
@@ -566,10 +559,6 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     } catch (e) { sendResponse({ ok: false, err: String(e) }); }
     return true;   // async sendResponse
   }
-  // The offscreen document (or any extension page) finished a browser.* action — execute it. This is a
-  // FRESH message wake doing one fast chrome.tabs op, which the browser process completes regardless of
-  // the worker's lifetime (the mechanism the built-in palette actions already rely on).
-  if (msg && msg.type === 'zbExec' && msg.action) { execZbCmd(msg.action); return; }
   // Command-palette navigation: a content script can't open chrome://, an
   // extension page, or a new tab itself — do it here.
   if (msg && msg.type === 'zbopen' && msg.url) {

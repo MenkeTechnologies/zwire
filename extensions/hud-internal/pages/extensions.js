@@ -245,7 +245,18 @@
     wrap.appendChild(cardSect('DETAILS', tbl));
 
     tbl.querySelectorAll('[data-view]').forEach(function (a) { a.onclick = function (ev) { ev.preventDefault();
-      var p = a.getAttribute('data-view').split(':'); dp.openDevTools({ renderProcessId: +p[0], renderViewId: +p[1], incognito: p[2] === '1', isServiceWorker: p[3] === '1', extensionId: e.id }); }; });
+      var p = a.getAttribute('data-view').split(':'), sw = p[3] === '1';
+      // For a service worker renderViewId is -1 (no view); a NaN/missing id makes openDevTools no-op.
+      var opts = { renderProcessId: +p[0] || -1, renderViewId: isNaN(+p[1]) ? -1 : +p[1], incognito: p[2] === '1', isServiceWorker: sw, extensionId: e.id };
+      var toNative = function () { try { location.href = 'chrome://extensions/?native&id=' + e.id; } catch (x) {} };
+      try {
+        dp.openDevTools(opts, function () {
+          // openDevTools can't attach from a content-script reimplementation for some views (idle SW,
+          // privileged attach) — fall back to Chrome's real page, whose native inspect link always works.
+          if (chrome.runtime.lastError) toNative();
+        });
+      } catch (x) { toNative(); }
+    }; });
     var sp = tbl.querySelector('[data-showpath]'); if (sp) sp.onclick = function (ev) { ev.preventDefault(); dp.showPath(e.id); };
     dp.getExtensionSize(e.id, function (sz) { void chrome.runtime.lastError; var s = tbl.querySelector('[data-size]'); if (s) s.textContent = sz || '—'; });
   }
