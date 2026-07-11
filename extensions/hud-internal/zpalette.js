@@ -70,9 +70,23 @@
     cmd({ a: 'openTab', url: url });
   }
   function extUrl(p) { return chrome.runtime.getURL('pages/' + p); }
+  // Write the resolved palette alongside the scheme/light — same precedent as
+  // zg-boot's producer — so global.toml carries real colours for the fleet. Reuses
+  // the baked SCHEMES + LIGHT_VARS this palette already resolves for its overlay;
+  // background.js forwards zb_palette to the host.
+  function writePalette(name, light) {
+    try {
+      var s = SCHEMES[name] || SCHEMES.cyberpunk || { vars: {} };
+      var vars = {}, sv = s.vars || {}, k;
+      for (k in sv) vars[k] = sv[k];
+      if (light) for (k in LIGHT_VARS) vars[k] = LIGHT_VARS[k];
+      chrome.storage.local.set({ zb_palette: vars });
+    } catch (e) {}
+  }
   function setScheme(name) {
     try { chrome.runtime.sendMessage({ type: 'zbhud-scheme', scheme: name }); } catch (e) {}
     try { chrome.storage.local.set({ zb_scheme: name }); } catch (e) {}
+    try { chrome.storage.local.get('zb_ui', function (o) { writePalette(name, !!(o && o.zb_ui && o.zb_ui.light)); }); } catch (e) {}
   }
 
   var PAGES = [['◈', 'Extensions', 'extensions.html'], ['⚙', 'Settings', 'settings.html'],
@@ -175,7 +189,7 @@
   }
   // Settings live in chrome.storage 'zb_ui' (mirrored from the HUD settings) so a
   // content-script palette can flip them; theme.js/newtab react via onChanged.
-  function toggleUi(key) { try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui[key] = (key === 'light') ? !ui.light : (ui[key] === false); chrome.storage.local.set({ zb_ui: ui }); }); } catch (e) {} }
+  function toggleUi(key) { try { chrome.storage.local.get(['zb_ui', 'zb_scheme'], function (o) { void chrome.runtime.lastError; var ui = (o && o.zb_ui) || {}; ui[key] = (key === 'light') ? !ui.light : (ui[key] === false); chrome.storage.local.set({ zb_ui: ui }); if (key === 'light') writePalette((o && o.zb_scheme) || 'cyberpunk', !!ui.light); }); } catch (e) {} }
 
   // Keyword web-search registry + provider now live in the SHARED palette-cmds.js
   // (ZWIRE_PALETTE_CMDS) so the HUD palette and the New Tab palette stay identical.
