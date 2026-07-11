@@ -199,6 +199,14 @@
       lastPick = Date.now();
       try { chrome.runtime.sendNativeMessage(HOST, { scheme: name }, function () { void chrome.runtime.lastError; }); } catch (e) {}
       try { chrome.storage.local.set({ zb_scheme: name }); } catch (e) {}
+      // Mirror the RESOLVED palette (every scheme var read off :root as concrete
+      // hex, incl. a custom/edited scheme) into zb_palette; the background bridge
+      // forwards it to the host so ~/.zwire/global.toml carries the real colours.
+      try {
+        var pal = {}, keys = ZGui.colorscheme.keys || window.SCHEME_VAR_KEYS, cs = getComputedStyle(document.documentElement);
+        if (keys) keys.forEach(function (k) { var val = cs.getPropertyValue(k); if (val && val.trim()) pal[k] = val.trim(); });
+        if (Object.keys(pal).length) chrome.storage.local.set({ zb_palette: pal });
+      } catch (e) {}
       // setLight() re-applies the scheme, so onApply ALSO fires on a light/dark
       // toggle from ANY surface — including the appShell settings modal + scheme
       // cards, which call setLight directly and never touched zb_ui. Mirror the
@@ -240,6 +248,19 @@
         });
       } catch (e) {}
     }
+    // Apply a resolved palette pushed by the host (a custom/edited scheme from
+    // this or another fleet app) straight onto :root. Change-driven, so a built-in
+    // scheme — whose palette equals the baked vars — is a harmless no-op repaint.
+    try {
+      chrome.storage.onChanged.addListener(function (ch, area) {
+        if (area !== 'local' || !ch.zb_palette || !ch.zb_palette.newValue) return;
+        if (Date.now() - lastPick < 2500) return;   // don't clobber a fresh local pick
+        try {
+          var pal = ch.zb_palette.newValue, root = document.documentElement.style;
+          Object.keys(pal).forEach(function (k) { if (k.charAt(0) === '-' && typeof pal[k] === 'string' && pal[k]) root.setProperty(k, pal[k]); });
+        } catch (e) {}
+      });
+    } catch (e) {}
     pull();
     setInterval(pull, 1500);
   }

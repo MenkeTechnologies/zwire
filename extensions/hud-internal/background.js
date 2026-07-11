@@ -43,7 +43,7 @@ var ZPWR_ID = 'hpppdchpnphmiijdeanibpcadgknmaja';
 // storage.set we made from a host push -> onChanged -> host write) never loops.
 // zpwrchrome + newtab no longer talk to us for theme — they subscribe the host
 // directly, so the old cross-extension push/pull/mirror mesh is gone.
-var _lastHostScheme = null, _lastHostUi = null;
+var _lastHostScheme = null, _lastHostUi = null, _lastHostPalette = null;
 
 function mirror(scheme) {
   if (!scheme) return;
@@ -60,6 +60,11 @@ function applyThemeFromHost(topic, data) {
   } else if (topic === 'ui' && data && typeof data === 'object') {
     _lastHostUi = JSON.stringify(data);
     try { chrome.storage.local.set({ zb_ui: data }); } catch (e) {}
+  } else if (topic === 'palette' && data && typeof data === 'object') {
+    // Resolved var->hex map for the active scheme+light; lets custom/edited
+    // palettes (which have no built-in scheme name) paint across HUD surfaces.
+    _lastHostPalette = JSON.stringify(data);
+    try { chrome.storage.local.set({ zb_palette: data }); } catch (e) {}
   }
 }
 
@@ -280,6 +285,7 @@ function startSysStream() {
     port.postMessage({ cmd: 'sysinfo_start' });
     port.postMessage({ cmd: 'sub', topic: 'scheme' });
     port.postMessage({ cmd: 'sub', topic: 'ui' });
+    port.postMessage({ cmd: 'sub', topic: 'palette' });
   } catch (e) { sysPort = null; setTimeout(startSysStream, 5000); }
 }
 startSysStream();
@@ -298,6 +304,9 @@ try {
     }
     if (ch.zb_ui && ch.zb_ui.newValue && JSON.stringify(ch.zb_ui.newValue) !== _lastHostUi) {
       try { chrome.runtime.sendNativeMessage(HOST, { ui: ch.zb_ui.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    }
+    if (ch.zb_palette && ch.zb_palette.newValue && JSON.stringify(ch.zb_palette.newValue) !== _lastHostPalette) {
+      try { chrome.runtime.sendNativeMessage(HOST, { palette: ch.zb_palette.newValue }, function () { void chrome.runtime.lastError; }); } catch (e) {}
     }
   });
 } catch (e) {}
