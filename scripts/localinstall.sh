@@ -276,6 +276,17 @@ EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$BROWSER_APP/Cont
 USEREXT="$STATE/ext"
 mkdir -p "$USEREXT"
 rsync -a --delete --exclude '_metadata' "$RES/ext/" "$USEREXT/"
+# Force the extension service worker to reload when the build changes. Chrome does NOT restart a
+# registered MV3 service worker when unpacked --load-extension files change: content scripts
+# re-inject per page, but the worker keeps running its OLD background.js. So service-worker fixes
+# silently never take effect across a redeploy. Deleting the profile's Service Worker script cache
+# (safe here — the launcher runs before Chrome starts; workers re-register from source) forces a
+# fresh background.js eval. Gated on a version marker so it only happens on an actual version bump.
+SWVER="$(grep -m1 '"version"' "$USEREXT/hud-internal/manifest.json" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+if [ -n "$SWVER" ] && [ "$(cat "$STATE/.sw_version" 2>/dev/null)" != "$SWVER" ]; then
+  rm -rf "$PROFILE/Service Worker" 2>/dev/null || true
+  printf '%s' "$SWVER" > "$STATE/.sw_version" 2>/dev/null || true
+fi
 LOAD="$USEREXT/newtab,$USEREXT/zpwrchrome,$USEREXT/hud-internal"
 exec "$BROWSER_APP/Contents/MacOS/$EXE" \
   --user-data-dir="$PROFILE" \
