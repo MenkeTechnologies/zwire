@@ -285,15 +285,12 @@
     try {
       chrome.runtime.sendMessage({ type: 'zb-host', req: { cmd: 'stryke_run', code: code } }, function (res) {
         void chrome.runtime.lastError;
-        // DIAG: log (reliably, via hook_fire) exactly what the external content script got back.
-        try { chrome.runtime.sendMessage({ type: 'zbFireHook', event: 'zdiag', payload: { got: !!res, ok: !!(res && res.ok), za: !!(res && res.reply && res.reply.zbAction), a: (res && res.reply && res.reply.zbAction || {}).a || '' } }); } catch (e) {}
+        // The worker routes stryke_run to the persistent offscreen document, which runs it and executes
+        // any browser.* action itself. We only render the toast. res.reply.offscreen means it was handed
+        // off (no stdout to show); a direct reply (other host cmds) still toasts normally.
         if (!res || !res.ok) { hostToast('stryke: ' + ((res && res.err) || 'no response'), true); return; }
         var r = res.reply || {};
-        // Fire any browser.* action the script queued (piggybacked on the reply). We (the content
-        // script) write zb_cmd ourselves — the SAME storage path the built-in palette actions use,
-        // which reliably wakes the worker's onChanged. Letting the worker execute it after the native
-        // round-trip did not fire the tab on external pages.
-        if (r.zbAction && r.zbAction.a) cmd(r.zbAction);
+        if (r.offscreen) { hostToast('⟨stryke⟩ ▶', false); return; }
         if (!r.ok) { hostToast('stryke: ' + (r.err || 'error'), true); return; }
         var out = (r.stdout || '').trim(), er = (r.stderr || '').trim();
         var bad = (r.code != null && r.code !== 0) || r.timedOut;

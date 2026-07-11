@@ -9,6 +9,33 @@
  *     unreliable — an MV3 worker can suspend mid-round-trip).
  */
 var HOST = 'com.zwire.hud';
+
+// A persistent offscreen document runs stryke for EXTERNAL pages (see offscreen.js). The service
+// worker can't reliably survive the ~200ms native round-trip when a content script drives it, so the
+// slow work lives in a page that isn't torn down; the worker only executes the fast browser action it
+// sends back. ensureOffscreen() creates the doc on demand (idempotent, guarded against concurrent
+// creates), then the caller broadcasts { type:'zbOffStryke', code } which the doc picks up.
+var _offCreating = null;
+function ensureOffscreen() {
+  return (async function () {
+    try {
+      if (chrome.offscreen && chrome.offscreen.hasDocument && await chrome.offscreen.hasDocument()) return;
+      if (!_offCreating) {
+        _offCreating = chrome.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: ['WORKERS'],
+          justification: 'Run stryke automation scripts via native messaging off the ephemeral service worker.'
+        }).catch(function () {}).finally(function () { _offCreating = null; });
+      }
+      await _offCreating;
+    } catch (e) {}
+  })();
+}
+function runStrykeOffscreen(code) {
+  ensureOffscreen().then(function () {
+    try { chrome.runtime.sendMessage({ type: 'zbOffStryke', code: code }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+  });
+}
 // Fire a lifecycle event to the native host so user stryke hooks run (see the
 // lifecycle-hooks IIFE below + hooks.rs). Top-level so every listener/handler in
 // this worker can call it. Best-effort: the host no-ops when no enabled hook is
@@ -522,11 +549,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // `host`-type commands (and anything else in a page) send the JSON here and we
   // forward it to the native host, returning its JSON reply.
   if (msg && msg.type === 'zb-host' && msg.req) {
-    // Just run the host command and return its reply. Any browser.* action piggybacked on a
-    // stryke_run reply (reply.zbAction) is executed by the CALLER writing zb_cmd — for a content
-    // script that means storage.set, which reliably wakes this worker's onChanged (proven by the
-    // built-in palette actions). The worker executing the action itself, after the native round-trip,
-    // did not reliably fire; letting the stable content script own the storage write does.
+    // stryke_run drives external browser.* automation. Do NOT run it here — the worker can't reliably
+    // survive the ~200ms native round-trip when a content script drives it (external = 0%). Hand it to
+    // the persistent offscreen document, which runs stryke and sends the resulting action back as a
+    // zbExec message we execute below. Ack the content script immediately (toast is cosmetic).
+    if (msg.req.cmd === 'stryke_run' && msg.req.code) {
+      runStrykeOffscreen(msg.req.code);
+      sendResponse({ ok: true, reply: { ok: true, offscreen: true } });
+      return;
+    }
     try {
       chrome.runtime.sendNativeMessage(HOST, msg.req, function (reply) {
         if (chrome.runtime.lastError) { sendResponse({ ok: false, err: chrome.runtime.lastError.message }); return; }
@@ -535,6 +566,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     } catch (e) { sendResponse({ ok: false, err: String(e) }); }
     return true;   // async sendResponse
   }
+  // The offscreen document (or any extension page) finished a browser.* action — execute it. This is a
+  // FRESH message wake doing one fast chrome.tabs op, which the browser process completes regardless of
+  // the worker's lifetime (the mechanism the built-in palette actions already rely on).
+  if (msg && msg.type === 'zbExec' && msg.action) { execZbCmd(msg.action); return; }
   // Command-palette navigation: a content script can't open chrome://, an
   // extension page, or a new tab itself — do it here.
   if (msg && msg.type === 'zbopen' && msg.url) {
