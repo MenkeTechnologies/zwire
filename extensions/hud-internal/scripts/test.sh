@@ -51,6 +51,16 @@ fi
 command rm -f /tmp/zwire-hud-compute.$$
 echo
 
+cyber_section "HISTORY DASHBOARD (calendar / analytics aggregation + render)"
+if node tests/history.mjs 2>/tmp/zwire-hud-history.$$ && node tests/history-render.mjs 2>>/tmp/zwire-hud-history.$$; then
+  cyber_ok "history dashboard nominal"
+else
+  FAIL=1; cyber_fail "history dashboard compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-history.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-history.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then

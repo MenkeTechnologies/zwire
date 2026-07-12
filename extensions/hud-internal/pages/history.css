@@ -1,0 +1,68 @@
+/* zwire HUD History — Vivaldi-style calendar + browsing-activity analytics.
+ * Themed entirely off the active scheme's CSS vars so it repaints with the HUD. */
+.zh-wrap { display: grid; grid-template-columns: 1fr 300px 300px; gap: 14px; align-items: start; }
+@media (max-width: 1200px) { .zh-wrap { grid-template-columns: 1fr 280px; } .zh-rail { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } }
+@media (max-width: 820px) { .zh-wrap { grid-template-columns: 1fr; } .zh-rail { grid-template-columns: 1fr; } }
+
+/* toolbar: month nav + view toggle */
+.zh-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+.zh-month { font-size: 16px; font-weight: 700; color: var(--text); min-width: 150px; }
+.zh-spacer { flex: 1; }
+.zh-btn { background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px;
+  padding: 5px 10px; font: 12px "Share Tech Mono", Monaco, monospace; cursor: pointer; }
+.zh-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+.zh-btn.on { color: var(--bg-primary); background: var(--cyan); border-color: var(--cyan); }
+.zh-nav { padding: 5px 9px; }
+
+/* calendar */
+.zh-cal { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-secondary); }
+.zh-dow { display: grid; grid-template-columns: repeat(7, 1fr); }
+.zh-dow > span { padding: 6px 8px; font-size: 11px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.zh-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.zh-cell { min-height: 84px; padding: 6px 8px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.zh-cell:nth-child(7n) { border-right: none; }
+.zh-cell.zh-out { opacity: .35; }
+.zh-cell:hover { background: var(--bg-hover); }
+.zh-cell.zh-in-range { background: var(--cyan-dim); }
+.zh-cell.zh-sel { outline: 1px solid var(--cyan); outline-offset: -1px; }
+.zh-cell.zh-today .zh-num { color: var(--bg-primary); background: var(--cyan); border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+.zh-num { font-size: 12px; color: var(--text-dim); align-self: flex-end; }
+.zh-bars { margin-top: auto; display: flex; align-items: flex-end; gap: 2px; height: 26px; }
+.zh-bars > i { flex: 1; background: var(--magenta); min-height: 2px; border-radius: 1px 1px 0 0; }
+.zh-daycount { font-size: 10px; color: var(--text-muted); }
+
+/* custom hover tooltip */
+.zh-tip { position: fixed; z-index: 50; pointer-events: none; background: var(--bg-card); border: 1px solid var(--cyan);
+  box-shadow: 0 0 20px var(--cyan-glow); border-radius: 4px; padding: 8px 10px; font: 11px "Share Tech Mono", monospace;
+  color: var(--text); max-width: 220px; display: none; }
+.zh-tip b { color: var(--cyan); }
+.zh-tip .zh-tip-dom { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* entries column */
+.zh-entries { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); display: flex; flex-direction: column; max-height: 72vh; }
+.zh-entries-hd { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); display: flex; justify-content: space-between; }
+.zh-entries-hd b { color: var(--text); }
+.zh-list { overflow-y: auto; }
+.zh-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.zh-row:hover { background: var(--bg-hover); }
+.zh-time { font-size: 11px; color: var(--text-muted); width: 40px; flex-shrink: 0; }
+.zh-chip { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: #06080f; }
+.zh-title { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zh-count { font-size: 10px; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; flex-shrink: 0; }
+.zh-empty { padding: 16px; color: var(--text-muted); font-size: 12px; text-align: center; }
+
+/* analytics rail */
+.zh-rail { display: flex; flex-direction: column; gap: 14px; }
+.zh-card { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); padding: 10px 12px; }
+.zh-card h4 { margin: 0 0 8px; font-size: 12px; color: var(--text-dim); font-weight: 600; letter-spacing: .04em; }
+.zh-date { font-size: 14px; color: var(--text); font-weight: 700; }
+.zh-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; font-size: 11px; color: var(--text-dim); }
+.zh-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.zh-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.zh-donut-wrap { display: flex; align-items: center; gap: 10px; }
+.zh-doms { list-style: none; margin: 0; padding: 0; }
+.zh-doms li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--text); }
+.zh-doms .zh-dom-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zh-doms .zh-dom-n { color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0 7px; font-size: 10px; }
