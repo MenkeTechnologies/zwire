@@ -607,6 +607,10 @@ function execZbCmd(c) {
           chrome.windows.update(ws[ni].id, { focused: true });
         });
       });
+    } else if (c.a === 'focusWindow' && c.windowId != null) {
+      // exposé pick: focus the chosen window (and optionally activate a tab in it).
+      chrome.windows.update(c.windowId, { focused: true }, function () { void chrome.runtime.lastError; });
+      if (c.tabId != null) chrome.tabs.update(c.tabId, { active: true }, function () { void chrome.runtime.lastError; });
     } else if (c.a === 'mergeWindows') {
       active(function (t) { if (!t) return; chrome.tabs.query({}, function (all) { (all || []).forEach(function (x) { if (x.windowId !== t.windowId) chrome.tabs.move(x.id, { windowId: t.windowId, index: -1 }, function () { void chrome.runtime.lastError; }); }); }); });
     // --- history ---
@@ -807,6 +811,22 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // cross-origin API under an arbitrary page CSP, so the worker (host_permissions
   // <all_urls>) does it once and shares { rates, ts }.
   if (msg && msg.type === 'zbGetRates') { getExchangeRates(sendResponse); return true; }
+  // Window/tab exposé (zexpose): a content script can't enumerate windows, so the
+  // worker returns every normal window with its tabs. Focus is driven back through
+  // the zb_cmd bus (focusWindow) with full window/tab permissions.
+  if (msg && msg.type === 'zbWindows') {
+    try {
+      chrome.windows.getAll({ populate: true }, function (ws) {
+        void chrome.runtime.lastError;
+        var out = (ws || []).filter(function (w) { return w.type === 'normal'; }).map(function (w) {
+          var tabs = (w.tabs || []).map(function (t) { return { id: t.id, title: t.title, url: t.url, active: !!t.active, pinned: !!t.pinned }; });
+          return { id: w.id, focused: !!w.focused, incognito: !!w.incognito, state: w.state, tabs: tabs };
+        });
+        sendResponse({ windows: out });
+      });
+    } catch (e) { sendResponse({ windows: [] }); }
+    return true;   // async sendResponse
+  }
   // Command-palette navigation: a content script can't open chrome://, an
   // extension page, or a new tab itself — do it here.
   if (msg && msg.type === 'zbopen' && msg.url) {

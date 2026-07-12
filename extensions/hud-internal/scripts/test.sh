@@ -61,6 +61,16 @@ fi
 command rm -f /tmp/zwire-hud-history.$$
 echo
 
+cyber_section "WINDOW EXPOSÉ (model + render)"
+if node tests/expose.mjs 2>/tmp/zwire-hud-expose.$$; then
+  cyber_ok "exposé nominal"
+else
+  FAIL=1; cyber_fail "exposé compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-expose.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-expose.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then

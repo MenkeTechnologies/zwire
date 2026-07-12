@@ -250,6 +250,8 @@
         "cmd-defaults.js",
         "palette-cmds.js",
         "zpalette.js",
+        "lib/zgui-core/webui/expose.js",
+        "zexpose.js",
         "zvim.js"
       ],
       "run_at": "document_start",

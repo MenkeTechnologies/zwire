@@ -166,6 +166,7 @@
     return [
       { icon: '＋', label: 'New tab', run: function () { cmd({ a: 'newTab' }); } },
       { icon: '⊞', label: 'New window', run: function () { cmd({ a: 'newWindow' }); } },
+      { icon: '▦', label: 'Expose all windows & tabs', detail: 'overview · switch', run: function () { try { if (window.__zbExposeOpen) window.__zbExposeOpen(); } catch (e) {} } },
       { icon: '⧉', label: 'Duplicate tab', run: function () { cmd({ a: 'duplicateTab' }); } },
       { icon: '↺', label: 'Reopen closed tab', run: function () { cmd({ a: 'reopenTab' }); } },
       { icon: '✕', label: 'Close tab', run: function () { cmd({ a: 'closeTab' }); } },
