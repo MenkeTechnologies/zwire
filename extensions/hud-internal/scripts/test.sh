@@ -71,6 +71,16 @@ fi
 command rm -f /tmp/zwire-hud-expose.$$
 echo
 
+cyber_section "NOTES + TRANSLATE (store + parser)"
+if node tests/notes.mjs 2>/tmp/zwire-hud-nt.$$ && node tests/translate.mjs 2>>/tmp/zwire-hud-nt.$$; then
+  cyber_ok "notes + translate nominal"
+else
+  FAIL=1; cyber_fail "notes + translate compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-nt.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-nt.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then

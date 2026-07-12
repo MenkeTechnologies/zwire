@@ -1,0 +1,19 @@
+/* zwire HUD Translate — two-pane translator, themed off the active scheme. */
+.zt-wrap { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 130px); }
+.zt-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.zt-lang { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; font: 13px "Share Tech Mono", Monaco, monospace; min-width: 150px; }
+.zt-lang:focus { border-color: var(--cyan); outline: none; }
+.zt-swap { background: var(--bg-card); color: var(--cyan); border: 1px solid var(--border); border-radius: 4px; padding: 6px 12px; font-size: 15px; cursor: pointer; }
+.zt-swap:hover { border-color: var(--cyan); box-shadow: 0 0 8px var(--cyan-glow); }
+.zt-det { font-size: 11px; color: var(--text-muted); }
+
+.zt-panes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; min-height: 0; }
+@media (max-width: 720px) { .zt-panes { grid-template-columns: 1fr; } }
+.zt-src, .zt-out { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 12px 14px; font: 14px/1.5 "Share Tech Mono", monospace; }
+.zt-src { resize: none; outline: none; width: 100%; height: 100%; }
+.zt-src:focus { border-color: var(--cyan); }
+.zt-out-wrap { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.zt-out { flex: 1; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+.zt-btn { background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 5px 10px; font: 12px "Share Tech Mono", monospace; cursor: pointer; }
+.zt-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+.zt-copy { align-self: flex-end; margin-top: 8px; }

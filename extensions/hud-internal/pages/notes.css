@@ -1,0 +1,29 @@
+/* zwire HUD Notes — folder tree + Markdown editor, themed off the active scheme. */
+.zn-wrap { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: start; height: calc(100vh - 130px); }
+@media (max-width: 720px) { .zn-wrap { grid-template-columns: 1fr; height: auto; } }
+
+.zn-tree { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.zn-toolbar { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); }
+.zn-btn { background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 5px 9px; font: 12px "Share Tech Mono", Monaco, monospace; cursor: pointer; }
+.zn-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+.zn-danger:hover { color: var(--accent); border-color: var(--accent); }
+.zn-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+.zn-row, .zn-folder { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; }
+.zn-row:hover, .zn-folder:hover { background: var(--bg-hover); }
+.zn-sel { background: var(--cyan-dim); }
+.zn-child { padding-left: 26px; }
+.zn-folder { font-weight: 600; color: var(--text); }
+.zn-row-ic { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.zn-row-t { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zn-row-d { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.zn-empty { padding: 16px; color: var(--text-muted); font-size: 12px; text-align: center; }
+
+.zn-edit { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); display: flex; flex-direction: column; height: 100%; padding: 12px; gap: 10px; overflow: hidden; }
+.zn-etools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.zn-move { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font: 12px "Share Tech Mono", monospace; }
+.zn-title { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 8px 10px; font: 14px "Share Tech Mono", monospace; outline: none; }
+.zn-title:focus { border-color: var(--cyan); }
+.zn-urlchip { font-size: 11px; color: var(--cyan); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zn-body { flex: 1; width: 100%; resize: none; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 10px; font: 13px/1.5 "Share Tech Mono", monospace; outline: none; }
+.zn-body:focus { border-color: var(--cyan); }
+.zn-preview { flex: 1; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; }

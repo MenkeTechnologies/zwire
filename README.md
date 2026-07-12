@@ -158,10 +158,13 @@ of `chrome://{extensions,settings,history,bookmarks,downloads,version}` — the
 **History** page defaults to a full-height, all-time list (Cmd+Y) and adds a
 Vivaldi-style calendar dashboard (Month/Week/Day: a month calendar with per-day
 activity, a per-day Entries list, and an analytics rail — a Browsing Activity area
-chart, a Link Transition donut, and Top Domains) — plus
+chart, a Link Transition donut, and Top Domains) — plus a **Notes** manager
+(Markdown notes in folders, ported from Vivaldi), a **Translate** panel
+(30+ languages, auto-detect, ported from Vivaldi),
 Keyboard, Commands, Sessions, a **Hooks** page, CI, a **Host** console, a
-**Terminal**, an **App Store**, and a live **Audio** page — 15 in all. Every shortcut, and the tmux
-prefix itself, is remappable on the Keyboard page.
+**Terminal**, and an **App Store**, plus a live **Audio** page. Notes and Translate
+open from the **Dashboard** tile grid (kept off the crowded page nav bar). Every
+shortcut, and the tmux prefix itself, is remappable on the Keyboard page.
 
 **Host console (`pages/host.html`).** A HUD tab that talks to the `zwire-host`
 native-messaging host directly — inspect and drive the native bridge from inside

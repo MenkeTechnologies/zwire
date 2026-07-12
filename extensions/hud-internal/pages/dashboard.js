@@ -54,6 +54,8 @@
         zt('store.html',        'App Store',     'MenkeTechnologies app catalog — install house apps.', '▦'),
         zt('history.html',      'History',       'Browsing history with fzf fuzzy search.', '◷'),
         zt('bookmarks.html',    'Bookmarks',     'HUD bookmark browser + editor.', '★'),
+        zt('notes.html',        'Notes',         'Markdown notes in folders — attach pages, live preview.', '▤'),
+        zt('translate.html',    'Translate',     'Translate text between 30+ languages with auto-detect.', '🌐'),
         zt('sessions.html',     'Sessions',      'Named tiling-workspace sessions — CRUD + SVG previews.', '▤'),
         zt('commands.html',     'Commands',      'Custom ⌘K palette commands (url / shell / js / scheme).', '⌘'),
         zt('keys.html',         'Keyboard',      'Remap every zwire shortcut + the tmux prefix.', '⌨'),
