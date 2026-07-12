@@ -29,7 +29,7 @@
   if (window.__zbExposeLoaded) return;
   window.__zbExposeLoaded = true;
 
-  var overlay = null, api = null, pollTimer = 0;
+  var overlay = null, api = null, storageListener = null;
   function cmd(obj) { try { obj.n = (window.__zbTick = (window.__zbTick || 0) + 1); chrome.storage.local.set({ zb_cmd: obj }); } catch (e) {} }
   function injectCss() {
     if (document.getElementById('zb-expose-css')) return;
@@ -48,9 +48,12 @@
       });
     } catch (e) {}
   }
-  function requestWindows(cb) { try { chrome.runtime.sendMessage({ type: 'zbWindows' }, function (r) { void chrome.runtime.lastError; cb((r && r.windows) || []); }); } catch (e) { cb([]); } }
+  // Read the worker-maintained window list from storage (reliable), and poke the
+  // worker to refresh it (a sendMessage RESPONSE to a sleeping MV3 worker is
+  // unreliable — same reason the palette reads zb_tabs from storage, not a reply).
+  function readWindows(cb) { try { chrome.storage.local.get('zb_windows', function (o) { void chrome.runtime.lastError; cb((o && o.zb_windows) || []); }); } catch (e) { cb([]); } }
   function close() {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = 0; }
+    if (storageListener) { try { chrome.storage.onChanged.removeListener(storageListener); } catch (e) {} storageListener = null; }
     if (overlay) { try { overlay.remove(); } catch (e) {} overlay = null; api = null; }
   }
   function open() {
@@ -66,7 +69,8 @@
     overlay.appendChild(panel);
     (document.body || document.documentElement).appendChild(overlay);
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-    requestWindows(function (wins) {
+    cmd({ a: 'ping' });   // wake the worker + refresh zb_windows (lands via onChanged below)
+    readWindows(function (wins) {
       if (!overlay) return;
       api = window.ZGui.expose(panel, {
         windows: exposeModel(wins),
@@ -75,10 +79,13 @@
         onChoose: function (id) { cmd({ a: 'focusWindow', windowId: id }); close(); },
         onClose: close
       });
-      // Live refresh while open (tabs open/close) — expose.set() patches in place,
-      // so this never steals keyboard focus or flickers.
-      pollTimer = setInterval(function () { requestWindows(function (w) { if (api && api.set) api.set(exposeModel(w)); }); }, 1500);
     });
+    // Live refresh while open — the worker rewrites zb_windows on tab/window events
+    // (and on our ping); patch tiles in place so focus/scroll never jump.
+    storageListener = function (ch, area) {
+      if (area === 'local' && ch.zb_windows && api && api.set) api.set(exposeModel(ch.zb_windows.newValue || []));
+    };
+    try { chrome.storage.onChanged.addListener(storageListener); } catch (e) {}
   }
   window.__zbExposeOpen = open;
   // Esc safety net (expose handles Esc on its own root too).

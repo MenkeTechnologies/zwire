@@ -502,14 +502,34 @@ try {
 } catch (e) {}
 pollCi();
 
-updateTabs();
+// Window/tab exposé (zexpose) reads this from storage — the SAME reliable pattern
+// as zb_tabs (a content-script sendMessage response to a sleeping MV3 worker is
+// unreliable, per zpalette). Every normal window with its tabs.
+function updateWindows() {
+  try {
+    chrome.windows.getAll({ populate: true }, function (ws) {
+      void chrome.runtime.lastError;
+      chrome.storage.local.set({ zb_windows: (ws || []).filter(function (w) { return w.type === 'normal'; }).map(function (w) {
+        return { id: w.id, focused: !!w.focused, incognito: !!w.incognito, state: w.state,
+          tabs: (w.tabs || []).map(function (t) { return { id: t.id, title: t.title, url: t.url, active: !!t.active, pinned: !!t.pinned }; }) }; }) });
+    });
+  } catch (e) {}
+}
+function updateTabsAndWindows() { updateTabs(); updateWindows(); }
+
+updateTabs(); updateWindows();
 try {
-  chrome.tabs.onCreated.addListener(updateTabs);
-  chrome.tabs.onRemoved.addListener(updateTabs);
-  chrome.tabs.onActivated.addListener(updateTabs);
-  chrome.tabs.onMoved.addListener(updateTabs);
-  chrome.tabs.onUpdated.addListener(function (id, info) { if (info.title || info.url || info.status === 'complete') updateTabs(); });
-  chrome.runtime.onStartup.addListener(updateTabs);
+  chrome.tabs.onCreated.addListener(updateTabsAndWindows);
+  chrome.tabs.onRemoved.addListener(updateTabsAndWindows);
+  chrome.tabs.onActivated.addListener(updateTabsAndWindows);
+  chrome.tabs.onMoved.addListener(updateTabsAndWindows);
+  chrome.tabs.onUpdated.addListener(function (id, info) { if (info.title || info.url || info.status === 'complete') updateTabsAndWindows(); });
+  chrome.runtime.onStartup.addListener(updateTabsAndWindows);
+  if (chrome.windows) {
+    chrome.windows.onCreated.addListener(updateWindows);
+    chrome.windows.onRemoved.addListener(updateWindows);
+    chrome.windows.onFocusChanged.addListener(updateWindows);
+  }
 } catch (e) {}
 
 // The single browser-action executor. Every path feeds it through the zb_cmd storage bus:
@@ -526,7 +546,7 @@ function execZbCmd(c) {
     });
   }
   try {
-    if (c.a === 'ping') { updateTabs(); updateExts(); updateFrecent(); updateShortcuts(); return; }   // wake + refresh lists
+    if (c.a === 'ping') { updateTabs(); updateWindows(); updateExts(); updateFrecent(); updateShortcuts(); return; }   // wake + refresh lists
     if (c.a === 'open' && c.url) {
       active(function (t) { if (t) chrome.tabs.update(t.id, { url: c.url }); else chrome.tabs.create({ url: c.url }); });
     } else if (c.a === 'openTab' && c.url) {
@@ -811,22 +831,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // cross-origin API under an arbitrary page CSP, so the worker (host_permissions
   // <all_urls>) does it once and shares { rates, ts }.
   if (msg && msg.type === 'zbGetRates') { getExchangeRates(sendResponse); return true; }
-  // Window/tab exposé (zexpose): a content script can't enumerate windows, so the
-  // worker returns every normal window with its tabs. Focus is driven back through
-  // the zb_cmd bus (focusWindow) with full window/tab permissions.
-  if (msg && msg.type === 'zbWindows') {
-    try {
-      chrome.windows.getAll({ populate: true }, function (ws) {
-        void chrome.runtime.lastError;
-        var out = (ws || []).filter(function (w) { return w.type === 'normal'; }).map(function (w) {
-          var tabs = (w.tabs || []).map(function (t) { return { id: t.id, title: t.title, url: t.url, active: !!t.active, pinned: !!t.pinned }; });
-          return { id: w.id, focused: !!w.focused, incognito: !!w.incognito, state: w.state, tabs: tabs };
-        });
-        sendResponse({ windows: out });
-      });
-    } catch (e) { sendResponse({ windows: [] }); }
-    return true;   // async sendResponse
-  }
+  // (Window/tab exposé reads the worker-maintained zb_windows from storage — see
+  // updateWindows — not a message response, which is unreliable to a sleeping SW.)
   // Command-palette navigation: a content script can't open chrome://, an
   // extension page, or a new tab itself — do it here.
   if (msg && msg.type === 'zbopen' && msg.url) {

@@ -45,13 +45,16 @@ const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
   const removed = [];
   const bodyEl = makeEl('div');
   globalThis.document = { createElement: (t) => makeEl(t), getElementById: () => null, documentElement: makeEl('html'), head: makeEl('head'), body: bodyEl, addEventListener() {} };
-  globalThis.setInterval = () => 1; globalThis.clearInterval = () => {};
 
+  // zexpose reads zb_windows from storage (reliable bus) and pings the worker to refresh it.
   const windows = [{ id: 7, focused: true, tabs: [{ id: 70, title: 'T', active: true }] }];
-  let sentZbCmd = null;
+  let sentZbCmd = null, storageSub = null;
   globalThis.chrome = {
-    runtime: { lastError: null, getURL: (p) => 'chrome-extension://x/' + p, sendMessage: (msg, cb) => { if (msg.type === 'zbWindows') cb({ windows: windows }); } },
-    storage: { local: { get: (_k, cb) => cb({ zb_scheme: 'cyberpunk' }), set: (o) => { if (o && o.zb_cmd) sentZbCmd = o.zb_cmd; } } },
+    runtime: { lastError: null, getURL: (p) => 'chrome-extension://x/' + p },
+    storage: {
+      local: { get: (_k, cb) => cb({ zb_windows: windows, zb_scheme: 'cyberpunk' }), set: (o) => { if (o && o.zb_cmd) sentZbCmd = o.zb_cmd; } },
+      onChanged: { addListener: (fn) => { storageSub = fn; }, removeListener: () => { storageSub = null; } },
+    },
   };
   let exposeOpts = null;
   const win = { ZWIRE_HUD: { SCHEMES: { cyberpunk: { vars: {} } }, VAR_KEYS: [] },
@@ -62,9 +65,12 @@ const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
   assert.equal(typeof win.__zbExposeOpen, 'function', '__zbExposeOpen defined');
   win.__zbExposeOpen();
   assert.ok(exposeOpts, 'ZGui.expose was called');
-  assert.equal(exposeOpts.windows.length, 1, 'one window mapped into the exposé');
+  assert.equal(exposeOpts.windows.length, 1, 'one window read from zb_windows storage (not a message response)');
   assert.equal(exposeOpts.windows[0].title, 'T');
   assert.ok(bodyEl.children.length >= 1, 'overlay mounted to body');
+  assert.ok(storageSub, 'live-refresh subscribes to storage.onChanged');
+  // a fresh zb_windows write updates the exposé in place.
+  storageSub({ zb_windows: { newValue: [] } }, 'local');
 
   // picking a window routes to the focusWindow bus and closes.
   exposeOpts.onChoose(7);
