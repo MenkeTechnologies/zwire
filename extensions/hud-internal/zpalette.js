@@ -372,6 +372,14 @@
   var searchProvider = PC.makeSearchProvider ? PC.makeSearchProvider(open) : function () { return []; };
   function customItems(list) { return PC.makeCustomItems ? PC.makeCustomItems(list, CMDCTX) : []; }
   var customProvider = PC.makeCustomProvider ? PC.makeCustomProvider(function () { return customCache; }, CMDCTX) : function () { return []; };
+  // Inline compute (ported from zgo-core): calc / unit + currency conversion /
+  // percentage, plus `@ <code>` stryke through the host relay. The result pins to
+  // the top row and copies to the clipboard on ⏎. Currency rates come from the
+  // worker (see zbGetRates), primed on open so the table is ready by first type.
+  var COMPUTECTX = { copy: clip, toast: function (t) { hostToast(t); }, runStryke: runStryke };
+  var computeProvider = PC.makeComputeProvider ? PC.makeComputeProvider(COMPUTECTX) : function () { return []; };
+  function getRates(cb) { try { chrome.runtime.sendMessage({ type: 'zbGetRates' }, function (r) { void chrome.runtime.lastError; cb(r); }); } catch (e) { cb(null); } }
+  function refreshPalette() { try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {} }
 
   function tabItems(tabs) {
     return (tabs || []).map(function (t) {
@@ -444,7 +452,8 @@
     schemeVars(injectStyle);
     // Open SYNCHRONOUSLY with the static commands so it never depends on an
     // async read — nav always works. Tabs (storage bus) are appended after.
-    try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); } ZGui.palette.open(); } catch (ex) {}
+    try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); } ZGui.palette.open(); } catch (ex) {}
+    try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
     try {
       chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {
         void chrome.runtime.lastError;

@@ -277,6 +277,16 @@
   var searchProvider = PC.makeSearchProvider ? PC.makeSearchProvider(goCurrent) : function () { return []; };
   var customProvider = PC.makeCustomProvider ? PC.makeCustomProvider(function () { return customCache; }, CMDCTX) : function () { return []; };
   function customItems(list) { return PC.makeCustomItems ? PC.makeCustomItems(list, CMDCTX) : []; }
+  // Inline compute (ported from zgo-core): calc / unit + currency conversion /
+  // percentage + `@ <code>` stryke. stryke runs through the SAME cross-ext host
+  // bridge the custom stryke step uses; currency rates come from the hud worker
+  // (zwireGetRates) since the new-tab page can't fetch a cross-origin API here.
+  function computeCopy(t) { try { navigator.clipboard.writeText(t); } catch (e) {} }
+  function computeStryke(code) { bridgeHost({ cmd: 'stryke_run', code: code }, function (res) { toastReply('stryke', '⟨stryke⟩', res, false); }); }
+  var COMPUTECTX = { copy: computeCopy, toast: function (t) { hostToast(t); }, runStryke: computeStryke };
+  var computeProvider = PC.makeComputeProvider ? PC.makeComputeProvider(COMPUTECTX) : function () { return []; };
+  function getRates(cb) { try { chrome.runtime.sendMessage(HUD_ID, { type: 'zwireGetRates' }, function (r) { void chrome.runtime.lastError; cb(r); }); } catch (e) { cb(null); } }
+  function refreshPalette() { try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {} }
   // Custom commands live in hud-internal's storage (the Commands page writes
   // there) and storage is per-extension, so pull the AUTHORITATIVE list from hud
   // over cross-extension messaging — that includes user-added commands (e.g. a
@@ -306,9 +316,10 @@
     try {
       ZGui.palette.clear();
       ZGui.palette.register(items());
-      if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); }
+      if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); }
       ZGui.palette.open();
     } catch (e) {}
+    try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
     // custom commands (personal + shipped defaults), tiered like the HUD palette
     try {
       seedCustom(function () {

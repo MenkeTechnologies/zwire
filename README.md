@@ -141,7 +141,13 @@ verbs to — so a stryke script sees one combined, introspectable `browser.*`
 surface via `App::here()->verbs()`.
 
 **Around it:** a **⌘K command palette** (`zpalette`) — which also carries the
-scheme picker, the light/dark toggle, and the settings controls — **vim-style
+scheme picker, the light/dark toggle, the settings controls, and an **inline
+compute layer** (ported from zgo-core): type a sum (`2^10`, `sqrt(2)+1`), a unit
+conversion (`10 km to miles`, `72 f in c`, `1 gb to mb`), a live currency
+conversion (`100 usd to eur`, rates fetched + cached by the host), a percentage
+(`20% of 150`, `150 + 20%`, `10 to 12`), or an `@`-prefixed stryke expression
+(`@ 1:10 |> sum`) and the answer pins to the top row, copyable with ⏎ —
+**vim-style
 motions** (`zkeys`/`zvim` — jump / scroll / tabs / launch categories), a **find
 bar** (`zfind`), a **powerline status bar** (`ZGui.powerline`, fed by
 `zpowerline.js` from the native host's `zb_sys` system stats + the tmux

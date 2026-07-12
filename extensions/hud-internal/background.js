@@ -87,6 +87,8 @@ try {
     // `windows`/`sessions` perms, so a local executor there couldn't do newWindow/reopenTab).
     if (msg.type === 'zb-host' && msg.req) { relayHost(msg.req, sendResponse); return true; }
     if (msg.type === 'zbAction' && msg.action) { execZbCmd(msg.action); sendResponse({ ok: true }); return; }
+    // Live FX rates for the new-tab palette's inline currency conversion (see zbGetRates).
+    if (msg.type === 'zwireGetRates') { getExchangeRates(sendResponse); return true; }
     // (theme toggles used to come through here from newtab; newtab now writes the
     // host directly, so those handlers are gone.)
   });
@@ -437,6 +439,29 @@ function ghFetch(path, token, cb) {
   try { fetch('https://api.github.com' + path, { headers: h }).then(function (r) { return r.ok ? r.json() : null; }).then(cb).catch(function () { cb(null); }); }
   catch (e) { cb(null); }
 }
+// Live exchange rates for the palette's inline currency conversion. Cached in
+// storage 'zb_rates' = { base:'USD', rates:{CODE:unitsPerBase}, ts }; refreshed
+// at most every 12h. open.er-api.com is keyless. On a fetch failure we return
+// whatever is cached (possibly nothing) so currency degrades gracefully.
+var RATES_TTL = 12 * 60 * 60 * 1000;
+function getExchangeRates(cb) {
+  try {
+    chrome.storage.local.get('zb_rates', function (o) {
+      void chrome.runtime.lastError;
+      var cached = o && o.zb_rates;
+      if (cached && cached.rates && cached.ts && (Date.now() - cached.ts) < RATES_TTL) { cb(cached); return; }
+      fetch('https://open.er-api.com/v6/latest/USD')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j || j.result !== 'success' || !j.rates) { cb(cached || null); return; }
+          var fresh = { base: j.base_code || 'USD', rates: j.rates, ts: Date.now() };
+          try { chrome.storage.local.set({ zb_rates: fresh }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+          cb(fresh);
+        })
+        .catch(function () { cb(cached || null); });
+    });
+  } catch (e) { cb(null); }
+}
 function pollCi() {
   try {
     chrome.storage.local.get(['zb_ci', 'zb_ci_status'], function (o) {
@@ -776,6 +801,12 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     relayHost(msg.req, sendResponse);
     return true;   // async sendResponse
   }
+  // Inline currency conversion (palette compute provider, ported from zgo-core):
+  // the engine does the cross-rate math, the host owns fetching + caching the
+  // live rate table. Content scripts / extension pages can't reliably fetch a
+  // cross-origin API under an arbitrary page CSP, so the worker (host_permissions
+  // <all_urls>) does it once and shares { rates, ts }.
+  if (msg && msg.type === 'zbGetRates') { getExchangeRates(sendResponse); return true; }
   // Command-palette navigation: a content script can't open chrome://, an
   // extension page, or a new tab itself — do it here.
   if (msg && msg.type === 'zbopen' && msg.url) {

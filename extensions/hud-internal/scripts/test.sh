@@ -41,6 +41,16 @@ fi
 command rm -f /tmp/zwire-hud-spec.$$
 echo
 
+cyber_section "PALETTE COMPUTE (calc / units / percent / currency ports)"
+if node tests/compute.mjs 2>/tmp/zwire-hud-compute.$$; then
+  cyber_ok "compute engine nominal"
+else
+  FAIL=1; cyber_fail "compute engine compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-compute.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-compute.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then
