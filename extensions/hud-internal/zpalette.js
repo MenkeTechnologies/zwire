@@ -146,6 +146,11 @@
     CHROME.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { open(p[2]); } }); });
     SETTINGS.forEach(function (p) { out.push({ icon: '⚙', label: 'Settings: ' + p[0], detail: p[1], run: function () { open(p[1]); } }); });
     WEB.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { open(p[2]); } }); });
+    // zpwrchrome's tool pages — registered like any other destination so they
+    // ALWAYS appear (no cross-ext ping: a content script can't message another
+    // extension, so gating on liveness silently hid them). open() routes the
+    // absolute chrome-extension:// URL via the worker's openTab, same as newtab.
+    if (window.ZWIRE_PALETTE_CMDS && window.ZWIRE_PALETTE_CMDS.makeZpwrItems) window.ZWIRE_PALETTE_CMDS.makeZpwrItems(open).forEach(function (it) { out.push(it); });
     ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the whole browser', run: function () { setScheme(n); } }); });
     return out;
   }
@@ -490,15 +495,6 @@
     // async read — nav always works. Tabs (storage bus) are appended after.
     try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); } ZGui.palette.open(); } catch (ex) {}
     try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
-    // zpwrchrome pages (the sibling extension's tools). This palette is a CONTENT
-    // SCRIPT, which can't cross-ext message — so ask OUR worker to ping zpwrchrome
-    // (zwireZpwrPing). If it can't answer (disabled/removed) we show no dead rows.
-    try {
-      if (PC.makeZpwrItems) chrome.runtime.sendMessage({ type: 'zwireZpwrPing' }, function (r) {
-        if (chrome.runtime.lastError || !r || !r.alive) return;
-        try { ZGui.palette.register(PC.makeZpwrItems(open)); var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {}
-      });
-    } catch (e) {}
     try {
       chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {
         void chrome.runtime.lastError;
