@@ -271,6 +271,40 @@ or toolbar (those are native C++), and it cannot add a tiling overlay or a
 command palette. The HUD extension layer adds the workspace; the `fork/` build
 adds the native styling — together they are zwire.
 
+### Command palette (⌘K)
+
+The **same** palette renders on **four** surfaces — they can't be one instance
+(different extensions / execution contexts), so they share one item source
+instead. This is the part that reads as "how many palettes are there?", so it is
+spelled out here.
+
+| # | Surface | Where | File | Context |
+|---|---|---|---|---|
+| 1 | Web-page palette | any `http(s)`/`file`/`chrome://` tab | `hud-internal/zpalette.js` | content script |
+| 2 | HUD-page palette | HUD pages (Settings, Sessions, Host, …) | `hud-internal/pages/zg-boot.js` | extension page |
+| 3 | New Tab palette | the new-tab page | `newtab/palette.js` | extension page |
+| 4 | zpwrchrome palette | zpwrchrome dashboard pages | `zpwrchrome/lib/zpc-palette.js` | extension page |
+
+Surfaces **1 and 2 are both hud-internal** (a web page gets the content-script
+palette; a HUD page gets the zg-boot palette) — that is why it looks like three
+but is four.
+
+- **Single source of truth:** `palette-cmds.js` (`ZWIRE_PALETTE_CMDS`) owns the
+  item set + ranking (search, custom commands, inline compute, and the
+  zpwrchrome page list via `makeZpwrItems`). Backend-agnostic; **vendored
+  verbatim** into `hud-internal/` (canonical — edit this), `newtab/`, and
+  `zpwrchrome/lib/`. Each surface must actually load it or its zpwrchrome rows
+  silently vanish (HUD pages load it via `<script src="../palette-cmds.js">`).
+- **⌘K ownership:** hud-internal owns ⌘K browser-wide as a `chrome.commands`
+  shortcut (a page keydown can't intercept it) and its service worker routes to
+  the palette matching the active tab (web page → 1, HUD page → 2, new tab → 3,
+  zpwrchrome page → 4 via cross-extension message).
+- **Gotchas:** content scripts (surface 1) can't cross-extension message, so the
+  zpwrchrome rows are registered unconditionally there rather than gated on a
+  liveness ping. MV3 service-worker code changes need the profile's SW script
+  cache purged (`localinstall.sh` does it on a manifest **version bump**);
+  content-script / extension-page / HTML changes only need a page reload.
+
 ## `[0x03] INSTALL`
 
 ```sh
