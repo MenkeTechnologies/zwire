@@ -580,6 +580,34 @@ function captureVisible() {
   } catch (e) {}
 }
 
+// ---- Auto-hibernate / sleeping tabs (ports Edge sleeping tabs / Chrome Memory
+// Saver). Discard tabs left untouched past the threshold (zb_autohibernate mins;
+// 0 = off, default 30). Active / pinned / audible / already-discarded are spared.
+var tabLastActive = {};
+try { chrome.tabs.onActivated.addListener(function (info) { tabLastActive[info.tabId] = Date.now(); }); } catch (e) {}
+function staleTabIds(tabs, lastActive, now, thresholdMs) {
+  return (tabs || []).filter(function (t) {
+    if (t.active || t.pinned || t.audible || t.discarded) return false;
+    var la = lastActive[t.id]; if (la == null) return false;   // unseen → let the next sweep age it
+    return (now - la) > thresholdMs;
+  }).map(function (t) { return t.id; });
+}
+function hibernateSweep() {
+  try {
+    chrome.storage.local.get('zb_autohibernate', function (o) {
+      void chrome.runtime.lastError;
+      var mins = (o && typeof o.zb_autohibernate === 'number') ? o.zb_autohibernate : 30;
+      if (!mins) return;   // 0 = off
+      chrome.tabs.query({}, function (tabs) {
+        void chrome.runtime.lastError; var now = Date.now();
+        (tabs || []).forEach(function (t) { if (t.id != null && !t.active && tabLastActive[t.id] == null) tabLastActive[t.id] = now; });   // seed so a later sweep can age it
+        staleTabIds(tabs, tabLastActive, now, mins * 60000).forEach(function (id) { try { chrome.tabs.discard(id, function () { void chrome.runtime.lastError; }); } catch (e) {} });
+      });
+    });
+  } catch (e) {}
+}
+try { chrome.alarms.create('zb-hibernate', { periodInMinutes: 5 }); chrome.alarms.onAlarm.addListener(function (a) { if (a.name === 'zb-hibernate') hibernateSweep(); }); } catch (e) {}
+
 function pollCi() {
   try {
     chrome.storage.local.get(['zb_ci', 'zb_ci_status'], function (o) {

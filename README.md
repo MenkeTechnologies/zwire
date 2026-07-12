@@ -158,7 +158,10 @@ current selection into Notes), a **Trash** dropdown (`ztrash` — restore recent
 closed tabs), **tab hibernation** (discard this / other tabs) + **tab stacks**
 (group tabs by domain), a **cookie-banner blocker** (`zcookies` — hides consent /
 GDPR popups + unlocks scroll), **spatial navigation** (`zspatial` — Shift+Arrow
-jumps focus to the nearest link/field), and an **inline
+jumps focus to the nearest link/field), **Read Aloud** (`zspeak` — text-to-speech
+of the selection/article), **Link Peek** (`zpeek` — Alt+click a link → floating
+preview), **Element Zapper** (`zzap` — click to hide page clutter, persists per
+site), **auto-hibernate** (sleeping tabs after 30 min idle), and an **inline
 compute layer** (ported from zgo-core): type a sum (`2^10`, `sqrt(2)+1`), a unit
 conversion (`10 km to miles`, `72 f in c`, `1 gb to mb`), a live currency
 conversion (`100 usd to eur`, rates fetched + cached by the host), a percentage

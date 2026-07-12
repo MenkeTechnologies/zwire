@@ -117,4 +117,30 @@ function load(file) { const win = {}; new Function('window', fs.readFileSync(new
   assert.equal(pick([], from, 'down'), -1);
 }
 
-console.log('browser tools (reader / gestures / reload / panels / pip / readinglist / cookies / spatial): all assertions passed');
+// ---- Read Aloud: sentence chunker ----
+{
+  const s = load('zspeak.js');
+  const chunk = s.__zbSpeakChunks;
+  assert.ok(chunk, 'speak chunker not exposed');
+  assert.deepEqual(chunk(''), []);
+  assert.deepEqual(chunk('Hello world.'), ['Hello world.']);
+  // splits on sentence boundaries once the cap is exceeded.
+  const out = chunk('One sentence here. Two sentence here. Three sentence here.', 25);
+  assert.ok(out.length >= 2, 'long text splits into multiple chunks');
+  out.forEach((c) => assert.ok(c.length <= 40, 'each chunk stays near the cap'));
+  assert.equal(out.join(' ').replace(/\s+/g, ' '), 'One sentence here. Two sentence here. Three sentence here.', 'no text lost');
+}
+
+// ---- Element Zapper: selector builder ----
+{
+  const z = load('zzap.js');
+  const path = z.__zbZapPath;
+  assert.ok(path, 'zap path builder not exposed');
+  // leaf→root steps; nth-of-type chain, root→leaf output.
+  assert.equal(path([{ tag: 'span', nth: 2 }, { tag: 'div', nth: 1 }, { tag: 'body', nth: 1 }]), 'body:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(2)');
+  // an id short-circuits the walk (ids are unique).
+  assert.equal(path([{ tag: 'span', nth: 3 }, { tag: 'div', id: 'main' }]), '#main > span:nth-of-type(3)');
+  assert.equal(path([]), '');
+}
+
+console.log('browser tools (reader / gestures / reload / panels / pip / readinglist / cookies / spatial / speak / zap): all assertions passed');

@@ -263,6 +263,9 @@
         "ztrash.js",
         "zcookies.js",
         "zspatial.js",
+        "zspeak.js",
+        "zpeek.js",
+        "zzap.js",
         "zvim.js"
       ],
       "run_at": "document_start",
