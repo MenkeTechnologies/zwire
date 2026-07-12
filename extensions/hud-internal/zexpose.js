@@ -40,6 +40,23 @@
   if (window.__zbExposeLoaded) return;
   window.__zbExposeLoaded = true;
 
+  // Report THIS page's content excerpt to the worker (reliable direct DOM read —
+  // no scripting API) so the exposé shows real page content. zexpose loads at
+  // document_start when body is null, so wait for load; refresh when hidden.
+  function reportExcerpt() {
+    try {
+      var b = (document.body && document.body.innerText) || '';
+      b = b.replace(/\s+/g, ' ').trim();
+      if (!b) { var m = document.querySelector('meta[name="description"]'); b = (m && m.content) || ''; }
+      if (b) chrome.runtime.sendMessage({ type: 'zbTabExcerpt', text: b.slice(0, 600) }, function () { void chrome.runtime.lastError; });
+    } catch (e) {}
+  }
+  try {
+    if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(reportExcerpt, 800);
+    else window.addEventListener('load', function () { setTimeout(reportExcerpt, 800); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') reportExcerpt(); });
+  } catch (e) {}
+
   var overlay = null, api = null, storageListener = null;
   function cmd(obj) { try { obj.n = (window.__zbTick = (window.__zbTick || 0) + 1); chrome.storage.local.set({ zb_cmd: obj }); } catch (e) {} }
   function injectCss() {

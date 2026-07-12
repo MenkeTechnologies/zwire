@@ -135,9 +135,12 @@ try {
       return;
     }
     if (msg.type === 'zbTermState') { sendResponse({ open: termOpenByTab[tid] === true }); return true; }
+    // zexpose reports each page's content excerpt (read from its own DOM) for the
+    // exposé previews — reliable, no scripting API needed.
+    if (msg.type === 'zbTabExcerpt') { setPreview(tid, msg.text); return; }
   });
 } catch (e) {}
-try { chrome.tabs.onRemoved.addListener(function (tid) { delete termOpenByTab[tid]; }); } catch (e) {}
+try { chrome.tabs.onRemoved.addListener(function (tid) { delete termOpenByTab[tid]; setPreview(tid, null); }); } catch (e) {}
 
 // First run: open the HUD App Store page and pop the welcome modal, so the
 // MenkeTechnologies app store is shown up front. Unpacked extensions loaded via
@@ -525,6 +528,15 @@ function updateTabsAndWindows() { updateTabs(); updateWindows(); }
 // executeScript, so it must be standalone — only DOM APIs); captureExcerpts fans
 // it out over every http(s) tab and publishes zb_tab_previews = { tabId: text }.
 // Runs only when the exposé asks (zb_cmd exposeCapture) — no always-on cost.
+// Merged excerpt store, published to storage for the exposé. Two feeders:
+//   1) content scripts (zexpose reportExcerpt) that read their own DOM directly —
+//      RELIABLE (no scripting API), covers every page as it loads/hides;
+//   2) captureExcerpts (executeScript) on exposé-open — covers already-open tabs.
+// All writes go through the single-threaded worker, so no merge races.
+var PREVIEWS = {};
+try { chrome.storage.local.get('zb_tab_previews', function (o) { void chrome.runtime.lastError; if (o && o.zb_tab_previews) PREVIEWS = o.zb_tab_previews; }); } catch (e) {}
+function publishPreviews() { try { chrome.storage.local.set({ zb_tab_previews: PREVIEWS }); } catch (e) {} }
+function setPreview(tabId, text) { if (tabId == null) return; if (text) PREVIEWS[tabId] = text; else delete PREVIEWS[tabId]; publishPreviews(); }
 function grabExcerpt() {
   try {
     var b = (document.body && document.body.innerText) || '';
@@ -539,16 +551,16 @@ function captureExcerpts() {
     chrome.tabs.query({}, function (tabs) {
       void chrome.runtime.lastError;
       tabs = (tabs || []).filter(function (t) { return t.id != null && /^https?:/.test(t.url || ''); });
-      var out = {}, pending = tabs.length;
-      if (!pending) { chrome.storage.local.set({ zb_tab_previews: out }); return; }
+      var pending = tabs.length;
+      if (!pending) { publishPreviews(); return; }
       tabs.forEach(function (t) {
         try {
           chrome.scripting.executeScript({ target: { tabId: t.id, allFrames: false }, func: grabExcerpt }, function (res) {
             void chrome.runtime.lastError;
-            if (res && res[0] && res[0].result) out[t.id] = res[0].result;
-            if (--pending <= 0) chrome.storage.local.set({ zb_tab_previews: out });
+            if (res && res[0] && res[0].result) PREVIEWS[t.id] = res[0].result;
+            if (--pending <= 0) publishPreviews();
           });
-        } catch (e) { if (--pending <= 0) chrome.storage.local.set({ zb_tab_previews: out }); }
+        } catch (e) { if (--pending <= 0) publishPreviews(); }
       });
     });
   } catch (e) {}
