@@ -1,52 +1,39 @@
-// Window/tab exposé test (zexpose.js). Part 1 covers the pure window->tile model
-// (window.__zbExposeModel); part 2 drives __zbExposeOpen() against a DOM + chrome
-// + ZGui.expose shim, asserting it maps windows, mounts an overlay, and routes a
-// pick to the focusWindow bus. No jsdom — a tiny element shim.
+// Window/tab exposé test (zexpose.js). Part 1 covers the pure tab->tile model
+// (window.__zbTabTiles): one tile per tab, page excerpt as preview, host + window
+// in the meta, url fallback. Part 2 drives __zbExposeOpen() against a DOM + chrome
+// + ZGui.expose shim: it must read zb_tabs + zb_tab_previews, ask the worker to
+// capture excerpts, mount a grid, and route a pick to activate that tab.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
 
-// ---- part 1: pure model (loads headless: no chrome -> helpers only) ----
+// ---- part 1: pure tile model ----
 {
   const win = {};
   new Function('window', src)(win);
-  const model = win.__zbExposeModel;
-  assert.ok(model, '__zbExposeModel not exposed');
+  const tabTiles = win.__zbTabTiles;
+  assert.ok(tabTiles, '__zbTabTiles not exposed');
 
-  const tiles = model([
-    { id: 11, focused: true, incognito: false, state: 'normal', tabs: [
-      { id: 1, title: 'A', active: false, pinned: true }, { id: 2, title: 'B', active: true, pinned: false }] },
-    { id: 12, focused: false, incognito: true, state: 'minimized', tabs: [{ id: 3, title: 'C', active: true }] },
-  ]);
-  assert.equal(tiles.length, 2);
-  assert.equal(tiles[0].id, 11);
-  assert.equal(tiles[0].title, 'B', 'tile title = active tab title');
-  assert.equal(tiles[0].tabId, 2, 'tabId = active tab id');
-  assert.equal(tiles[0].focused, true);
-  assert.equal(tiles[0].meta, '2 tabs', 'two tabs, non-incognito, normal state');
-  assert.match(tiles[0].preview, /▸ B/, 'active tab marked with ▸');
-  assert.match(tiles[0].preview, /⚲ A/, 'pinned tab marked');
-  assert.equal(tiles[1].meta, '1 tab · incognito · minimized', 'incognito + state in meta');
-  assert.equal(model([]).length, 0);
+  const tabs = [
+    { id: 1, title: 'A', url: 'https://github.com/x', windowId: 100, active: false, pinned: true },
+    { id: 2, title: 'B', url: 'https://www.wikipedia.org/', windowId: 100, active: true },
+    { id: 3, title: 'C', url: 'https://news.ycombinator.com/', windowId: 200, active: true },
+  ];
+  const tiles = tabTiles(tabs, { 1: 'the readme text', 2: 'an encyclopedia' });
+  assert.equal(tiles.length, 3, 'one tile per tab');
+  assert.equal(tiles[0].title, '⚲ A', 'pinned tab marked');
+  assert.equal(tiles[1].focused, true, 'active tab is focused');
+  assert.equal(tiles[0].preview, 'the readme text', 'page excerpt is the tile preview');
+  assert.equal(tiles[2].preview, 'https://news.ycombinator.com/', 'url fallback when no excerpt');
+  assert.match(tiles[0].meta, /github\.com/, 'host in meta (www stripped)');
+  assert.match(tiles[0].meta, /window 1/, 'window label when multiple windows');
+  assert.match(tiles[2].meta, /window 2/);
+  assert.equal(tiles[0].tabId, 1, 'tabId carried for focus');
 
-  // windowsFromTabs: reconstruct windows from the flat zb_tabs list by windowId.
-  const wft = win.__zbWindowsFromTabs;
-  assert.ok(wft, '__zbWindowsFromTabs not exposed');
-  const wins = wft([
-    { id: 1, title: 'A', url: 'a', windowId: 100, active: false },
-    { id: 2, title: 'B', url: 'b', windowId: 100, active: true },
-    { id: 3, title: 'C', url: 'c', windowId: 200, active: true },
-  ]);
-  assert.equal(wins.length, 2, 'two windows grouped from three tabs');
-  assert.equal(wins[0].id, 100);
-  assert.equal(wins[0].tabs.length, 2);
-  assert.equal(wins[1].id, 200);
-  // and it round-trips through exposeModel into real tiles.
-  const t2 = model(wft([{ id: 9, title: 'Solo', windowId: 5, active: true }]));
-  assert.equal(t2.length, 1);
-  assert.equal(t2[0].title, 'Solo');
-  assert.equal(wft([]).length, 0);
+  const single = tabTiles([{ id: 5, title: 'S', url: 'https://x.io/', windowId: 9, active: true }], {});
+  assert.ok(single[0].meta.indexOf('window') < 0, 'single window omits the window label');
+  assert.equal(tabTiles([]).length, 0);
 }
 
 // ---- part 2: render smoke ----
@@ -64,18 +51,17 @@ const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
   const bodyEl = makeEl('div');
   globalThis.document = { createElement: (t) => makeEl(t), getElementById: () => null, documentElement: makeEl('html'), head: makeEl('head'), body: bodyEl, addEventListener() {} };
 
-  // Real-world path: zb_windows EMPTY (getAll gave nothing on this build), so the
-  // exposé must fall back to grouping the reliable zb_tabs list.
   const zbTabs = [
-    { id: 70, title: 'T', url: 'u1', windowId: 7, active: true },
-    { id: 71, title: 'U', url: 'u2', windowId: 7, active: false },
-    { id: 90, title: 'V', url: 'u3', windowId: 9, active: true },
+    { id: 70, title: 'T', url: 'https://a.com', windowId: 7, active: true },
+    { id: 71, title: 'U', url: 'https://b.com', windowId: 7, active: false },
   ];
-  let sentZbCmd = null, storageSub = null;
+  const previews = { 70: 'excerpt of A' };
+  const sentCmds = [];
+  let storageSub = null;
   globalThis.chrome = {
     runtime: { lastError: null, getURL: (p) => 'chrome-extension://x/' + p },
     storage: {
-      local: { get: (_k, cb) => cb({ zb_windows: [], zb_tabs: zbTabs, zb_scheme: 'cyberpunk' }), set: (o) => { if (o && o.zb_cmd) sentZbCmd = o.zb_cmd; } },
+      local: { get: (_k, cb) => cb({ zb_tabs: zbTabs, zb_tab_previews: previews, zb_scheme: 'cyberpunk' }), set: (o) => { if (o && o.zb_cmd) sentCmds.push(o.zb_cmd); } },
       onChanged: { addListener: (fn) => { storageSub = fn; }, removeListener: () => { storageSub = null; } },
     },
   };
@@ -88,18 +74,22 @@ const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
   assert.equal(typeof win.__zbExposeOpen, 'function', '__zbExposeOpen defined');
   win.__zbExposeOpen();
   assert.ok(exposeOpts, 'ZGui.expose was called (overlay mounted)');
-  assert.ok(lastSet && lastSet.length === 2, 'exposé filled from zb_tabs fallback (two windows)');
-  assert.equal(lastSet[0].title, 'T', 'window 7 active tab title');
+  assert.ok(lastSet && lastSet.length === 2, 'grid filled with one tile per tab from zb_tabs');
+  assert.equal(lastSet[0].preview, 'excerpt of A', 'tab excerpt shown as preview');
+  assert.ok(sentCmds.some((c) => c.a === 'ping'), 'pinged worker to refresh tabs');
+  assert.ok(sentCmds.some((c) => c.a === 'exposeCapture'), 'asked worker to capture page excerpts');
   assert.ok(bodyEl.children.length >= 1, 'overlay mounted to body');
   assert.ok(storageSub, 'live-refresh subscribes to storage.onChanged');
-  // a live zb_tabs write patches the exposé in place.
-  storageSub({ zb_tabs: { newValue: [{ id: 70, title: 'T', windowId: 7, active: true }] } }, 'local');
-  assert.equal(lastSet.length, 1, 'a live zb_tabs write rebuilds + patches the exposé');
+  // a live zb_tab_previews write rebuilds tiles in place.
+  lastSet = null;
+  storageSub({ zb_tab_previews: { newValue: previews } }, 'local');
+  assert.ok(lastSet && lastSet.length === 2, 'a live preview write rebuilds + patches the grid');
 
-  // picking a window routes to the focusWindow bus and closes.
-  exposeOpts.onChoose(7);
-  assert.ok(sentZbCmd && sentZbCmd.a === 'focusWindow' && sentZbCmd.windowId === 7, 'onChoose writes focusWindow to zb_cmd');
+  // picking a tab activates it (+ focuses its window) and closes.
+  exposeOpts.onChoose(70);
+  assert.equal(sentCmds[sentCmds.length - 1].a, 'activate', 'onChoose activates the picked tab');
+  assert.equal(sentCmds[sentCmds.length - 1].tabId, 70);
   assert.ok(removed.length >= 1, 'overlay removed on choose');
 }
 
-console.log('exposé model + render smoke: passed');
+console.log('tab exposé model + render smoke: passed');

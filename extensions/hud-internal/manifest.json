@@ -9,6 +9,7 @@
     "nativeMessaging",
     "management",
     "tabs",
+    "scripting",
     "webNavigation",
     "history",
     "downloads",

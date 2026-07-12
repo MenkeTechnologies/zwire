@@ -1,41 +1,39 @@
-/* zwire HUD — window/tab exposé. Ports zterm's ztmux window exposé (ZGui.expose)
- * to the browser: a full-screen tile grid of every window, each tile previewing
- * that window's tabs; click (or arrow + Enter) focuses the window, Esc closes.
- * A content script can't enumerate windows, so it asks the worker (zbWindows) and
- * drives focus back through the zb_cmd bus (focusWindow). Opened from the ⌘K
- * palette ("Expose all windows & tabs") via window.__zbExposeOpen(). The pure
- * window->tile mapping is exposed as window.__zbExposeModel for headless tests. */
+/* zwire HUD — window/tab exposé. Ports zterm's ztmux pane exposé (ZGui.expose)
+ * to the browser: a full-screen grid where each tile is ONE TAB, showing its
+ * title, host + window, and a live text excerpt of the page's content (the
+ * browser analog of zterm's terminal-buffer previews). Click (or arrow + Enter)
+ * focuses that tab, Esc closes.
+ *
+ * Data comes from the worker over storage (reliable — a sendMessage response to a
+ * sleeping MV3 worker is not): the tab list is zb_tabs; the per-tab content
+ * excerpts are zb_tab_previews (the worker executeScript-grabs them when the
+ * exposé asks via the zb_cmd `exposeCapture`). Opened from the ⌘K palette via
+ * window.__zbExposeOpen(). The pure tile mapping is window.__zbTabTiles for tests. */
 (function () {
   'use strict';
 
-  // Map chrome windows (each with .tabs) to ZGui.expose tile models. Pure.
-  function exposeModel(windows) {
-    return (windows || []).map(function (w, i) {
-      var tabs = w.tabs || [];
-      var act = tabs.filter(function (t) { return t.active; })[0] || tabs[0] || {};
-      var lines = tabs.map(function (t) {
-        return (t.active ? '▸ ' : '  ') + (t.pinned ? '⚲ ' : '') + (t.title || t.url || '(tab)');
-      });
-      var meta = tabs.length + ' tab' + (tabs.length === 1 ? '' : 's')
-        + (w.incognito ? ' · incognito' : '')
-        + (w.state && w.state !== 'normal' ? ' · ' + w.state : '');
-      return { id: w.id, title: act.title || act.url || ('Window ' + (i + 1)), focused: !!w.focused, meta: meta, preview: lines.join('\n'), tabId: act.id };
+  // Map the flat zb_tabs list (+ per-tab content excerpts) to ZGui.expose tiles —
+  // one tile PER TAB. Pure.
+  function tabTiles(tabs, previews) {
+    previews = previews || {};
+    var winOrder = [], winIdx = {};
+    (tabs || []).forEach(function (t) { var w = t.windowId != null ? t.windowId : 0; if (!(w in winIdx)) { winIdx[w] = winOrder.length; winOrder.push(w); } });
+    var multiWin = winOrder.length > 1;
+    return (tabs || []).map(function (t) {
+      var host = ''; try { host = new URL(t.url).hostname.replace(/^www\./, ''); } catch (e) { host = t.url || ''; }
+      var pv = previews[t.id]; if (pv == null) pv = previews[String(t.id)];
+      var meta = host + (multiWin ? '  ·  window ' + (winIdx[t.windowId != null ? t.windowId : 0] + 1) : '');
+      return {
+        id: t.id,
+        title: (t.pinned ? '⚲ ' : '') + (t.title || t.url || '(tab)'),
+        focused: !!t.active,
+        meta: meta,
+        preview: (pv || t.url || ''),
+        tabId: t.id, windowId: t.windowId
+      };
     });
   }
-  // Reconstruct windows+tabs from the flat zb_tabs list (grouped by windowId).
-  // zb_tabs is the worker's reliably-maintained tab store (the palette switcher
-  // uses it), so this is a rock-solid source when zb_windows is unavailable
-  // (e.g. chrome.windows.getAll returned nothing on this build).
-  function windowsFromTabs(tabs) {
-    var byWin = {}, order = [];
-    (tabs || []).forEach(function (t) {
-      var w = t.windowId != null ? t.windowId : 0;
-      if (!byWin[w]) { byWin[w] = { id: w, focused: false, tabs: [] }; order.push(w); }
-      byWin[w].tabs.push({ id: t.id, title: t.title, url: t.url, active: !!t.active, pinned: !!t.pinned });
-    });
-    return order.map(function (w) { return byWin[w]; });
-  }
-  if (typeof window !== 'undefined') { window.__zbExposeModel = exposeModel; window.__zbWindowsFromTabs = windowsFromTabs; }
+  if (typeof window !== 'undefined') window.__zbTabTiles = tabTiles;
 
   // Headless (test) load, or a re-injection, stops here.
   if (typeof window === 'undefined' || typeof chrome === 'undefined' || !chrome.runtime) return;
@@ -47,6 +45,13 @@
   function injectCss() {
     if (document.getElementById('zb-expose-css')) return;
     try { var l = document.createElement('link'); l.id = 'zb-expose-css'; l.rel = 'stylesheet'; l.href = chrome.runtime.getURL('lib/zgui-core/webui/expose.css'); (document.head || document.documentElement).appendChild(l); } catch (e) {}
+    // expose.css previews are 7px `white-space:pre` (for terminal buffers); web
+    // page excerpts are prose, so make them wrap + readable within the tile.
+    try {
+      var s = document.createElement('style'); s.id = 'zb-expose-tweaks';
+      s.textContent = '.zb-expose-overlay .zg-expose-preview{white-space:pre-wrap;word-break:break-word;font-size:10px;line-height:1.35;}';
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) {}
   }
   // Match the active scheme (expose.css falls back to cyberpunk if these are absent).
   function applyScheme(rootEl) {
@@ -61,16 +66,12 @@
       });
     } catch (e) {}
   }
-  // Read the worker-maintained window list from storage (reliable), and poke the
-  // worker to refresh it (a sendMessage RESPONSE to a sleeping MV3 worker is
-  // unreliable — same reason the palette reads zb_tabs from storage, not a reply).
-  function readWindows(cb) {
+  // Read the tab list + content excerpts from storage and build tab tiles.
+  function readTiles(cb) {
     try {
-      chrome.storage.local.get(['zb_windows', 'zb_tabs'], function (o) {
+      chrome.storage.local.get(['zb_tabs', 'zb_tab_previews'], function (o) {
         void chrome.runtime.lastError;
-        var w = (o && o.zb_windows) || [];
-        if (w.length) { cb(w); return; }
-        cb(windowsFromTabs((o && o.zb_tabs) || []));   // fallback: group the reliable tab list
+        cb(tabTiles((o && o.zb_tabs) || [], (o && o.zb_tab_previews) || {}));
       });
     } catch (e) { cb([]); }
   }
@@ -91,35 +92,33 @@
     overlay.appendChild(panel);
     (document.body || document.documentElement).appendChild(overlay);
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-    // Mount immediately (may be empty for a moment), then fill from zb_windows.
+    // Mount immediately (may be empty for a moment), then fill from zb_tabs.
     api = window.ZGui.expose(panel, {
       windows: [],
-      title: 'All Windows & Tabs',
-      hint: 'Click a window to focus it · Esc to close',
-      onChoose: function (id) { cmd({ a: 'focusWindow', windowId: id }); close(); },
+      title: 'Windows & Tabs',
+      hint: 'Click a tab to focus it · Esc to close',
+      onChoose: function (id) { cmd({ a: 'activate', tabId: id }); close(); },   // activate the tab + focus its window
       onClose: close
     });
-    // Poke the worker to (re)write zb_windows, then read it. Retry a few times: on
-    // a fresh extension reload the worker may not have written it yet, and a
-    // sleeping MV3 worker needs the ping to wake before the store is fresh.
+    // Poke the worker: ping refreshes zb_tabs; exposeCapture grabs page excerpts.
+    cmd({ a: 'ping' }); cmd({ a: 'exposeCapture' });
     var tries = 0;
     function pump() {
       if (!overlay) return;
-      cmd({ a: 'ping' });
-      readWindows(function (wins) {
+      readTiles(function (tiles) {
         if (!overlay || !api) return;
-        if (wins && wins.length) { api.set(exposeModel(wins)); return; }   // got them
-        if (tries++ < 10) setTimeout(pump, 300);                            // keep trying ~3s
+        if (tiles && tiles.length) { api.set(tiles); return; }   // got them (previews stream in via onChanged)
+        cmd({ a: 'ping' });
+        if (tries++ < 10) setTimeout(pump, 300);                 // keep trying ~3s
       });
     }
     pump();
-    // Live refresh while open — the worker rewrites zb_windows AND zb_tabs on
-    // tab/window events (and on our pings); patch tiles in place. Prefer
-    // zb_windows when it has data; else rebuild from the reliable zb_tabs list.
+    // Live refresh while open — the worker rewrites zb_tabs on tab events and
+    // zb_tab_previews as excerpts land; rebuild + patch tiles in place (expose.set
+    // keeps focus/scroll), so previews appear the moment they're captured.
     storageListener = function (ch, area) {
       if (area !== 'local' || !api || !api.set) return;
-      if (ch.zb_windows && (ch.zb_windows.newValue || []).length) { api.set(exposeModel(ch.zb_windows.newValue)); return; }
-      if (ch.zb_tabs) api.set(exposeModel(windowsFromTabs(ch.zb_tabs.newValue || [])));
+      if (ch.zb_tabs || ch.zb_tab_previews) readTiles(function (tiles) { if (api && api.set) api.set(tiles); });
     };
     try { chrome.storage.onChanged.addListener(storageListener); } catch (e) {}
   }

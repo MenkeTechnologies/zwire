@@ -520,6 +520,40 @@ function updateWindows() {
 }
 function updateTabsAndWindows() { updateTabs(); updateWindows(); }
 
+// The tab/pane exposé shows a text excerpt of each page's content (the browser
+// analog of zterm's terminal-buffer previews). grabExcerpt runs IN the page (via
+// executeScript, so it must be standalone — only DOM APIs); captureExcerpts fans
+// it out over every http(s) tab and publishes zb_tab_previews = { tabId: text }.
+// Runs only when the exposé asks (zb_cmd exposeCapture) — no always-on cost.
+function grabExcerpt() {
+  try {
+    var b = (document.body && document.body.innerText) || '';
+    b = b.replace(/\s+/g, ' ').trim();
+    if (!b) { var m = document.querySelector('meta[name="description"]'); b = (m && m.content) || ''; }
+    return b.slice(0, 600);
+  } catch (e) { return ''; }
+}
+function captureExcerpts() {
+  if (!chrome.scripting) return;
+  try {
+    chrome.tabs.query({}, function (tabs) {
+      void chrome.runtime.lastError;
+      tabs = (tabs || []).filter(function (t) { return t.id != null && /^https?:/.test(t.url || ''); });
+      var out = {}, pending = tabs.length;
+      if (!pending) { chrome.storage.local.set({ zb_tab_previews: out }); return; }
+      tabs.forEach(function (t) {
+        try {
+          chrome.scripting.executeScript({ target: { tabId: t.id, allFrames: false }, func: grabExcerpt }, function (res) {
+            void chrome.runtime.lastError;
+            if (res && res[0] && res[0].result) out[t.id] = res[0].result;
+            if (--pending <= 0) chrome.storage.local.set({ zb_tab_previews: out });
+          });
+        } catch (e) { if (--pending <= 0) chrome.storage.local.set({ zb_tab_previews: out }); }
+      });
+    });
+  } catch (e) {}
+}
+
 updateTabs(); updateWindows();
 try {
   chrome.tabs.onCreated.addListener(updateTabsAndWindows);
@@ -634,6 +668,8 @@ function execZbCmd(c) {
       // exposé pick: focus the chosen window (and optionally activate a tab in it).
       chrome.windows.update(c.windowId, { focused: true }, function () { void chrome.runtime.lastError; });
       if (c.tabId != null) chrome.tabs.update(c.tabId, { active: true }, function () { void chrome.runtime.lastError; });
+    } else if (c.a === 'exposeCapture') {
+      captureExcerpts();   // grab a text excerpt of every http(s) tab for the exposé previews
     } else if (c.a === 'mergeWindows') {
       active(function (t) { if (!t) return; chrome.tabs.query({}, function (all) { (all || []).forEach(function (x) { if (x.windowId !== t.windowId) chrome.tabs.move(x.id, { windowId: t.windowId, index: -1 }, function () { void chrome.runtime.lastError; }); }); }); });
     // --- history ---
