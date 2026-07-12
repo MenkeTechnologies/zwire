@@ -260,6 +260,7 @@
         "zgestures.js",
         "zpanels.js",
         "zextras.js",
+        "ztrash.js",
         "zvim.js"
       ],
       "run_at": "document_start",

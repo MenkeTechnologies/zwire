@@ -638,6 +638,24 @@ function updateWindows() {
 }
 function updateTabsAndWindows() { updateTabs(); updateWindows(); }
 
+// Recently-closed tabs/windows for the Trash overlay (ports Vivaldi's Trash can).
+// Published to storage (content scripts can't call chrome.sessions); restore via
+// the restoreSession action.
+function updateTrash() {
+  try {
+    if (!chrome.sessions || !chrome.sessions.getRecentlyClosed) return;
+    chrome.sessions.getRecentlyClosed({ maxResults: 25 }, function (sessions) {
+      void chrome.runtime.lastError;
+      var out = [];
+      (sessions || []).forEach(function (s) {
+        if (s.tab) out.push({ sessionId: s.tab.sessionId, title: s.tab.title || s.tab.url, url: s.tab.url, kind: 'tab' });
+        else if (s.window) { var t = (s.window.tabs || [])[0] || {}; out.push({ sessionId: s.window.sessionId, title: (s.window.tabs ? s.window.tabs.length + ' tabs' : 'window'), url: t.url || '', kind: 'window' }); }
+      });
+      chrome.storage.local.set({ zb_trash: out });
+    });
+  } catch (e) {}
+}
+
 // The tab/pane exposé shows a text excerpt of each page's content (the browser
 // analog of zterm's terminal-buffer previews). grabExcerpt runs IN the page (via
 // executeScript, so it must be standalone — only DOM APIs); captureExcerpts fans
@@ -681,10 +699,10 @@ function captureExcerpts() {
   } catch (e) {}
 }
 
-updateTabs(); updateWindows();
+updateTabs(); updateWindows(); updateTrash();
 try {
   chrome.tabs.onCreated.addListener(updateTabsAndWindows);
-  chrome.tabs.onRemoved.addListener(updateTabsAndWindows);
+  chrome.tabs.onRemoved.addListener(function () { updateTabsAndWindows(); updateTrash(); });
   chrome.tabs.onActivated.addListener(updateTabsAndWindows);
   chrome.tabs.onMoved.addListener(updateTabsAndWindows);
   chrome.tabs.onUpdated.addListener(function (id, info) { if (info.title || info.url || info.status === 'complete') updateTabsAndWindows(); });
@@ -874,6 +892,20 @@ function execZbCmd(c) {
         else if (c.a === 'ungroupTabs') { try { chrome.tabs.ungroup(ids, function () { void chrome.runtime.lastError; }); } catch (e) {} }
         else { try { chrome.tabGroups.query({ windowId: t.windowId }, function (gs) { void chrome.runtime.lastError; (gs || []).forEach(function (g) { chrome.tabGroups.update(g.id, { collapsed: c.a === 'collapseGroups' }, function () { void chrome.runtime.lastError; }); }); }); } catch (e) {} }
       }); });
+    } else if (c.a === 'groupByDomain') {
+      // Tab stacks: one group per domain (Vivaldi tab stacks), titled by host.
+      active(function (t) { if (!t) return; chrome.tabs.query({ windowId: t.windowId }, function (all) {
+        void chrome.runtime.lastError; var byDom = {};
+        (all || []).forEach(function (x) { var h; try { h = new URL(x.url).hostname.replace(/^www\./, ''); } catch (e) { h = ''; } if (h) (byDom[h] = byDom[h] || []).push(x.id); });
+        Object.keys(byDom).forEach(function (h) { if (byDom[h].length < 2) return;
+          try { chrome.tabs.group({ tabIds: byDom[h] }, function (gid) { void chrome.runtime.lastError; try { chrome.tabGroups.update(gid, { title: h }, function () { void chrome.runtime.lastError; }); } catch (e) {} }); } catch (e) {} });
+      }); });
+    } else if (c.a === 'discardOthers') {
+      active(function (t) { if (!t) return; chrome.tabs.query({ windowId: t.windowId }, function (all) {
+        void chrome.runtime.lastError; (all || []).forEach(function (x) { if (x.id !== t.id && !x.active && !x.discarded) { try { chrome.tabs.discard(x.id, function () { void chrome.runtime.lastError; }); } catch (e) {} } }); }); });
+    // --- trash / recently closed ---
+    } else if (c.a === 'trashList') { updateTrash();
+    } else if (c.a === 'restoreSession' && c.sessionId) { try { chrome.sessions.restore(c.sessionId, function () { void chrome.runtime.lastError; }); } catch (e) {}
     // --- downloads control (most recent matching item) ---
     } else if (c.a === 'download' && c.url) { try { chrome.downloads.download({ url: c.url }, function () { void chrome.runtime.lastError; }); } catch (e) {}
     } else if (c.a === 'pauseDownload' || c.a === 'resumeDownload' || c.a === 'cancelDownload' || c.a === 'openDownload' || c.a === 'showDownload' || c.a === 'retryDownload') {

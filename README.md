@@ -154,7 +154,9 @@ a visible-area capture), **mouse gestures** (`zgestures` — right-drag navigati
 back / forward / new / close / reload), **Web Panels** (`zpanels` — pinned
 websites in a docked side panel; the `frame_bust` rule lets any site load),
 **pop-out video** (Picture-in-Picture), **quick note from selection** (save the
-current selection into Notes), and an **inline
+current selection into Notes), a **Trash** dropdown (`ztrash` — restore recently
+closed tabs), **tab hibernation** (discard this / other tabs) + **tab stacks**
+(group tabs by domain), and an **inline
 compute layer** (ported from zgo-core): type a sum (`2^10`, `sqrt(2)+1`), a unit
 conversion (`10 km to miles`, `72 f in c`, `1 gb to mb`), a live currency
 conversion (`100 usd to eur`, rates fetched + cached by the host), a percentage
@@ -170,7 +172,7 @@ of `chrome://{extensions,settings,history,bookmarks,downloads,version}` — the
 Vivaldi-style calendar dashboard (Month/Week/Day: a month calendar with per-day
 activity, a per-day Entries list, and an analytics rail — a Browsing Activity area
 chart, a Link Transition donut, and Top Domains) — plus a **Feeds** RSS/Atom
-reader, a **Notes** manager
+reader, a **Reading List**, a **Notes** manager
 (Markdown notes in folders, ported from Vivaldi), a **Translate** panel
 (30+ languages, auto-detect, ported from Vivaldi),
 Keyboard, Commands, Sessions, a **Hooks** page, CI, a **Host** console, a

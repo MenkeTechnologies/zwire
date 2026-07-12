@@ -70,4 +70,20 @@ function load(file) { const win = {}; new Function('window', fs.readFileSync(new
   assert.equal(pick([]), null);
 }
 
-console.log('browser tools (reader / gestures / reload / panels / pip): all assertions passed');
+// ---- Reading List: order + partition ----
+{
+  const win = {}; new Function('window', fs.readFileSync(new URL('../pages/readinglist.js', import.meta.url), 'utf8'))(win);
+  const R = win.ZBReadingList;
+  assert.ok(R && R.order, 'reading-list helpers not exposed');
+  const entries = [
+    { url: 'a', hasBeenRead: true, creationTime: 300 },
+    { url: 'b', hasBeenRead: false, creationTime: 100 },
+    { url: 'c', hasBeenRead: false, creationTime: 200 },
+  ];
+  const ord = R.order(entries);
+  assert.deepEqual(ord.map((e) => e.url), ['c', 'b', 'a'], 'unread first, then newest-first');
+  assert.deepEqual(R.partition(entries), { unread: 2, total: 3 });
+  assert.deepEqual(R.partition([]), { unread: 0, total: 0 });
+}
+
+console.log('browser tools (reader / gestures / reload / panels / pip / readinglist): all assertions passed');
