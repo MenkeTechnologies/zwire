@@ -144,7 +144,9 @@ surface via `App::here()->verbs()`.
 scheme picker, the light/dark toggle, the settings controls, a **window/tab
 exposé** (`zexpose` — a tile grid with one tile per tab showing a live text
 excerpt of the page's content; click to focus that tab, Esc to close; ports
-zterm's ztmux pane exposé via `ZGui.expose`), and an **inline
+zterm's ztmux pane exposé via `ZGui.expose`), **Page Actions** (`zpageactions` —
+Vivaldi-style live CSS-filter transforms on the current page: grayscale, sepia,
+invert, high-contrast, blur, hue-rotate…, remembered per site), and an **inline
 compute layer** (ported from zgo-core): type a sum (`2^10`, `sqrt(2)+1`), a unit
 conversion (`10 km to miles`, `72 f in c`, `1 gb to mb`), a live currency
 conversion (`100 usd to eur`, rates fetched + cached by the host), a percentage

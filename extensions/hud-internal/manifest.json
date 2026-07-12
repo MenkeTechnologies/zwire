@@ -253,6 +253,7 @@
         "zpalette.js",
         "lib/zgui-core/webui/expose.js",
         "zexpose.js",
+        "zpageactions.js",
         "zvim.js"
       ],
       "run_at": "document_start",

@@ -81,6 +81,16 @@ fi
 command rm -f /tmp/zwire-hud-nt.$$
 echo
 
+cyber_section "PAGE ACTIONS (Vivaldi filter transforms)"
+if node tests/pageactions.mjs 2>/tmp/zwire-hud-pa.$$; then
+  cyber_ok "page actions nominal"
+else
+  FAIL=1; cyber_fail "page actions compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-pa.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-pa.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then
