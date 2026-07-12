@@ -22,7 +22,20 @@
       return { id: w.id, title: act.title || act.url || ('Window ' + (i + 1)), focused: !!w.focused, meta: meta, preview: lines.join('\n'), tabId: act.id };
     });
   }
-  if (typeof window !== 'undefined') window.__zbExposeModel = exposeModel;
+  // Reconstruct windows+tabs from the flat zb_tabs list (grouped by windowId).
+  // zb_tabs is the worker's reliably-maintained tab store (the palette switcher
+  // uses it), so this is a rock-solid source when zb_windows is unavailable
+  // (e.g. chrome.windows.getAll returned nothing on this build).
+  function windowsFromTabs(tabs) {
+    var byWin = {}, order = [];
+    (tabs || []).forEach(function (t) {
+      var w = t.windowId != null ? t.windowId : 0;
+      if (!byWin[w]) { byWin[w] = { id: w, focused: false, tabs: [] }; order.push(w); }
+      byWin[w].tabs.push({ id: t.id, title: t.title, url: t.url, active: !!t.active, pinned: !!t.pinned });
+    });
+    return order.map(function (w) { return byWin[w]; });
+  }
+  if (typeof window !== 'undefined') { window.__zbExposeModel = exposeModel; window.__zbWindowsFromTabs = windowsFromTabs; }
 
   // Headless (test) load, or a re-injection, stops here.
   if (typeof window === 'undefined' || typeof chrome === 'undefined' || !chrome.runtime) return;
@@ -51,7 +64,16 @@
   // Read the worker-maintained window list from storage (reliable), and poke the
   // worker to refresh it (a sendMessage RESPONSE to a sleeping MV3 worker is
   // unreliable — same reason the palette reads zb_tabs from storage, not a reply).
-  function readWindows(cb) { try { chrome.storage.local.get('zb_windows', function (o) { void chrome.runtime.lastError; cb((o && o.zb_windows) || []); }); } catch (e) { cb([]); } }
+  function readWindows(cb) {
+    try {
+      chrome.storage.local.get(['zb_windows', 'zb_tabs'], function (o) {
+        void chrome.runtime.lastError;
+        var w = (o && o.zb_windows) || [];
+        if (w.length) { cb(w); return; }
+        cb(windowsFromTabs((o && o.zb_tabs) || []));   // fallback: group the reliable tab list
+      });
+    } catch (e) { cb([]); }
+  }
   function close() {
     if (storageListener) { try { chrome.storage.onChanged.removeListener(storageListener); } catch (e) {} storageListener = null; }
     if (overlay) { try { overlay.remove(); } catch (e) {} overlay = null; api = null; }
@@ -91,10 +113,13 @@
       });
     }
     pump();
-    // Live refresh while open — the worker rewrites zb_windows on tab/window events
-    // (and on our pings); patch tiles in place so focus/scroll never jump.
+    // Live refresh while open — the worker rewrites zb_windows AND zb_tabs on
+    // tab/window events (and on our pings); patch tiles in place. Prefer
+    // zb_windows when it has data; else rebuild from the reliable zb_tabs list.
     storageListener = function (ch, area) {
-      if (area === 'local' && ch.zb_windows && api && api.set) api.set(exposeModel(ch.zb_windows.newValue || []));
+      if (area !== 'local' || !api || !api.set) return;
+      if (ch.zb_windows && (ch.zb_windows.newValue || []).length) { api.set(exposeModel(ch.zb_windows.newValue)); return; }
+      if (ch.zb_tabs) api.set(exposeModel(windowsFromTabs(ch.zb_tabs.newValue || [])));
     };
     try { chrome.storage.onChanged.addListener(storageListener); } catch (e) {}
   }

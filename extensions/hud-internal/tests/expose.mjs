@@ -29,6 +29,24 @@ const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
   assert.match(tiles[0].preview, /⚲ A/, 'pinned tab marked');
   assert.equal(tiles[1].meta, '1 tab · incognito · minimized', 'incognito + state in meta');
   assert.equal(model([]).length, 0);
+
+  // windowsFromTabs: reconstruct windows from the flat zb_tabs list by windowId.
+  const wft = win.__zbWindowsFromTabs;
+  assert.ok(wft, '__zbWindowsFromTabs not exposed');
+  const wins = wft([
+    { id: 1, title: 'A', url: 'a', windowId: 100, active: false },
+    { id: 2, title: 'B', url: 'b', windowId: 100, active: true },
+    { id: 3, title: 'C', url: 'c', windowId: 200, active: true },
+  ]);
+  assert.equal(wins.length, 2, 'two windows grouped from three tabs');
+  assert.equal(wins[0].id, 100);
+  assert.equal(wins[0].tabs.length, 2);
+  assert.equal(wins[1].id, 200);
+  // and it round-trips through exposeModel into real tiles.
+  const t2 = model(wft([{ id: 9, title: 'Solo', windowId: 5, active: true }]));
+  assert.equal(t2.length, 1);
+  assert.equal(t2[0].title, 'Solo');
+  assert.equal(wft([]).length, 0);
 }
 
 // ---- part 2: render smoke ----
@@ -46,13 +64,18 @@ const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
   const bodyEl = makeEl('div');
   globalThis.document = { createElement: (t) => makeEl(t), getElementById: () => null, documentElement: makeEl('html'), head: makeEl('head'), body: bodyEl, addEventListener() {} };
 
-  // zexpose reads zb_windows from storage (reliable bus) and pings the worker to refresh it.
-  const windows = [{ id: 7, focused: true, tabs: [{ id: 70, title: 'T', active: true }] }];
+  // Real-world path: zb_windows EMPTY (getAll gave nothing on this build), so the
+  // exposé must fall back to grouping the reliable zb_tabs list.
+  const zbTabs = [
+    { id: 70, title: 'T', url: 'u1', windowId: 7, active: true },
+    { id: 71, title: 'U', url: 'u2', windowId: 7, active: false },
+    { id: 90, title: 'V', url: 'u3', windowId: 9, active: true },
+  ];
   let sentZbCmd = null, storageSub = null;
   globalThis.chrome = {
     runtime: { lastError: null, getURL: (p) => 'chrome-extension://x/' + p },
     storage: {
-      local: { get: (_k, cb) => cb({ zb_windows: windows, zb_scheme: 'cyberpunk' }), set: (o) => { if (o && o.zb_cmd) sentZbCmd = o.zb_cmd; } },
+      local: { get: (_k, cb) => cb({ zb_windows: [], zb_tabs: zbTabs, zb_scheme: 'cyberpunk' }), set: (o) => { if (o && o.zb_cmd) sentZbCmd = o.zb_cmd; } },
       onChanged: { addListener: (fn) => { storageSub = fn; }, removeListener: () => { storageSub = null; } },
     },
   };
@@ -65,13 +88,13 @@ const src = fs.readFileSync(new URL('../zexpose.js', import.meta.url), 'utf8');
   assert.equal(typeof win.__zbExposeOpen, 'function', '__zbExposeOpen defined');
   win.__zbExposeOpen();
   assert.ok(exposeOpts, 'ZGui.expose was called (overlay mounted)');
-  assert.ok(lastSet && lastSet.length === 1, 'exposé filled from zb_windows storage (not a message response)');
-  assert.equal(lastSet[0].title, 'T');
+  assert.ok(lastSet && lastSet.length === 2, 'exposé filled from zb_tabs fallback (two windows)');
+  assert.equal(lastSet[0].title, 'T', 'window 7 active tab title');
   assert.ok(bodyEl.children.length >= 1, 'overlay mounted to body');
   assert.ok(storageSub, 'live-refresh subscribes to storage.onChanged');
-  // a fresh zb_windows write updates the exposé in place.
-  storageSub({ zb_windows: { newValue: [] } }, 'local');
-  assert.equal(lastSet.length, 0, 'a live zb_windows write patches the exposé');
+  // a live zb_tabs write patches the exposé in place.
+  storageSub({ zb_tabs: { newValue: [{ id: 70, title: 'T', windowId: 7, active: true }] } }, 'local');
+  assert.equal(lastSet.length, 1, 'a live zb_tabs write rebuilds + patches the exposé');
 
   // picking a window routes to the focusWindow bus and closes.
   exposeOpts.onChoose(7);
