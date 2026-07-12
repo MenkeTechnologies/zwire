@@ -258,6 +258,8 @@
         "zreload.js",
         "zbreak.js",
         "zgestures.js",
+        "zpanels.js",
+        "zextras.js",
         "zvim.js"
       ],
       "run_at": "document_start",

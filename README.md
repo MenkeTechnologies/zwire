@@ -151,7 +151,10 @@ invert, high-contrast, blur, hue-rotate…, remembered per site), a **Reader vie
 mode** (`zbreak` — pause every tab behind a break screen), **full-page capture**
 (scroll + `captureVisibleTab` slices stitched on an `OffscreenCanvas` → PNG, plus
 a visible-area capture), **mouse gestures** (`zgestures` — right-drag navigation:
-back / forward / new / close / reload), and an **inline
+back / forward / new / close / reload), **Web Panels** (`zpanels` — pinned
+websites in a docked side panel; the `frame_bust` rule lets any site load),
+**pop-out video** (Picture-in-Picture), **quick note from selection** (save the
+current selection into Notes), and an **inline
 compute layer** (ported from zgo-core): type a sum (`2^10`, `sqrt(2)+1`), a unit
 conversion (`10 km to miles`, `72 f in c`, `1 gb to mb`), a live currency
 conversion (`100 usd to eur`, rates fetched + cached by the host), a percentage

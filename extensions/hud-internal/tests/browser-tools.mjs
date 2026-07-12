@@ -46,4 +46,28 @@ function load(file) { const win = {}; new Function('window', fs.readFileSync(new
   presets.forEach((x) => assert.equal(typeof x[1], 'number', 'preset value is ms'));
 }
 
-console.log('browser tools (reader / gestures / reload): all assertions passed');
+// ---- Web Panels: URL normalizer ----
+{
+  const p = load('zpanels.js');
+  const norm = p.__zbPanelNormalize;
+  assert.ok(norm, 'panel normalizer not exposed');
+  assert.equal(norm('example.com'), 'https://example.com', 'bare host gets https://');
+  assert.equal(norm('http://x.io'), 'http://x.io', 'existing scheme kept');
+  assert.equal(norm('https://y.io/a'), 'https://y.io/a');
+  assert.equal(norm('  spaced.com  '), 'https://spaced.com', 'trimmed');
+  assert.equal(norm(''), '');
+}
+
+// ---- Pop-out video: pick the best <video> ----
+{
+  const x = load('zextras.js');
+  const pick = x.__zbPickVideo;
+  assert.ok(pick, 'video picker not exposed');
+  // a playing video beats a bigger paused one.
+  assert.deepEqual(pick([{ w: 800, h: 600, playing: false }, { w: 320, h: 240, playing: true }]), { w: 320, h: 240, playing: true });
+  // among same play-state, the largest wins.
+  assert.deepEqual(pick([{ w: 100, h: 100, playing: false }, { w: 400, h: 300, playing: false }]), { w: 400, h: 300, playing: false });
+  assert.equal(pick([]), null);
+}
+
+console.log('browser tools (reader / gestures / reload / panels / pip): all assertions passed');
