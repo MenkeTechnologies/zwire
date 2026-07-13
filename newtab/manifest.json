@@ -36,6 +36,14 @@
       "omcgnnjfmbmpdlofklbpddkhnfibfhgg"
     ]
   },
+  "content_security_policy": {
+    "sandbox": "sandbox allow-scripts allow-modals allow-popups allow-forms; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+  },
+  "sandbox": {
+    "pages": [
+      "sandbox/js-run.html"
+    ]
+  },
   "web_accessible_resources": [
     {
       "resources": [

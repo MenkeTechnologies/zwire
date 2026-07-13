@@ -69,11 +69,20 @@
       "description": "Open the zwire command palette"
     }
   },
+  "content_security_policy": {
+    "sandbox": "sandbox allow-scripts allow-modals allow-popups allow-forms; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+  },
+  "sandbox": {
+    "pages": [
+      "sandbox/js-run.html"
+    ]
+  },
   "web_accessible_resources": [
     {
       "resources": [
         "pages/*",
         "schemes.js",
+        "sandbox/js-run.html",
         "lib/term/*",
         "lib/zgui-core/webui/*.css"
       ],

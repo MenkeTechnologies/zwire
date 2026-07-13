@@ -218,10 +218,38 @@
     var text = out || er;
     hostToast(prefix + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
   }
+  // The 'js' step runs user JavaScript. MV3's default CSP forbids eval/new Function
+  // in this realm, so relay the code to the manifest-declared sandbox page (its own
+  // CSP allows unsafe-eval + modals) via a hidden, reused iframe and eval it there.
+  var _zjsFrame = null, _zjsReady = false, _zjsN = 0, _zjsQ = [], _zjsBound = false;
+  function zjsRun(code, arg) {
+    if (!_zjsBound) {
+      _zjsBound = true;
+      window.addEventListener('message', function (e) {
+        var d = e.data;
+        if (d && d.zjs === 1 && d.ok === false) { try { console.error('zwire custom js:', d.err); } catch (x) {} }
+      });
+    }
+    var msg = { zjs: 1, id: 'j' + (++_zjsN), code: String(code || ''), arg: arg || '' };
+    if (_zjsReady && _zjsFrame && _zjsFrame.contentWindow) { _zjsFrame.contentWindow.postMessage(msg, '*'); return; }
+    _zjsQ.push(msg);
+    if (_zjsFrame) return;
+    _zjsFrame = document.createElement('iframe');
+    _zjsFrame.src = chrome.runtime.getURL('sandbox/js-run.html');
+    _zjsFrame.setAttribute('aria-hidden', 'true');
+    _zjsFrame.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;border:0;opacity:0;';
+    _zjsFrame.addEventListener('load', function () {
+      _zjsReady = true;
+      var cw = _zjsFrame.contentWindow;
+      _zjsQ.forEach(function (m) { try { cw.postMessage(m, '*'); } catch (x) {} });
+      _zjsQ = [];
+    });
+    (document.body || document.documentElement).appendChild(_zjsFrame);
+  }
   function runStep(type, v, arg) {
     v = v || '';
     if (type === 'scheme') { setScheme(v); return; }
-    if (type === 'js') { try { (new Function('q', v))(arg || ''); } catch (err) { try { console.error('zwire custom js:', err); } catch (x) {} } return; }
+    if (type === 'js') { zjsRun(v, arg); return; }
     if (type === 'action') {
       if (v === 'reload') { try { location.reload(); } catch (x) {} }
       else if (v === 'copyUrl') { try { navigator.clipboard.writeText(location.href); } catch (x) {} }

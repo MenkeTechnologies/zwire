@@ -53,7 +53,7 @@
     url: 'A URL to open. Use {q} as a placeholder and give it a keyword to make it a search — e.g. keyword "jira", value https://jira/browse/{q}.',
     shell: 'Runs via zwire-host in the OS shell (cmd.exe on Windows, /bin/sh -c on macOS/Linux) and toasts the output — no terminal needed. {q} = the typed argument; otherwise the argument is appended.',
     stryke: 'Runs an inline stryke script via zwire-host (stryke -E) using the bundled stryke sidecar — no PATH needed — and toasts stdout. Print with `p`. {q} = the typed argument; otherwise it is appended.',
-    js: 'JavaScript run in the extension isolated world (has chrome.*). The variable `q` holds the typed argument.',
+    js: 'JavaScript run in a sandboxed iframe (MV3 CSP forbids eval elsewhere) — has window/eval and can alert(), but no chrome.* and no host-page DOM. The variable `q` holds the typed argument.',
     applescript: 'Runs via zwire-host through osascript (macOS only) — each line becomes an -e arg, so multi-line scripts work with no temp file. {q} = the typed argument. E.g. tell application "Music" to playpause, or display notification "{q}".',
     batch: 'Runs via zwire-host through cmd.exe /c (Windows only) and toasts the output. {q} = the typed argument. E.g. echo hi {q} & start "" .',
     action: 'Trigger a built-in browser action under your own name.',
