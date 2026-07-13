@@ -125,6 +125,17 @@
   var mf = null, meterPort = null;
   startMeterFeed();
 
+  // The authoritative EQ/strip spec lives on disk ($STATE/audio-eq), read back
+  // async via the native host — a ~30-80ms round-trip. If we only relied on that,
+  // every knob would build at its default and visibly JUMP to the saved value when
+  // the reply lands. So we mirror the spec into localStorage on every persist and
+  // hydrate from it SYNCHRONOUSLY here, before any control is built: the engine
+  // vars (engGain, engDrive, …) carry the saved values into knob construction, so
+  // knobs paint correct on first frame. loadBrowserEq() below still reconciles
+  // from disk (authoritative) — matching cache → set()s to the same value → no jump.
+  var LS_EQ_KEY = 'zwire.audioEq.spec';
+  var cachedEqCfg = hydrateEqFromCache();
+
   function ensureCtx() {
     if (ctx) return;
     var AC = window.AudioContext || window.webkitAudioContext;
@@ -287,6 +298,9 @@
     // drag; only an explicit click (announce) retries and reports.
     if (hostMissing && !announce) return;
     var spec = buildSpec();
+    // Mirror to localStorage every time so the next page open hydrates knobs
+    // synchronously (no async-disk jump) — works even when the host is missing.
+    try { localStorage.setItem(LS_EQ_KEY, spec); } catch (e) {}
     // Fire the audio-eq-changed lifecycle hook on an explicit save only (not on
     // every knob drag, which would spawn a host per move). Background relays it.
     if (announce) { try { chrome.runtime.sendMessage({ type: 'zbFireHook', event: 'audio-eq-changed', payload: { spec: spec } }, function () { void chrome.runtime.lastError; }); } catch (e) {} }
@@ -460,6 +474,25 @@
     }
     showSpec();
   }
+  // Reflect a raw audio-eq spec string in the dashboard (shared by the async disk
+  // read and the synchronous localStorage hydrate). UI touches inside applyLoaded
+  // are all existence-guarded, so this is safe to call before controls are built —
+  // in that case only the engine vars are set, which is exactly what the knob
+  // constructors read. Returns the parsed cfg (or null for off/empty).
+  function applyEqSpecString(out) {
+    var t = String(out || '').trim(), lc = t.toLowerCase();
+    if (lc === 'off' || lc === '0') {
+      engBypass = true; if (typeof engBypassTog !== 'undefined' && engBypassTog && engBypassTog.set) engBypassTog.set(true); showSpec(); return null;
+    }
+    if (typeof engBypassTog !== 'undefined' && engBypassTog && engBypassTog.set) { engBypass = false; engBypassTog.set(false); }
+    if (t) { var cfg = parseSpec(t); if (cfg) { applyLoaded(cfg); return cfg; } }
+    return null;
+  }
+  // Synchronously seed the engine state from the localStorage mirror of the spec.
+  function hydrateEqFromCache() {
+    var out; try { out = (localStorage.getItem(LS_EQ_KEY) || '').trim(); } catch (e) { return null; }
+    return out ? applyEqSpecString(out) : null;
+  }
   function loadBrowserEq() {
     showSpec();
     var cmd = 'cat ' + stateDirShell() + '/audio-eq 2>/dev/null';
@@ -469,12 +502,10 @@
         var err = chrome.runtime.lastError;
         if (err) { if (/not found|host/i.test(err.message || '')) hostMissing = true; return; }
         var out = b64dec((reply && reply.stdout) || '').trim();
-        var lc = out.toLowerCase();
-        if (lc === 'off' || lc === '0') {
-          engBypass = true; if (typeof engBypassTog !== 'undefined' && engBypassTog && engBypassTog.set) engBypassTog.set(true); showSpec(); return;
-        }
-        if (typeof engBypassTog !== 'undefined' && engBypassTog && engBypassTog.set) { engBypass = false; engBypassTog.set(false); }
-        if (out) { var cfg = parseSpec(out); if (cfg) applyLoaded(cfg); }
+        // Refresh the localStorage mirror from the authoritative disk value so the
+        // next open hydrates from what the engine actually has.
+        if (out) { try { localStorage.setItem(LS_EQ_KEY, out); } catch (e) {} }
+        applyEqSpecString(out);
       });
     } catch (e) {}
   }
@@ -1068,6 +1099,11 @@
     persistDebounced(); toast('EQ preset: ' + name, '');
   }
   showSpec(); // reflect the current curve in the readout; don't write on load (would clobber a saved EQ)
+  // Now that the EQ graph + knob units exist, replay the cached spec so the curve
+  // and control positions fill in synchronously from localStorage (the early
+  // hydrate only had engine vars — no eq/units yet). loadBrowserEq() then
+  // reconciles from disk; matching cache means the set()s are no-ops (no jump).
+  if (cachedEqCfg) applyLoaded(cachedEqCfg);
   loadBrowserEq(); // pull the saved engine config from appdata into the controls (EQ + strip), so they reflect the always-on state
 
   /* ---------------------------------------------------------------- meter/animation loop --------- */
