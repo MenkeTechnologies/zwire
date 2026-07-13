@@ -71,6 +71,16 @@ fi
 command rm -f /tmp/zwire-hud-brace.$$
 echo
 
+cyber_section "URL SURGERY (url: sed + query/path/host rewrite provider)"
+if node tests/urlsurgery.mjs 2>/tmp/zwire-hud-urls.$$; then
+  cyber_ok "url surgery nominal"
+else
+  FAIL=1; cyber_fail "url surgery compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-urls.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-urls.$$
+echo
+
 cyber_section "HISTORY DASHBOARD (calendar / analytics aggregation + render)"
 if node tests/history.mjs 2>/tmp/zwire-hud-history.$$ && node tests/history-render.mjs 2>>/tmp/zwire-hud-history.$$; then
   cyber_ok "history dashboard nominal"

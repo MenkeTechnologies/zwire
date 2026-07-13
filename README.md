@@ -205,7 +205,21 @@ expands to N destinations and opens the whole batch from a single ⏎;
 `gh.com/{issues,pulls,wiki}` opens three tabs at once. It fires only when the
 pattern has no whitespace and every expansion is a real URL, so it never hijacks
 prose or a plain word list — no browser's address bar or command palette expands a
-brace/sequence pattern into a batch tab-open) — **vim-style
+brace/sequence pattern into a batch tab-open) — a **URL-surgery mini-language**
+(`makeUrlSurgeryProvider` — a `url:`/`u:` prefix turns the palette into a rewrite
+engine over the CURRENT tab's URL: a compact, space-separated op list transforms the
+live href and one ⏎ re-navigates to the result. `s/blob/edit/` sed-style regex
+substitution over the whole URL (any single char after `s` is the delimiter, so
+`s|old|new|` skips escaping slashes; `$1` backrefs and `g`/`i` flags work); `+k=v`
+sets/overrides a query param, `-k` removes one, `-?`/`-*` strip ALL of them (drop
+trackers), `#frag`/`-#` set/clear the fragment, `^`/`^^^`/`^3` climb N path segments
+toward root, and `@host` swaps the hostname — composed left→right, e.g.
+`url: @github.dev ^ -utm` swaps host, climbs one segment, and drops a param in one
+⏎. Distinct from brace-expansion (which GENERATES many URLs) and the tab query
+(which FILTERS open tabs): this REWRITES one live URL. Firefox/Brave/Eraser-style
+strippers auto-remove a FIXED tracker list; no browser's command bar exposes an
+interactive URL-rewrite language over the current page — this is the first) —
+**vim-style
 motions** (`zkeys`/`zvim` — jump / scroll / tabs / launch categories), a **find
 bar** (`zfind`), a **powerline status bar** (`ZGui.powerline`, fed by
 `zpowerline.js` from the native host's `zb_sys` system stats + the tmux
@@ -329,7 +343,8 @@ but is four.
 
 - **Single source of truth:** `palette-cmds.js` (`ZWIRE_PALETTE_CMDS`) owns the
   item set + ranking (search, custom commands, inline compute, the `tabs:`
-  boolean tab-query provider, and the zpwrchrome page list via `makeZpwrItems`).
+  boolean tab-query provider, the brace-expansion batch launcher, the `url:`
+  URL-surgery rewrite engine, and the zpwrchrome page list via `makeZpwrItems`).
   Backend-agnostic; **vendored
   verbatim** into `hud-internal/` (canonical — edit this), `newtab/`, and
   `zpwrchrome/lib/`. Each surface must actually load it or its zpwrchrome rows

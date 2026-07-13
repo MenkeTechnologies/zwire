@@ -320,6 +320,13 @@
   // Brace-expansion batch nav (zsh `{a,b}` / `{1..10}` patterns -> N tabs). Direct
   // chrome backend: each open is goCurrent (chrome.tabs.create); a batch loops it.
   var braceProvider = PC.makeBraceProvider ? PC.makeBraceProvider({ open: goCurrent }) : function () { return []; };
+  // URL surgery (`url:` / `u:` sed + query/path/host rewrite). The New Tab page has no
+  // real page URL to rewrite, so getUrl() is empty and the provider stays inert here;
+  // it lives on the HUD content-script palette (zpalette.js) where location.href is a
+  // real page. Registered for surface parity so the two palettes can't drift.
+  var urlSurgeryProvider = PC.makeUrlSurgeryProvider ? PC.makeUrlSurgeryProvider({
+    getUrl: function () { return ''; }, open: goCurrent
+  }) : function () { return []; };
   function customItems(list) { return PC.makeCustomItems ? PC.makeCustomItems(list, CMDCTX) : []; }
   // Inline compute (ported from zgo-core): calc / unit + currency conversion /
   // percentage + `@ <code>` stryke. stryke runs through the SAME cross-ext host
@@ -368,7 +375,7 @@
     try {
       ZGui.palette.clear();
       ZGui.palette.register(items());
-      if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); }
+      if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); ZGui.palette.registerProvider(urlSurgeryProvider); }
       ZGui.palette.open();
     } catch (e) {}
     try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency

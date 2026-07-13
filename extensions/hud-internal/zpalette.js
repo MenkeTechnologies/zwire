@@ -460,6 +460,15 @@
   // Brace-expansion batch nav (zsh `{a,b}` / `{1..10}` patterns -> N tabs). Reuses
   // the same open() worker openTab bus; a batch just loops it (openMany default).
   var braceProvider = PC.makeBraceProvider ? PC.makeBraceProvider({ open: open }) : function () { return []; };
+  // URL surgery (`url:` / `u:` sed + query/path/host rewrite of THIS page's URL). The
+  // top row re-navigates the current tab in place (address-bar semantic); a second row
+  // opens the result in a new tab via the same openTab bus; ⏎ on the copy row yanks it.
+  var urlSurgeryProvider = PC.makeUrlSurgeryProvider ? PC.makeUrlSurgeryProvider({
+    getUrl: function () { return location.href; },
+    nav: function (url) { try { location.assign(url); } catch (e) {} },
+    open: open,
+    copy: clip
+  }) : function () { return []; };
   function getRates(cb) { try { chrome.runtime.sendMessage({ type: 'zbGetRates' }, function (r) { void chrome.runtime.lastError; cb(r); }); } catch (e) { cb(null); } }
   function refreshPalette() { try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {} }
 
@@ -534,7 +543,7 @@
     schemeVars(injectStyle);
     // Open SYNCHRONOUSLY with the static commands so it never depends on an
     // async read — nav always works. Tabs (storage bus) are appended after.
-    try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); } ZGui.palette.open(); } catch (ex) {}
+    try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); ZGui.palette.registerProvider(urlSurgeryProvider); } ZGui.palette.open(); } catch (ex) {}
     try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
     try {
       chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {

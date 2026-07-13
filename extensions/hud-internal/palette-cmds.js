@@ -719,6 +719,116 @@
     };
   }
 
+  /* ==== URL surgery mini-language ==========================================
+   * A `url:` / `u:` prefix turns the palette into a REWRITE ENGINE over the
+   * CURRENT tab's URL: a compact, space-separated op list transforms the live
+   * href and one ⏎ re-navigates to the result. Ops apply left→right:
+   *   s/pat/rep/[gi]  sed-style regex substitution on the whole URL — any single
+   *                   non-word char after `s` is the delimiter, so `s|blob|edit|`
+   *                   avoids escaping slashes; `\`+delim is a literal delim, other
+   *                   escapes (\d, \.) pass through to the RegExp; `$1` backrefs work
+   *   +k=v            set / override a query param (v is url-encoded); bare `+k` => k=
+   *   -k              remove a query param
+   *   -?  /  -*       strip ALL query params (declutter / drop trackers)
+   *   #frag  /  -#    set / clear the fragment
+   *   ^  (^^^ / ^3)   climb N path segments toward root  (/a/b/c + ^ => /a/b)
+   *   @host           swap the hostname (keeps path + query + fragment)
+   * Pure/offline — the consumer injects getUrl() + nav/open(url) (+ optional copy).
+   * Distinct from brace-expansion (which GENERATES many URLs) and the tab query
+   * (which FILTERS open tabs): this REWRITES one live URL. No browser's command bar
+   * exposes an interactive URL-rewrite language over the current page — this is the
+   * first (Firefox/Brave/Eraser-style strippers auto-remove a FIXED tracker list;
+   * none take arbitrary substitution / path / host edits from a typed expression). */
+  function surgeryUrl(href) { try { return new URL(href); } catch (e) { return null; } }
+  // splitDelim(str, delim) -> fields split on an unescaped single-char `delim`.
+  // `\`+delim collapses to a literal delim; any OTHER `\x` is preserved verbatim so
+  // regex escapes (\d, \., \w) survive into the RegExp.
+  function splitDelim(str, delim) {
+    var fields = [], cur = '';
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charAt(i);
+      if (c === '\\' && i + 1 < str.length) {
+        var nx = str.charAt(i + 1);
+        if (nx === delim) cur += delim; else cur += c + nx;
+        i++; continue;
+      }
+      if (c === delim) { fields.push(cur); cur = ''; continue; }
+      cur += c;
+    }
+    fields.push(cur);
+    return fields;
+  }
+  // applySub(href, op, delim) -> href with the sed substitution applied. Malformed
+  // ops (bad regex, missing pattern) no-op rather than throwing.
+  function applySub(href, op, delim) {
+    var f = splitDelim(op.slice(2), delim);
+    if (f.length < 2 || !f[0]) return href;
+    var flags = (f[2] || '').replace(/[^gi]/g, '');
+    var re; try { re = new RegExp(f[0], flags); } catch (e) { return href; }
+    try { return href.replace(re, f[1]); } catch (e) { return href; }
+  }
+  function surgeryClimb(u, op) {
+    var n = /^\^(\d+)$/.test(op) ? parseInt(op.slice(1), 10) : op.length;
+    var segs = u.pathname.split('/').filter(Boolean);
+    segs = segs.slice(0, Math.max(0, segs.length - n));
+    u.pathname = '/' + segs.join('/');
+  }
+  function surgeryParam(u, kv) {
+    if (!kv) return;
+    var eq = kv.indexOf('=');
+    var key = eq >= 0 ? kv.slice(0, eq) : kv;
+    if (key) u.searchParams.set(key, eq >= 0 ? kv.slice(eq + 1) : '');
+  }
+  // urlSurgery(href, expr) -> rewritten href string (unchanged on a no-op expr).
+  // Substitution edits the raw string; structured ops parse the current string into
+  // a URL, mutate, and re-serialize (skipped if it isn't a valid absolute URL).
+  function urlSurgery(href, expr) {
+    var ops = String(expr || '').trim().split(/\s+/).filter(Boolean);
+    var cur = String(href || '');
+    for (var i = 0; i < ops.length; i++) {
+      var op = ops[i];
+      var sm = /^s([^\w\s])/.exec(op);
+      if (sm) { cur = applySub(cur, op, sm[1]); continue; }
+      var u = surgeryUrl(cur);
+      if (!u) continue;
+      if (op === '-?' || op === '-*') u.search = '';
+      else if (op === '-#') u.hash = '';
+      else if (/^\^+$/.test(op) || /^\^\d+$/.test(op)) surgeryClimb(u, op);
+      else if (op.charAt(0) === '+') surgeryParam(u, op.slice(1));
+      else if (op.charAt(0) === '-') u.searchParams.delete(op.slice(1));
+      else if (op.charAt(0) === '#') u.hash = op;
+      else if (op.charAt(0) === '@') { if (op.length > 1) try { u.host = op.slice(1); } catch (e) {} }
+      else continue;                                                 // unknown op: ignore
+      cur = u.href;
+    }
+    return cur;
+  }
+  // makeUrlSurgeryProvider(ctx) -> provider(q). ctx: { getUrl():string, nav?(url),
+  // open?(url), copy?(text) }. Fires only on a `url:`/`u:` sigil. Top row re-navigates
+  // the current tab (nav, falling back to open); optional new-tab + copy rows follow.
+  function makeUrlSurgeryProvider(ctx) {
+    ctx = ctx || {};
+    var getUrl = ctx.getUrl || function () { return ''; };
+    var nav = ctx.nav || ctx.open || function () {};
+    var openNew = ctx.open;
+    var copy = ctx.copy;
+    return function urlSurgeryProvider(q) {
+      var m = /^u(?:rl)?:\s*([\s\S]*)$/i.exec(String(q || ''));
+      if (!m) return [];
+      var expr = m[1].trim();
+      var src = String(getUrl() || '');
+      if (!surgeryUrl(src)) return [];                               // nothing to rewrite (e.g. New Tab surface)
+      if (!expr) return [{ icon: '✂', label: src, detail: 'url surgery · s/…/…/  +k=v  -k  -?  ^  @host  #frag', top: true, run: function () {} }];
+      var out = urlSurgery(src, expr);
+      if (out === src) return [{ icon: '✂', label: 'No change', detail: 'url surgery · ' + expr, top: true, run: function () {} }];
+      if (!surgeryUrl(out)) return [{ icon: '✂', label: 'Invalid result', detail: 'url surgery · ' + expr, top: true, run: function () {} }];
+      var rows = [{ icon: '✂', label: out, detail: 'url surgery · rewrite here ⏎', top: true, run: function () { nav(out); } }];
+      if (openNew && openNew !== nav) rows.push({ icon: '↗', label: 'New tab: ' + out, detail: 'url surgery', run: function () { openNew(out); } });
+      if (copy) rows.push({ icon: '⧉', label: 'Copy: ' + out, detail: 'url surgery', run: function () { try { copy(out); } catch (e) {} } });
+      return rows;
+    };
+  }
+
   root.ZWIRE_PALETTE_CMDS = {
     SEARCH: SEARCH,
     parseTabQuery: parseTabQuery,
@@ -748,6 +858,9 @@
     makeComputeProvider: makeComputeProvider,
     // brace-expansion batch navigation
     expandBraces: expandBraces,
-    makeBraceProvider: makeBraceProvider
+    makeBraceProvider: makeBraceProvider,
+    // URL surgery mini-language
+    urlSurgery: urlSurgery,
+    makeUrlSurgeryProvider: makeUrlSurgeryProvider
   };
 })(typeof window !== 'undefined' ? window : this);
