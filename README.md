@@ -49,9 +49,9 @@ workspace layered on top:
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 
-The HUD layer (`extensions/hud-internal`) is ~7,400 lines of extension code
+The HUD layer (`extensions/hud-internal`) is ~11,800 lines of extension code
 across 11 subsystems and 21 pages, assembled on the **`zgui-core`** shared GUI
-toolkit (253 `ZGui.*` components, a git submodule loaded straight from
+toolkit (258 `ZGui.*` components, a git submodule loaded straight from
 `lib/zgui-core/webui/`) and bridged to the **`zwire-host`** native agent (a
 single Rust binary, its own submodule). Under it, a **25-patch C++ fork**
 restyles the *native* chrome the extension layer can't reach.
@@ -83,7 +83,7 @@ Chrome can no longer be scripted this way; a Chromium build can.
 ## `[0x01] THE HUD WORKSPACE`
 
 `extensions/hud-internal` is where zwire stops being "a browser" and becomes a
-workspace. It is a content-script + page bundle (~7,400 LOC), not a theme.
+workspace. It is a content-script + page bundle (~11,800 LOC), not a theme.
 
 **`ztmux` — the tiling overlay.** A tmux server, in the browser. The tiling
 window-manager itself is `ZGui.tmux` from the shared `zgui-core` toolkit; zwire
@@ -94,7 +94,7 @@ copy-mode yanks up to the top frame). Recursive binary pane splits, unlimited
 windows, and **every pane is a live webview** (any URL, iframed via the
 allow-framing patch). Driven by a
 **rebindable prefix** (default `Ctrl-b` / `⌥B`; set your own — `C-a` — on the
-Keyboard page, with a configurable timeout). 45 prefix actions, all remappable:
+Keyboard page, with a configurable timeout). 48 prefix actions, all remappable:
 
 - **panes** — split h/v, directional nav (arrows + `h/j/k/l`), resize
   (`H/J/K/L`), zoom, close, swap, rotate, break-to-window, pane numbers;
@@ -113,7 +113,7 @@ the current layout with `Ctrl-b S`, attach a saved one with `Ctrl-b s`.
 
 **Hooks (`pages/hooks.html`).** Bind
 [stryke](https://github.com/MenkeTechnologies/strykelang) scripts to browser
-lifecycle events. The service worker fires ~50 events — tab
+lifecycle events. The service worker fires ~160 events — tab
 open/close/activate/update/move, window open/close/focus, navigation, downloads,
 bookmarks, history, the HUD terminal, scheme changes, the audio engine, ⌘K
 palette commands, plus an `action` catch-all for every command — and `zwire-host`
@@ -225,7 +225,7 @@ patch 0022 and asserts per-effect invariants.
 
 **`zgui-core` — the shared GUI toolkit (`lib/zgui-core`, submodule).** The HUD is
 not hand-rolled per page; it is assembled from **`ZGui`**, a cyberpunk web-component
-library (253 modules under `webui/`) shared across the MenkeTechnologies app
+library (258 modules under `webui/`) shared across the MenkeTechnologies app
 suite and loaded **directly from the submodule path** (never copied — copies go
 stale). The tiling WM (`ZGui.tmux`), the ⌘K palette (`ZGui.palette`), fuzzy find
 (`ZGui.fzf`), the scheme engine (`ZGui.colorscheme`), the powerline
@@ -258,7 +258,7 @@ without a host and silently hand them back to the browser's built-in downloader.
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
 | **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 21 HUD pages (incl. the Sessions manager, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
-| **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (253 `webui/*` modules), a submodule loaded straight from path (never copied). Every HUD page composes `ZGui` components; zwire supplies only the glue |
+| **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (258 `webui/*` modules), a submodule loaded straight from path (never copied). Every HUD page composes `ZGui` components; zwire supplies only the glue |
 | **Native host** | `extensions/hud-internal/native/zwire-host` — a single Rust binary (native-messaging host + Unix-socket daemon: sysmon, fs, exec, PTY, KV, hooks, OS ops), a submodule. Backs the Host console + powerline stats + the audio EQ/meters file bridge |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension (in-repo, not a submodule): the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |
