@@ -83,6 +83,42 @@
       });
     } catch (e) { bootToast('stryke: ' + e, 'error'); }
   }
+  // AppleScript steps run through zwire-host via `osascript` (macOS only). Each
+  // source line becomes an `-e` arg (osascript's multi-line convention), so
+  // multi-line scripts run with no temp file. Mirrors zpalette.js runOsa, but on
+  // an internal HUD page we reach the host directly (sendNativeMessage).
+  function runOsaBoot(script) {
+    if (osKind() !== 'mac') { bootToast('applescript: macOS only', 'error'); return; }
+    var args = [];
+    String(script).split('\n').forEach(function (line) { args.push('-e'); args.push(line); });
+    try {
+      chrome.runtime.sendNativeMessage(HOST, { cmd: 'exec', program: 'osascript', args: args }, function (reply) {
+        var err = chrome.runtime.lastError;
+        if (err) { bootToast('applescript: ' + err.message, 'error'); return; }
+        var r = reply || {};
+        if (r.ok === false) { bootToast('applescript: ' + (r.err || 'failed'), 'error'); return; }
+        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
+        var bad = r.code != null && r.code !== 0;
+        var text = out || er;
+        bootToast('⟨osa⟩' + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad ? 'error' : 'success');
+      });
+    } catch (e) { bootToast('applescript: ' + e, 'error'); }
+  }
+  // Batch steps run through zwire-host via `cmd.exe /d /s /c` (Windows only).
+  function runBatchBoot(cmd) {
+    try {
+      chrome.runtime.sendNativeMessage(HOST, { cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', cmd] }, function (reply) {
+        var err = chrome.runtime.lastError;
+        if (err) { bootToast('batch: ' + err.message, 'error'); return; }
+        var r = reply || {};
+        if (r.ok === false) { bootToast('batch: ' + (r.err || 'failed'), 'error'); return; }
+        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
+        var bad = r.code != null && r.code !== 0;
+        var text = out || er;
+        bootToast('cmd> ' + cmd + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad ? 'error' : 'success');
+      });
+    } catch (e) { bootToast('batch: ' + e, 'error'); }
+  }
   function runStepBoot(type, v, arg) {
     v = v || '';
     if (type === 'shell') {
@@ -93,6 +129,16 @@
     if (type === 'stryke') {
       var sc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
       runStrykeBoot(sc);
+      return;
+    }
+    if (type === 'applescript') {
+      var as = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
+      runOsaBoot(as);
+      return;
+    }
+    if (type === 'batch') {
+      var bc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : (arg ? v + ' ' + arg : v);
+      runBatchBoot(bc);
       return;
     }
     if (type === 'js') { try { (new Function('q', v))(arg || ''); } catch (x) {} return; }
