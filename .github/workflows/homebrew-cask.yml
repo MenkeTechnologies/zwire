@@ -1,0 +1,84 @@
+name: Homebrew Cask
+
+# Keep the MenkeTechnologies/homebrew-menketech `zwire` cask in lockstep with
+# each macOS release. release-macos.sh cuts the release LOCALLY (it repackages a
+# self-contained zwire.app that needs macOS + the Blink base), so the asset the
+# cask points at only exists AFTER `gh release create` publishes it — hence this
+# fires on `release: published`, not on the raw tag push (which lands before the
+# .zip is uploaded and would race the asset). `workflow_dispatch` re-syncs a tag
+# by hand.
+#
+# Requires the org secret HOMEBREW_TAP_TOKEN (a PAT with write access to
+# homebrew-menketech) to be exposed to this repo — the same secret every other
+# MenkeTechnologies release workflow uses to push its formula.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sync (e.g. v0.6.41)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  cask:
+    name: Bump the zwire cask on the tap
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve tag, download the macOS .zip, hash it
+        id: asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          V="${TAG#v}"
+          ZIP="zwire-${V}-macos.zip"
+          gh release download "$TAG" -R MenkeTechnologies/zwire -p "$ZIP" -D .
+          SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
+          {
+            echo "version=$V"
+            echo "sha=$SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out the tap
+        uses: actions/checkout@v6
+        with:
+          repository: MenkeTechnologies/homebrew-menketech
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Bump version + sha256 in Casks/zwire.rb
+        env:
+          V: ${{ steps.asset.outputs.version }}
+          SHA: ${{ steps.asset.outputs.sha }}
+        run: |
+          set -euo pipefail
+          cask="tap/Casks/zwire.rb"
+          [ -f "$cask" ] || { echo "::error::$cask missing on the tap"; exit 1; }
+          # The cask file is the source of truth (app/zap/caveats stanzas); only
+          # the two volatile lines change per release.
+          perl -i -pe 's/^  version ".*"/  version "'"$V"'"/'   "$cask"
+          perl -i -pe 's/^  sha256 ".*"/  sha256 "'"$SHA"'"/'   "$cask"
+          grep -q "version \"$V\"" "$cask"
+          grep -q "sha256 \"$SHA\"" "$cask"
+
+      - name: Commit + push
+        run: |
+          set -euo pipefail
+          cd tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/zwire.rb
+          if git diff --cached --quiet; then
+            echo "cask already at ${{ steps.asset.outputs.version }} — nothing to push"
+            exit 0
+          fi
+          git commit -m "zwire: bump cask to v${{ steps.asset.outputs.version }}"
+          git push
