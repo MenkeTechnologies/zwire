@@ -565,4 +565,10 @@
       try { if (window.toggleTerminalPopup) window.toggleTerminalPopup(); } catch (ex) {}
     }
   }, true);
+
+  // Export the step executor so ztriggers.js runs a trigger's chain through the exact
+  // same code path a ⌘K command uses — one implementation of shell/stryke/js/applescript/
+  // batch/action/scheme/host/url execution on a live page. runCustom(entry, arg) runs
+  // entry.steps top-to-bottom with {q} = arg (the matched text, for a trigger).
+  try { window.ZWIRE_CMD_EXEC = { runStep: runStep, runCustom: runCustom }; } catch (e) {}
 })();

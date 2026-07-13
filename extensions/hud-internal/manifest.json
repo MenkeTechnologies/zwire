@@ -275,7 +275,8 @@
         "zspeak.js",
         "zpeek.js",
         "zzap.js",
-        "zvim.js"
+        "zvim.js",
+        "ztriggers.js"
       ],
       "run_at": "document_start",
       "all_frames": false

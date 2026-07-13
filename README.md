@@ -41,6 +41,12 @@ workspace layered on top:
   browser events (tab / window / navigation / download / bookmark / terminal /
   scheme / audio / ⌘K-command lifecycle, plus an `action` catch-all), with a
   searchable event picker;
+- **output triggers** — a **Triggers HUD page** that binds a regex to page text
+  *as it renders/streams* (the browser analog of a terminal-emulator trigger) and,
+  on a match, runs a chain of typed steps — shell / stryke / JavaScript /
+  AppleScript / batch / browser-action / scheme / host — the identical step set a
+  ⌘K command runs, with the matched line passed as `{q}`; per-trigger cooldown and
+  an optional URL-filter regex keep it scoped;
 - an **automation verb bus** — one namespaced `browser.*` surface (tab / group /
   window ops, edge-snapping, downloads, browsing-data clearing, bookmarks,
   reading list, extensions, power, screenshot, notify, tmux toggle) that the ⌘K
@@ -50,7 +56,7 @@ workspace layered on top:
   never touches your system Chrome.
 
 The HUD layer (`extensions/hud-internal`) is ~11,800 lines of extension code
-across 11 subsystems and 21 pages, assembled on the **`zgui-core`** shared GUI
+across 11 subsystems and 22 pages, assembled on the **`zgui-core`** shared GUI
 toolkit (258 `ZGui.*` components, a git submodule loaded straight from
 `lib/zgui-core/webui/`) and bridged to the **`zwire-host`** native agent (a
 single Rust binary, its own submodule). Under it, a **25-patch C++ fork**
@@ -121,6 +127,21 @@ runs each **enabled** hook whose event matches, feeding it the event JSON on
 stdin. The script prints an `{actions:[…]}` object the host dispatches (`notify` /
 `open` / `exec` / `pub`). The page has a searchable event picker, a Monaco editor
 with the stryke LSP (vim/emacs modes), and a Test-run button.
+
+**Triggers (`pages/triggers.html`).** Where Hooks react to browser *events*,
+triggers react to page *content*. A content-script engine (`ztriggers.js`) runs on
+every web page, watches its text as it renders and streams (a `MutationObserver`
+over the DOM, throttled and line-capped), and matches each enabled trigger's regex
+against the fresh output — the browser analog of a terminal emulator's output
+triggers, a thing a tab-multiplexer can't do because it never sees rendered text.
+On a match the trigger runs a **chain of typed steps** — the identical wizard a ⌘K
+command uses (`shell` / `stryke` / `js` / `applescript` / `batch` / `action` /
+`scheme` / `host` / `url`), rendered by the shared `ZwireStepWizard` and executed
+through the same `window.ZWIRE_CMD_EXEC` path — with the matched line passed as the
+`{q}` argument. Each trigger carries its own cooldown (no process storm on bursty
+output) and an optional URL-filter regex to scope which pages it fires on. Stored
+in `chrome.storage.local` (`zb_triggers`); the page is full CRUD with a
+per-trigger enable toggle.
 
 **Automation verb bus (`background.js` → `execZbCmd`).** Every HUD surface —
 the ⌘K palette, content-script shortcuts, and stryke hooks — drives the browser
@@ -257,7 +278,7 @@ without a host and silently hand them back to the browser's built-in downloader.
 | Layer | What it is |
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
-| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 21 HUD pages (incl. the Sessions manager, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
+| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 22 HUD pages (incl. the Sessions manager, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
 | **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (258 `webui/*` modules), a submodule loaded straight from path (never copied). Every HUD page composes `ZGui` components; zwire supplies only the glue |
 | **Native host** | `extensions/hud-internal/native/zwire-host` — a single Rust binary (native-messaging host + Unix-socket daemon: sysmon, fs, exec, PTY, KV, hooks, OS ops), a submodule. Backs the Host console + powerline stats + the audio EQ/meters file bridge |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension (in-repo, not a submodule): the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
