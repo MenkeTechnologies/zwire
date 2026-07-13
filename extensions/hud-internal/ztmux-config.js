@@ -83,6 +83,21 @@
     else if (d.yank) ZGui.tmux.yank(d.yank, d.append);
   });
 
+  // The HUD Sessions page loads a layout by asking the background to open a fresh tab
+  // and relay this message to it (chrome.tabs.sendMessage). We attach the saved session
+  // here. init()'s prefs load is async, so SESSIONS may not be populated the instant the
+  // message lands (the tab just finished loading) — retry until it attaches or we give up.
+  function attachSession(id, tries) {
+    if (!window.ZGui || !ZGui.tmux || !ZGui.tmux.loadSession) { if (tries < 20) setTimeout(function () { attachSession(id, tries + 1); }, 100); return; }
+    ZGui.tmux.loadSession(id);
+    if (!ZGui.tmux.isOpen() && tries < 20) setTimeout(function () { attachSession(id, tries + 1); }, 100);
+  }
+  try {
+    chrome.runtime.onMessage.addListener(function (msg) {
+      if (msg && msg.type === 'zbTmuxLoadSession' && msg.id) attachSession(msg.id, 0);
+    });
+  } catch (e) {}
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();

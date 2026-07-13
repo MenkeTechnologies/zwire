@@ -1,8 +1,9 @@
 /* zwire HUD — Tmux Sessions manager. Durable, named tmux sessions: each session
  * holds windows, each window holds panes, each pane is a webview (URL + title).
  * Full CRUD from one page. Sessions live in chrome.storage.local 'zb_tmux_sessions'
- * (survives restart — inside the profile). "Load" writes a 'zb_tmux_load' trigger
- * that the live ztmux overlay (ztmux.js) watches, rebuilding its tiling tree.
+ * (survives restart — inside the profile). "Load" asks the background to open a fresh
+ * browsing tab at the layout's first web page; the tmux overlay content script there
+ * attaches the whole session (background → tabs.sendMessage 'zbTmuxLoadSession').
  *
  * Schema:  [{ id, name, created, updated, windows:[{ name, panes:[{ url, title }] }] }] */
 (function () {
@@ -117,10 +118,23 @@
       if (editingId === s.id) editingId = null; persist(render);
     });
   }
+  // First pane URL that is a real web page — the carrier the overlay attaches onto (the
+  // overlay is a content script, so it only lives on http/https/file pages, never a blank
+  // pane whose ref points at the extension new-tab).
+  function firstPaneUrl(s) {
+    var wins = s.windows || [];
+    for (var i = 0; i < wins.length; i++) {
+      var ps = wins[i].panes || [];
+      for (var j = 0; j < ps.length; j++) { var u = ((ps[j] && ps[j].url) || '').trim(); if (/^(https?|file):\/\//i.test(u)) return u; }
+    }
+    return null;
+  }
   function loadSession(s) {
-    // signal the live ztmux overlay (in whatever tab is active) to attach this session.
-    try { chrome.storage.local.set({ zb_tmux_load: { id: s.id, ts: stamp() } }, function () { void chrome.runtime.lastError; }); } catch (e) {}
-    toast('Attaching "' + s.name + '" — switch to a browsing tab to see it.');
+    var url = firstPaneUrl(s);
+    if (!url) { toast('"' + s.name + '" has no web pages — add a URL to a pane first.'); return; }
+    // Background opens a new tab at `url` and relays the attach to its overlay once loaded.
+    try { chrome.runtime.sendMessage({ type: 'zbTmuxOpen', id: s.id, url: url }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+    toast('Opening "' + s.name + '" in a new tab…');
   }
 
   /* --------------------------- window / pane ops -------------------------- */

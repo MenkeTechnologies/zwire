@@ -1050,6 +1050,25 @@ function relayHost(req, respond) {
   } catch (e) { respond({ ok: false, err: String(e) }); }
 }
 
+// Open a new tab as the carrier for a tmux session and relay the attach message to it
+// once its content scripts are live (status 'complete' — document_idle has run by then).
+function openTmuxSession(id, url) {
+  try {
+    chrome.tabs.create({ url: url }, function (tab) {
+      void chrome.runtime.lastError;
+      if (!tab || tab.id == null) return;
+      var tid = tab.id, done = false;
+      function attach() {
+        if (done) return; done = true;
+        try { chrome.tabs.onUpdated.removeListener(onUpd); } catch (e) {}
+        try { chrome.tabs.sendMessage(tid, { type: 'zbTmuxLoadSession', id: id }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      }
+      function onUpd(uid, info) { if (uid === tid && info && info.status === 'complete') attach(); }
+      try { chrome.tabs.onUpdated.addListener(onUpd); } catch (e) {}
+    });
+  } catch (e) {}
+}
+
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   // HUD pages fire their own lifecycle events (palette-command, session-saved,
   // pane-split, audio-eq-changed, …) through this relay so all hook firing goes
@@ -1061,6 +1080,16 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (msg.event === 'palette-command' && msg.payload && msg.payload.command && self.__zbAct) {
       try { self.__zbAct('palette:' + msg.payload.command); } catch (e) {}
     }
+    return;
+  }
+  // Sessions page → "Load": open a fresh browsing tab at the layout's first web page and,
+  // once it finishes loading, tell the tmux overlay content script there to attach the
+  // whole session (ztmux-config.js listens for zbTmuxLoadSession). The overlay only lives
+  // on http/https/file pages, so this is how a saved layout attaches without the user
+  // hunting for a tab. { type:'zbTmuxOpen', id, url }.
+  if (msg && msg.type === 'zbTmuxOpen' && msg.id && msg.url) {
+    openTmuxSession(msg.id, msg.url);
+    sendResponse({ ok: true });
     return;
   }
   if (msg && msg.type === 'zbhud-scheme' && msg.scheme) {
