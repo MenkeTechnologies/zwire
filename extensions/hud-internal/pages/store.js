@@ -15,13 +15,14 @@
   function byId(id) { for (var i = 0; i < S.PRODUCTS.length; i++) if (S.PRODUCTS[i].id === id) return S.PRODUCTS[i]; return null; }
 
   function buyBtn(p) { return ZGui.button({ label: 'Buy ↗', variant: 'primary', onClick: function () { open(S.url(p.id)); } }); }
-  // Full-bleed screenshot thumb (webp from app-store/assets) — cover-filled like
-  // the live storefront, vs the glyph fallback for apps without a shot. Passed as
-  // a node so productCard drops it straight into .product-thumb.
+  // Full-bleed screenshot thumb (webp vendored under pages/store-assets) —
+  // cover-filled like the live storefront, vs the glyph fallback for apps
+  // without a shot. p.shot is an extension-relative path so the thumb loads
+  // offline; passed as a node so productCard drops it straight into .product-thumb.
   function shotThumb(p) {
     if (!p.shot) return null;
     var img = el('img', 'thumb-shot');
-    img.src = S.BASE + p.shot;
+    img.src = p.shot;
     img.loading = 'lazy';
     img.alt = p.name + ' screenshot';
     return img;

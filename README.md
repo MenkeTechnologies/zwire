@@ -246,8 +246,9 @@ the browser.
 
 **App Store (`pages/store.html`).** A HUD storefront tab for the
 **MenkeTechnologies app store** — the paid Rust desktop apps and audio plugins,
-each a `ZGui.productCard` (cover-filled with the app's `app-store/assets` webp
-screenshot, glyph fallback) linking to its live product page to buy. zwire is free
+each a `ZGui.productCard` (cover-filled with the app's screenshot — webp vendored
+under `pages/store-assets/` so the tab renders offline, glyph fallback) linking to
+its live product page to buy. zwire is free
 and open source; this is its shop window. On **first run** (`onInstalled`),
 `background.js` opens this page once with a welcome modal, so the store is shown
 up front — the new-tab page stays untouched.
