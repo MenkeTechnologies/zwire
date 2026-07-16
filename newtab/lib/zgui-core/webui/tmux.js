@@ -803,7 +803,7 @@
     // to the document (Bold survives) — ⌥b (altKey) still arms as a universal
     // opener. Once ATTACHED, the prefix owns the surface like real tmux (C-b is
     // always the prefix inside tmux, even in editable panes).
-    //   CFG.prefixInEditable: hosts whose whole surface is an editable terminal (e.g. zemacs-gui,
+    //   CFG.prefixInEditable: hosts whose whole surface is an editable terminal (e.g. zmax-gui,
     //   where the editor lives in an xterm textarea) opt in so C-b is the tmux prefix GLOBALLY —
     //   otherwise the detached-editable pass-through above would send every C-b to the editor.
     if (isPrefix(e)) {

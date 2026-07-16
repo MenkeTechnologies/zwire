@@ -315,7 +315,7 @@ startSysStream();
 // palette or a HUD page flips zb_ui / zb_scheme). Write it to the host — the
 // single source of truth — which persists it to ~/.zwire/global.toml and
 // publishes it back to US (echo, skipped below) AND to every other app's
-// subscription (newtab, zpwrchrome, zemacs, the fleet). No cross-extension
+// subscription (newtab, zpwrchrome, zmax, the fleet). No cross-extension
 // messaging: the host fans it out.
 try {
   chrome.storage.onChanged.addListener(function (ch, area) {
