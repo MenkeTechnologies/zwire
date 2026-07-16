@@ -57,6 +57,21 @@ const STATE = {
   engReverbMix: 0.0, engRoom: 0.5, engDamp: 0.5,
   engLimit: false, engCeiling: -1.0,
   engBypass: false, engMute: false,
+  // section A/B bypasses
+  engDynBypass: false, engSpaceBypass: false, engFxBypass: false, engFx2Bypass: false,
+  // FX rack state (defaults mirror the `var eng… =` declarations in audio.js)
+  engGate: -90.0,
+  engTremolo: 0.0, engTremRate: 5.0,
+  engAutopan: 0.0, engPanRate: 1.0,
+  engChorus: 0.0, engChorusRate: 1.5, engChorusDepth: 5.0,
+  engFlanger: 0.0, engFlangerRate: 0.5, engFlangerDepth: 2.0, engFlangerFb: 0.3,
+  engPhaser: 0.0, engPhaserRate: 0.5, engPhaserDepth: 0.7,
+  engCrushBits: 16.0, engDownsample: 1.0,
+  engRing: 0.0, engRingFreq: 500.0,
+  engExciter: 0.0, engExciterFreq: 3000.0,
+  engShaper: 0.0, engShaperType: 0,
+  engWah: 0.0, engWahSens: 0.5, engWahBase: 400.0,
+  engHaas: 0.0, engCrossfeed: 0.0,
   preampDb: 0, eq: null
 };
 const names = Object.keys(STATE);
@@ -71,7 +86,7 @@ ${buildSpecSrc}
 ${parseSpecSrc}
 function __set(s){ ${setBody} }
 function __reset(){ __set(${JSON.stringify(STATE)}); }
-return { buildSpec: buildSpec, parseSpec: parseSpec, set: __set, reset: __reset };
+return { buildSpec: buildSpec, parseSpec: parseSpec, flat: flat, set: __set, reset: __reset };
 `;
 
 // eslint-disable-next-line no-new-func
@@ -156,8 +171,10 @@ const emittedNames = unityParts
   .map((f) => f[0]);
 check('(b) unity spec emits ZERO channel-strip directives',
   emittedNames.length === 0, `emitted: [${emittedNames.join(', ')}]`);
-check('(b) unity spec still carries preamp + 5 bands',
-  unityParts.length === 6 && unityParts[0] === '0.00', `spec: ${unity}`);
+// band count derived from audio.js's own flat() — never hardcoded
+const nDefaultBands = M.flat().length;
+check(`(b) unity spec still carries preamp + ${nDefaultBands} default bands`,
+  unityParts.length === nDefaultBands + 1 && unityParts[0] === '0.00', `spec: ${unity}`);
 // belt-and-suspenders: none of the omit-list names appear anywhere
 check('(b) no default directive name leaks into unity spec',
   OMIT.every((n) => !emittedNames.includes(n)), `emitted: [${emittedNames.join(', ')}]`);

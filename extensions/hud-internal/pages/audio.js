@@ -278,9 +278,12 @@
       parts.push('wahbase,' + Math.round(engWahBase));
     }
     }  // end !engFx2Bypass (FX II)
-    // CEILING auto-engages the limiter: a set ceiling emits the directive even
-    // if the LED toggle wasn't flipped (else the knob silently does nothing).
-    if (!engSpaceBypass && (engLimit || engCeiling < -0.05)) parts.push('ceiling,' + engCeiling.toFixed(2));
+    // CEILING auto-engages the limiter: a MOVED ceiling emits the directive
+    // even if the LED toggle wasn't flipped (else the knob silently does
+    // nothing). "Moved" = off the -1.0 dBFS default — comparing against
+    // -0.05 emitted ceiling,-1.00 on every unity spec, which parseSpec then
+    // read back as limit=true, silently engaging the limiter at defaults.
+    if (!engSpaceBypass && (engLimit || Math.abs(engCeiling + 1.0) > 0.05)) parts.push('ceiling,' + engCeiling.toFixed(2));
     return parts.join(';');
   }
   function stateDirShell() {
