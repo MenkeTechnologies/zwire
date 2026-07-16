@@ -57,6 +57,33 @@
       tag: 'A fully modular MIDI-effects plugin on the same patch-graph engine.', pills: ['VST3/AU/CLAP', 'Fully modular'] }
   ];
 
+  // Primary screenshot per app (a webp in app-store/assets), shown as the card
+  // thumb. Mirrors the first DETAILS[id].screenshots entry on the live
+  // storefront; a card falls back to its glyph when an app has no shot yet
+  // (e.g. zpwr-daw). Paths are relative to BASE, so they resolve to the live
+  // gh-pages assets.
+  var SHOTS = {
+    zpdf:           'assets/zpdf.webp',
+    zphoto:         'assets/zphoto.webp',
+    zoffice:        'assets/zoffice.webp',
+    zemail:         'assets/zemail.webp',
+    zstation:       'assets/zstation.webp',
+    'audio-haxor':  'assets/audio-haxor/plugins.webp',
+    traderview:     'assets/traderview.webp',
+    ztranslator:    'assets/ztranslator.webp',
+    zcite:          'assets/zcite.webp',
+    zreq:           'assets/zreq.webp',
+    ztunnel:        'assets/ztunnel.webp',
+    zgo:            'assets/zgo.webp',
+    zftp:           'assets/zftp.webp',
+    zcontainer:     'assets/zcontainer/dashboard.webp',
+    zterminal:      'assets/zterminal/dashboard.webp',
+    'zpwr-synth':   'assets/zsynth-synth.webp',
+    'zpwr-fx':      'assets/zpwr-fx.webp',
+    'zpwr-midi-fx': 'assets/zpwr-midi-fx.webp'
+  };
+  PRODUCTS.forEach(function (p) { if (SHOTS[p.id]) p.shot = SHOTS[p.id]; });
+
   window.ZWIRE_STORE = {
     BASE: BASE,
     url: url,

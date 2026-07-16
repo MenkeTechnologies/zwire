@@ -15,9 +15,20 @@
   function byId(id) { for (var i = 0; i < S.PRODUCTS.length; i++) if (S.PRODUCTS[i].id === id) return S.PRODUCTS[i]; return null; }
 
   function buyBtn(p) { return ZGui.button({ label: 'Buy ↗', variant: 'primary', onClick: function () { open(S.url(p.id)); } }); }
+  // Full-bleed screenshot thumb (webp from app-store/assets) — cover-filled like
+  // the live storefront, vs the glyph fallback for apps without a shot. Passed as
+  // a node so productCard drops it straight into .product-thumb.
+  function shotThumb(p) {
+    if (!p.shot) return null;
+    var img = el('img', 'thumb-shot');
+    img.src = S.BASE + p.shot;
+    img.loading = 'lazy';
+    img.alt = p.name + ' screenshot';
+    return img;
+  }
   function card(p) {
     return ZGui.productCard({
-      glyph: p.glyph, badge: p.badge, badgeFirst: p.badge === 'WORLD FIRST' || p.badge === 'BESTSELLER',
+      glyph: p.glyph, thumb: shotThumb(p), badge: p.badge, badgeFirst: p.badge === 'WORLD FIRST' || p.badge === 'BESTSELLER',
       category: p.category, name: p.name, tag: p.tag, meta: p.pills, actions: buyBtn(p)
     }).el;
   }
@@ -84,6 +95,9 @@
     var s = document.createElement('style'); s.id = 'zb-store-css';
     s.textContent = [
       '.store-intro .store-lead{font-family:"Share Tech Mono",monospace;font-size:12px;color:var(--text-dim);line-height:1.6;margin:.4rem 0 .8rem;}',
+      // Screenshot thumbs fill the card head (ported from the live store .thumb-shot).
+      '.product-thumb .thumb-shot{width:100%;height:100%;object-fit:cover;object-position:top center;display:block;}',
+      '.product-card:hover .thumb-shot{filter:brightness(1.08);}',
       '.store-actions{display:flex;flex-wrap:wrap;gap:.5rem;}',
       '.store-welcome .store-lead{font-size:12px;color:var(--text-dim);line-height:1.6;margin:0 0 1rem;}',
       '.store-welcome-modal .modal-content{width:min(920px,94vw);}'
