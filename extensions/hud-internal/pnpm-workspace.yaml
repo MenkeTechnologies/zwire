@@ -1,2 +1,6 @@
+# pnpm >= 11 reads build approvals from here; the `pnpm.onlyBuiltDependencies`
+# field in package.json is ignored. esbuild unpacks a platform binary in its
+# install script and the Monaco bundle (scripts/build.sh) needs it, so approve it
+# — left unset, `pnpm test` aborts with ERR_PNPM_IGNORED_BUILDS before it runs.
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
