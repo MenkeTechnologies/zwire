@@ -97,7 +97,10 @@ APP_DIRNAME="$(basename "$BASE_APP")"              # zbrowser.app
 # base with no framework is exactly the case this check exists to report.
 BASE_FW="$(ls -d "$BASE_APP"/Contents/Frameworks/*.framework/Versions/*/ 2>/dev/null | head -1 || true)"
 BASE_FW_BIN="$BASE_FW$(ls "$BASE_FW" 2>/dev/null | grep -i 'Framework$' | head -1 || true)"
-if [[ -f $BASE_FW_BIN ]] && strings -a "$BASE_FW_BIN" 2>/dev/null | grep -q 'hud-scheme'; then
+# grep reads the binary directly (-a): piping `strings` into `grep -q` returns
+# 141 under `set -o pipefail` — grep exits at the first match and strings dies on
+# SIGPIPE — which read as "not the fork" for a base that IS the fork.
+if [[ -f $BASE_FW_BIN ]] && LC_ALL=C grep -qa 'hud-scheme' "$BASE_FW_BIN" 2>/dev/null; then
   cyber_ok "base bundle // $BASE_APP  (fork build — native patches present)"
 elif [[ ${ZWIRE_ALLOW_STOCK_BASE:-} == 1 ]]; then
   cyber_warn "base bundle // $BASE_APP  (STOCK Chromium — no fork patches; ZWIRE_ALLOW_STOCK_BASE=1)"
