@@ -26,7 +26,10 @@ source scripts/cyberpunk.sh
 
 ROOT="$(pwd)"
 ICON="$ROOT/branding/zwire.icns"
-VERSION="$(python3 -c 'import json;print(json.load(open("package.json"))["version"])')"
+# Version comes out of package.json with perl, not python3: the JSON here is a
+# flat manifest, and a perl one-liner has no interpreter-flavor dependency (a
+# non-CPython python3 on PATH broke the release script mid-cut).
+VERSION="$(perl -ne 'if (!$seen && /"version"\s*:\s*"([^"]+)"/) { print "$1\n"; $seen = 1 }' package.json)"
 DEST="${ZWIRE_DEST:-/Applications/zwire.app}"
 RES="$DEST/Contents/Resources"
 

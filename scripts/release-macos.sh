@@ -59,7 +59,10 @@ command -v gh      >/dev/null || { cyber_fail "gh not found — install the GitH
 command -v cargo   >/dev/null || { cyber_fail "cargo not found — install Rust (https://rustup.rs)"; exit 1; }
 command -v pkgbuild >/dev/null || { cyber_fail "pkgbuild not found (Xcode command line tools)"; exit 1; }
 
-VERSION="$(python3 -c 'import json;print(json.load(open("package.json"))["version"])')"
+# Version comes out of package.json with perl, not python3: the JSON here is a
+# flat manifest, and a perl one-liner has no interpreter-flavor dependency (a
+# non-CPython python3 on PATH broke the release script mid-cut).
+VERSION="$(perl -ne 'if (!$seen && /"version"\s*:\s*"([^"]+)"/) { print "$1\n"; $seen = 1 }' package.json)"
 TAG="v$VERSION"
 cyber_ok "version // $VERSION  (tag $TAG)"
 
