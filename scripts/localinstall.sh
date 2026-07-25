@@ -102,7 +102,32 @@ cyber_ok "host // zpwrchrome-host $(du -h "$ZPWR_HOST_BIN" | awk '{print $1}') (
 echo
 
 cyber_section "BUILD SELF-CONTAINED .app"
-command rm -rf "$DEST"
+# An existing /Applications/zwire.app installed from the .pkg is owned by root,
+# so this `rm -rf` deletes what it can and then fails on the bundle directory —
+# leaving NO working install behind while the script exits on the next write.
+# Prove the destination is replaceable BEFORE destroying it: a writable parent
+# is enough to swap the bundle, otherwise re-exec the whole install under sudo
+# (and if sudo needs a password we can't supply, stop with the old app intact).
+# The probe is a RENAME, never a delete: `mv` needs only a writable parent, is
+# atomic, and leaves the old install fully intact if it fails. (`rm -rf` needs
+# write on every directory INSIDE the bundle, which a root-owned .pkg install
+# doesn't grant — it deletes what it can, fails, and leaves nothing behind.)
+if [[ -e $DEST ]]; then
+  OLD_BUNDLE="$DEST.replacing.$$"
+  if ! mv "$DEST" "$OLD_BUNDLE" 2>/dev/null; then
+    if [[ ${ZWIRE_INSTALL_ELEVATED:-} == 1 ]]; then
+      cyber_fail "cannot replace $DEST even as root"; exit 1
+    fi
+    if sudo -n true 2>/dev/null; then
+      cyber_status "ELEVATE" "$DEST is not writable — re-running the install with sudo"
+      exec sudo -n env ZWIRE_INSTALL_ELEVATED=1 ZWIRE_DEST="$DEST" bash "$0" "$@"
+    fi
+    cyber_fail "$DEST belongs to another user (installed from the .pkg?) — rerun with: sudo $0"
+    exit 1
+  fi
+  command rm -rf "$OLD_BUNDLE" 2>/dev/null || sudo -n rm -rf "$OLD_BUNDLE" 2>/dev/null || \
+    cyber_warn "left the previous bundle at $OLD_BUNDLE (could not delete it)"
+fi
 mkdir -p "$DEST/Contents/MacOS" "$RES/browser" "$RES/ext" "$RES/native"
 
 # 1) the browser bundle (biggest copy)
