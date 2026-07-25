@@ -1,33 +1,139 @@
-/* zwire HUD Settings — full chrome://settings reimplementation on
- * chrome.settingsPrivate (allowlisted for our extension): every real pref is
- * rendered from getAllPrefs, grouped + filterable, with a zgui-core control per
- * type. Appearance hosts the 8-scheme picker (bridged to the native palette).
+/* zwire HUD Settings — the chrome://settings reimplementation on
+ * chrome.settingsPrivate (allowlisted for our extension). redirect.js shadows
+ * every chrome://settings/* URL with this page, so this is the ONLY settings
+ * surface in zwire: it has to carry the sections Chrome's own page has, not a
+ * flat dump of pref keys.
+ *
+ * Layout is ZGui.prefsShell — a section rail (Appearance, Privacy & data,
+ * Autofill, Search, On startup, Downloads, Languages, Performance,
+ * Accessibility, Advanced) with a detail pane per section. Every settingsPrivate
+ * pref is routed to a section by SECTION_KEYS, and anything unrecognized lands
+ * in Advanced, so no pref is ever hidden. The Privacy pane hosts the Clear
+ * browsing data wizard (pages/cleardata.js) — chrome://settings/clearBrowserData
+ * lands directly on it.
+ *
+ * The routing model is pure and exposed on window.ZBSettings so
+ * tests/settings-sections.mjs can check slug + key routing headless.
  * All widgets are ZGui.* per the zgui-core-only rule. */
 (function () {
   'use strict';
+
+  /* ------------------------------------------------------------ section model */
+  // desc doubles as the rail subtitle. Order is the rail order.
+  var SECTIONS = [
+    { id: 'appearance', icon: '◐', name: 'Appearance', desc: 'Color scheme, cyberpunk effects, toolbar and fonts' },
+    { id: 'privacy', icon: '⛨', name: 'Privacy & data', desc: 'Clear browsing data, Safe Browsing, cookies, DNS' },
+    { id: 'autofill', icon: '⌸', name: 'Autofill & passwords', desc: 'Saved addresses, payment methods, password manager' },
+    { id: 'search', icon: '⌕', name: 'Search engine', desc: 'Default provider, omnibox suggestions' },
+    { id: 'startup', icon: '⏻', name: 'On startup', desc: 'Session restore and startup pages' },
+    { id: 'downloads', icon: '⤓', name: 'Downloads', desc: 'Download directory and prompting' },
+    { id: 'languages', icon: '⌘', name: 'Languages', desc: 'Accepted languages, translation, spellcheck' },
+    { id: 'performance', icon: '⚡', name: 'Performance', desc: 'Memory saver, tab discarding, preloading' },
+    { id: 'accessibility', icon: '♿', name: 'Accessibility', desc: 'Caret browsing, captions, a11y prefs' },
+    { id: 'advanced', icon: '⚙', name: 'Advanced', desc: 'Every remaining settingsPrivate pref' }
+  ];
+
+  // key prefix -> section. First match wins, so put the specific ones first.
+  // A prefix matches the whole key or a dotted parent of it ('download' matches
+  // 'download.default_directory' but not 'downloadable_fonts'). Chromium also
+  // ships flat underscore names with no dotted parent (kHttpsOnlyModeEnabled is
+  // "https_only_mode_enabled"), so a third element 'raw' switches an entry to a
+  // plain startsWith.
+  var SECTION_KEYS = [
+    ['appearance', 'appearance'], ['appearance', 'bookmark_bar'], ['appearance', 'browser.show_home_button'],
+    ['appearance', 'browser.custom_chrome_frame'], ['appearance', 'homepage'], ['appearance', 'homepage_is_newtabpage'],
+    ['appearance', 'webkit.webprefs'], ['appearance', 'extensions.theme'], ['appearance', 'browser.theme'],
+
+    ['autofill', 'autofill'], ['autofill', 'payments'], ['autofill', 'credentials_enable_service'],
+    ['autofill', 'credentials_enable_autosignin'], ['autofill', 'password_manager'], ['autofill', 'profile.password_manager_enabled'],
+    ['autofill', 'generated.password_leak_detection'],
+
+    ['search', 'default_search_provider'], ['search', 'default_search_provider_data'], ['search', 'search'],
+    ['search', 'omnibox'],
+
+    ['startup', 'session'], ['startup', 'restore_on_startup'], ['startup', 'browser.startup'],
+
+    ['downloads', 'download'], ['downloads', 'savefile'], ['downloads', 'download_bubble'],
+
+    ['languages', 'intl'], ['languages', 'translate'], ['languages', 'translate_blocked_languages'],
+    ['languages', 'spellcheck'], ['languages', 'browser.enable_spellchecking'],
+
+    ['performance', 'performance_tuning'], ['performance', 'memory_saver'], ['performance', 'high_efficiency'],
+    ['performance', 'battery_saver'], ['performance', 'discard'],
+    // "Preload pages" — chrome/common/pref_names.h kNetworkPredictionOptions.
+    ['performance', 'net.network_prediction_options'],
+
+    ['accessibility', 'settings.a11y'], ['accessibility', 'accessibility'], ['accessibility', 'caret_browsing'],
+    ['accessibility', 'live_caption'],
+
+    // Privacy is last of the specific sections so the narrower routes above win
+    // (generated.password_leak_detection belongs with passwords, not privacy).
+    ['privacy', 'safebrowsing'], ['privacy', 'privacy_sandbox'],
+    // https_only_mode_enabled / https_first_balanced_mode_enabled / … — flat names.
+    ['privacy', 'https_', 'raw'],
+    ['privacy', 'dns_over_https'], ['privacy', 'enable_do_not_track'],
+    ['privacy', 'profile.cookie_controls_mode'], ['privacy', 'profile.default_content_setting_values'],
+    ['privacy', 'profile.content_settings'], ['privacy', 'profile.block_third_party_cookies'],
+    ['privacy', 'alternate_error_pages'], ['privacy', 'url_keyed_anonymized_data_collection'],
+    ['privacy', 'signin'], ['privacy', 'sync'], ['privacy', 'generated']
+  ];
+
+  // Native chrome://settings/<slug> -> section. Slugs Chrome ships that have no
+  // pref surface of their own (content, cookies, security) still resolve to the
+  // section a user means by them.
+  var SLUG_SECTION = {
+    clearbrowserdata: 'privacy', deletebrowsingdata: 'privacy', privacy: 'privacy',
+    security: 'privacy', cookies: 'privacy', content: 'privacy', sitedata: 'privacy',
+    syncsetup: 'privacy', people: 'privacy', privacysandbox: 'privacy',
+    appearance: 'appearance', fonts: 'appearance', themes: 'appearance',
+    autofill: 'autofill', payments: 'autofill', addresses: 'autofill', passwords: 'autofill',
+    search: 'search', searchengines: 'search', defaultbrowser: 'startup', onstartup: 'startup',
+    downloads: 'downloads', languages: 'languages', performance: 'performance',
+    accessibility: 'accessibility', system: 'advanced', reset: 'advanced'
+  };
+
+  // The slugs that mean "clear my data now" — these open the wizard, not just
+  // the section holding it.
+  var CLEAR_SLUGS = { clearbrowserdata: 1, deletebrowsingdata: 1 };
+
+  function sectionById(id) { for (var i = 0; i < SECTIONS.length; i++) if (SECTIONS[i].id === id) return SECTIONS[i]; return null; }
+  function keyMatches(key, prefix, mode) {
+    if (mode === 'raw') return key.indexOf(prefix) === 0;
+    return key === prefix || key.indexOf(prefix + '.') === 0;
+  }
+  function sectionForKey(key) {
+    key = String(key || '');
+    for (var i = 0; i < SECTION_KEYS.length; i++) {
+      if (keyMatches(key, SECTION_KEYS[i][1], SECTION_KEYS[i][2])) return SECTION_KEYS[i][0];
+    }
+    return 'advanced';
+  }
+  function sectionForSlug(slug) {
+    if (!slug) return null;
+    return SLUG_SECTION[String(slug).toLowerCase()] || null;
+  }
+  function isClearSlug(slug) { return !!CLEAR_SLUGS[String(slug || '').toLowerCase()]; }
+
+  window.ZBSettings = {
+    SECTIONS: SECTIONS, SECTION_KEYS: SECTION_KEYS, SLUG_SECTION: SLUG_SECTION,
+    sectionById: sectionById, sectionForKey: sectionForKey, sectionForSlug: sectionForSlug,
+    isClearSlug: isClearSlug
+  };
+
+  // Everything below needs a live page (chrome.settingsPrivate + DOM); the model
+  // above is loadable headless for tests.
+  if (typeof document === 'undefined' || typeof chrome === 'undefined' || !chrome.settingsPrivate) return;
+
+  /* ------------------------------------------------------------------ page */
   var sp = chrome.settingsPrivate;
   var FZ = window.ZGui.fzf;
-  var shell, body, prefs = [], query = '', regexOn = false;
+  var shell, body, pshell, prefs = [], query = '', regexOn = false, activeId = 'appearance';
 
   // Deep-link: redirect.js forwards chrome://settings/<slug> here as
-  // ?section=<slug> so we can land on the matching group instead of the top.
-  // A native settings slug isn't always the pref-group key, so alias the ones
-  // that differ; anything else falls back to a substring match on the group.
-  var pendingSection = null;
-  try { pendingSection = (new URLSearchParams(location.search)).get('section'); } catch (e) {}
-  var SECTION_ALIAS = {
-    performance: 'performance_tuning', downloads: 'download',
-    onstartup: 'session', search: 'default_search', languages: 'intl',
-    accessibility: 'settings', autofill: 'autofill', privacy: 'profile',
-    appearance: 'appearance'
-  };
-  if (pendingSection) {
-    var st = document.createElement('style');
-    st.textContent = '[data-section-focus]{outline:1px solid var(--zb-cyan,#05d9e8);' +
-      'box-shadow:0 0 0 3px color-mix(in srgb,var(--zb-cyan,#05d9e8) 30%,transparent);' +
-      'transition:box-shadow .3s,outline-color .3s;}';
-    (document.head || document.documentElement).appendChild(st);
-  }
+  // ?section=<slug>, so land on the matching section (and pop the clear-data
+  // wizard when the slug asked for it) instead of dumping at the top.
+  var pendingSlug = null;
+  try { pendingSlug = (new URLSearchParams(location.search)).get('section'); } catch (e) {}
 
   function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
   function pretty(s) { return s.replace(/[._]/g, ' ').replace(/\b\w/g, function (m) { return m.toUpperCase(); }); }
@@ -117,6 +223,22 @@
     return ZGui.card({ body: inner }).el;
   }
 
+  /* ------------------------------------------------------- clear-data card */
+  // The whole reason this section exists: Chrome's Delete-browsing-data dialog
+  // is unreachable under the HUD shadow, so the wizard IS the surface. Rendered
+  // inline (not behind a button) — one keystroke from chrome://settings/clearBrowserData.
+  function clearDataCard() {
+    var inner = el('div');
+    inner.appendChild(el('div', 'set-h', '// PRIVACY · CLEAR BROWSING DATA'));
+    var host = el('div');
+    inner.appendChild(host);
+    var card = ZGui.card({ body: inner }).el;
+    card.setAttribute('data-cleardata', '1');
+    if (window.ZBClear) window.ZBClear.mount(host, {});
+    else inner.appendChild(el('div', 'footer-docs', '[ cleardata.js not loaded ]'));
+    return card;
+  }
+
   /* --------------------------------------------------------------- pref row */
   function setPref(p, v) {
     sp.setPref(p.key, v, '', function (ok) {
@@ -141,61 +263,82 @@
     if (disabled) { c.style.pointerEvents = 'none'; c.style.opacity = '.5'; }
     return c;
   }
-  function prefRow(p) {
-    var f = ZGui.field({ label: labelOf(p.key), control: control(p),
-      help: p.key + (p.controlledBy ? ' · controlled by ' + String(p.controlledBy).toLowerCase() : '') });
+  function prefRow(p, withSection) {
+    var help = p.key + (p.controlledBy ? ' · controlled by ' + String(p.controlledBy).toLowerCase() : '');
+    if (withSection) { var s = sectionById(sectionForKey(p.key)); if (s) help = s.name + ' · ' + help; }
+    var f = ZGui.field({ label: labelOf(p.key), control: control(p), help: help });
     f.el.setAttribute('data-key', p.key);
     return f.el;
   }
 
-  /* ------------------------------------------------------------------ render */
+  /* ------------------------------------------------------------------ panes */
+  function prefsOf(id) { return prefs.filter(function (p) { return sectionForKey(p.key) === id; }); }
+
+  function renderSection(pane, sec) {
+    pane.appendChild(ZGui.prefsShell.paneHead(sec.icon, sec.name, sec.desc));
+    if (sec.id === 'appearance') {
+      pane.appendChild(appearanceCard());
+      var fxc = effectsCard(); if (fxc) pane.appendChild(fxc);
+    }
+    if (sec.id === 'privacy') pane.appendChild(clearDataCard());
+    var list = prefsOf(sec.id).sort(function (a, b) { return a.key.localeCompare(b.key); });
+    if (!list.length) {
+      pane.appendChild(el('div', 'footer-docs', prefs.length ? '[ no settingsPrivate prefs in this section ]' : '[ loading settingsPrivate… ]'));
+      return;
+    }
+    var inner = el('div');
+    inner.appendChild(el('div', 'set-h', '// ' + sec.name.toUpperCase() + ' · PREFERENCES'));
+    list.forEach(function (p) { inner.appendChild(prefRow(p)); });
+    pane.appendChild(ZGui.card({ body: inner }).el);
+    pane.appendChild(el('div', 'footer-docs', '[ ' + list.length + ' of ' + prefs.length + ' settings · settingsPrivate ]'));
+  }
+
   function matches(p) {
     if (!query.trim()) return true;
     if (regexOn) { try { var re = new RegExp(query, 'i'); return re.test(p.key) || re.test(labelOf(p.key)); } catch (e) { return false; } }
     return !!(FZ.fzfMatch(query, p.key) || FZ.fzfMatch(query, labelOf(p.key)));
   }
-  function render() {
-    body.innerHTML = '';
-    body.appendChild(appearanceCard());
-    var fxc = effectsCard(); if (fxc) body.appendChild(fxc);
-    var groups = {};
-    prefs.forEach(function (p) { if (!matches(p)) return; var g = p.key.split('.')[0]; (groups[g] = groups[g] || []).push(p); });
-    var keys = Object.keys(groups).sort();
-    if (!keys.length) { body.appendChild(el('div', 'footer-docs', '[ no settings match ]')); return; }
-    keys.forEach(function (g) {
-      var inner = el('div');
-      inner.appendChild(el('div', 'set-h', '// ' + pretty(g)));
-      groups[g].sort(function (a, b) { return a.key.localeCompare(b.key); }).forEach(function (p) { inner.appendChild(prefRow(p)); });
-      var card = ZGui.card({ body: inner }).el;
-      card.setAttribute('data-group', g);
-      body.appendChild(card);
-    });
-    body.appendChild(el('div', 'footer-docs', '[ ' + prefs.length + ' settings · settingsPrivate ]'));
-    // Re-apply the deep-link on every render while it's pending, so the async
-    // zb_ui reconcile re-render (boot) can't bounce us back to the top.
-    if (pendingSection) scrollToSection(pendingSection);
+
+  // Filtering searches EVERY section at once — a pref you can't name the section
+  // for is exactly the pref you're searching for.
+  function renderSearch(pane) {
+    var hits = prefs.filter(matches).sort(function (a, b) { return a.key.localeCompare(b.key); });
+    pane.appendChild(ZGui.prefsShell.paneHead('⌕', 'Search results', hits.length + ' of ' + prefs.length + ' settings match “' + query + '”'));
+    if (!hits.length) { pane.appendChild(el('div', 'footer-docs', '[ no settings match ]')); return; }
+    var inner = el('div');
+    hits.forEach(function (p) { inner.appendChild(prefRow(p, true)); });
+    pane.appendChild(ZGui.card({ body: inner }).el);
   }
 
-  // Scroll to (and briefly highlight) the group matching a native settings slug.
-  // Returns true if a section was found + focused.
-  function scrollToSection(slug) {
-    if (!slug) return false;
-    slug = String(slug).toLowerCase();
-    var want = (SECTION_ALIAS[slug] || slug).toLowerCase();
-    var cards = [].slice.call(body.querySelectorAll('[data-group]'));
-    var gkey = function (c) { return (c.getAttribute('data-group') || '').toLowerCase(); };
-    // Prefer an exact/prefix match on the aliased group (performance_tuning) so a
-    // merely performance-*containing* group (cpu_performance_tier_override) can't
-    // win; fall back to a substring match on the alias, then the raw slug.
-    var hit = cards.find(function (c) { return gkey(c) === want; })
-      || cards.find(function (c) { return gkey(c).indexOf(want) === 0; })
-      || cards.find(function (c) { return gkey(c).indexOf(want) >= 0; })
-      || cards.find(function (c) { return gkey(c).indexOf(slug) >= 0; });
-    if (!hit) return false;
-    try { hit.scrollIntoView({ block: 'start' }); } catch (e) { hit.scrollIntoView(); }
-    hit.setAttribute('data-section-focus', '1');
-    setTimeout(function () { try { hit.removeAttribute('data-section-focus'); } catch (e) {} }, 1600);
-    return true;
+  function navItems() {
+    if (query.trim()) return [{ id: '__search', icon: '⌕', name: 'Search results', sub: query, render: renderSearch }];
+    return SECTIONS.map(function (s) {
+      return { id: s.id, icon: s.icon, name: s.name, sub: s.desc,
+        render: function (pane) { activeId = s.id; renderSection(pane, s); } };
+    });
+  }
+
+  function render() {
+    if (!pshell) {
+      body.innerHTML = '';
+      pshell = ZGui.prefsShell(body, { title: 'SETTINGS', items: navItems(), active: activeId });
+      return;
+    }
+    pshell.setItems(navItems());
+    if (!query.trim()) pshell.select(activeId);
+  }
+
+  // Land the chrome://settings/<slug> deep-link on a real section, and open the
+  // wizard when the slug was a clear-data one.
+  function applyDeepLink() {
+    if (!pendingSlug) return;
+    var id = sectionForSlug(pendingSlug);
+    if (id) { activeId = id; if (pshell) pshell.select(id); }
+    if (isClearSlug(pendingSlug)) {
+      var card = body.querySelector('[data-cleardata]');
+      if (card) { try { card.scrollIntoView({ block: 'start' }); } catch (e) { card.scrollIntoView(); } }
+    }
+    pendingSlug = null;
   }
 
   function mergeChanged(list) {
@@ -206,19 +349,26 @@
   }
 
   function boot() {
+    // Honor the deep-link before the first paint so the wizard is on screen when
+    // the page settles, not one re-render later.
+    var slugId = sectionForSlug(pendingSlug);
+    if (slugId) activeId = slugId;
     shell = ZBHUD.mount({ title: 'SETTINGS', current: 'settings.html', filterPlaceholder: 'filter settings…',
-      onFilter: function (q, rx) { pendingSection = null; query = q; regexOn = rx; render(); } });
+      onFilter: function (q, rx) { query = q; regexOn = rx; render(); } });
     body = shell.body;
-    // The deep-link is a one-shot intent: stop forcing the section once the page
-    // has settled (the reconcile re-render fires within ~100ms), so later
-    // pref-change re-renders don't yank the user back.
-    setTimeout(function () { pendingSection = null; }, 2000);
+    render();
     sp.getAllPrefs(function (list) {
       void chrome.runtime.lastError;
       prefs = (list || []).slice().sort(function (a, b) { return a.key.localeCompare(b.key); });
       render();
+      applyDeepLink();
     });
-    if (sp.onPrefsChanged) sp.onPrefsChanged.addListener(function (changed) { mergeChanged(changed); render(); });
+    // A pref change re-renders the ACTIVE pane only — prefsShell keeps the rail,
+    // so this can't yank the user out of the section they're in.
+    if (sp.onPrefsChanged) sp.onPrefsChanged.addListener(function (changed) {
+      mergeChanged(changed);
+      if (!query.trim() && pshell) pshell.select(activeId);
+    });
     // Reconcile the ZGui light/fx state to a fleet-truth ui object (zb_ui, which
     // the background bridge mirrors from ~/.zwire/global.toml). Applied under the
     // __zbApplyingExternal guard so the setLight-driven zg-boot onApply does NOT
@@ -237,7 +387,7 @@
     // (or a toggle could publish) a stale local value. storage.onChanged only
     // fires on a *change*, so a fresh open — where zb_ui already equals the host —
     // needs this explicit read to reconcile + re-render.
-    try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; if (o && o.zb_ui) { reconcileUi(o.zb_ui); render(); } }); } catch (e) {}
+    try { chrome.storage.local.get('zb_ui', function (o) { void chrome.runtime.lastError; if (o && o.zb_ui) { reconcileUi(o.zb_ui); if (pshell && activeId === 'appearance' && !query.trim()) pshell.select(activeId); } }); } catch (e) {}
     // Keep the light/effect SWITCHES in sync when the state is changed elsewhere
     // (⌘K palette command, another surface): reconcile ZGui state to zb_ui, then
     // re-render so the toggles reflect it. Without this the switch went stale.
@@ -248,7 +398,7 @@
         // the Settings switch drifts out of sync with the palette / status bar.
         if (area !== 'local' || (!ch.zb_ui && !ch.zb_status)) return;
         if (ch.zb_ui) reconcileUi(ch.zb_ui.newValue || {});
-        render();
+        if (pshell && activeId === 'appearance' && !query.trim()) pshell.select(activeId);
       });
     } catch (e) {}
   }

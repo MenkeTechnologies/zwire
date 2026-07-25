@@ -46,6 +46,13 @@
 .zh-listfull .zh-time { width: 96px; }
 .zh-entries-hd { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim); display: flex; justify-content: space-between; }
 .zh-entries-hd b { color: var(--text); }
+/* deletion affordances: the row ✕ stays invisible until the row is hovered so
+   the list reads the same as before, and the header button is always present. */
+.zh-entries-hd .zh-del-range { margin-left: auto; }
+.zh-del { flex-shrink: 0; visibility: hidden; border: 1px solid var(--border); background: var(--bg-card);
+  color: var(--text-muted); border-radius: 4px; font-size: 10px; line-height: 1; padding: 3px 5px; cursor: pointer; }
+.zh-row:hover .zh-del, .zh-row.zh-navsel .zh-del { visibility: visible; }
+.zh-del:hover { color: var(--magenta); border-color: var(--magenta); }
 .zh-list { overflow-y: auto; }
 .zh-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .zh-row:hover { background: var(--bg-hover); }

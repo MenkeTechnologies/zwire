@@ -189,6 +189,15 @@
       { icon: '▦', label: 'Group tabs by domain', detail: 'tab stacks', run: function () { cmd({ a: 'groupByDomain' }); } },
       { icon: '▤', label: 'Ungroup all tabs', detail: 'clear tab stacks', run: function () { cmd({ a: 'ungroupTabs' }); } },
       { icon: '🍪', label: 'Toggle cookie-banner blocker', detail: 'hide consent popups', run: function () { try { if (window.__zbCookiesToggle) window.__zbCookiesToggle(); } catch (e) {} } },
+      // Clearing browsing data: the wizard for a scoped delete (time range, data
+      // types, origin filter), then the all-time one-shots for when you just want
+      // it gone. Both land on chrome.browsingData — nothing here opens Chrome's
+      // own dialog, which the HUD shadow makes unreachable.
+      { icon: '⌫', label: 'Clear browsing data…', detail: 'wizard · range · types · origins', run: function () { open(extUrl('settings.html?section=clearBrowserData')); } },
+      { icon: '⌫', label: 'Clear cache', detail: 'all time', run: function () { cmd({ a: 'clearCache' }); } },
+      { icon: '⌫', label: 'Clear cookies', detail: 'all time · signs you out', run: function () { cmd({ a: 'clearCookies' }); } },
+      { icon: '⌫', label: 'Clear cache and cookies', detail: 'all time', run: function () { cmd({ a: 'clearCacheAndCookies' }); } },
+      { icon: '⌫', label: 'Clear ALL browsing data', detail: 'all time · history, downloads, cookies, cache, storage', run: function () { cmd({ a: 'clearAllData' }); } },
       { icon: '⤢', label: 'Toggle spatial navigation', detail: 'Shift+Arrow link jump', run: function () { try { if (window.__zbSpatialToggle) window.__zbSpatialToggle(); } catch (e) {} } },
       { icon: '🔊', label: 'Read aloud', detail: 'text-to-speech · Esc stops', run: function () { try { if (window.__zbSpeakToggle) window.__zbSpeakToggle(); } catch (e) {} } },
       { icon: '◳', label: 'Zap page elements', detail: 'click to hide · persists', run: function () { try { if (window.__zbZapStart) window.__zbZapStart(); } catch (e) {} } },

@@ -142,6 +142,64 @@
 
   function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
 
+  /* ---- deletion (history.deleteUrl / deleteRange / deleteAll) ---------------
+   * This page shadows chrome://history, so deletion has to live here — without
+   * it the only way to drop a single visit was to clear the whole profile.
+   * No local cache surgery: onVisitRemoved (bottom of file) invalidates and
+   * re-fetches, so the view always reflects what the store actually holds. */
+  function toast(msg) { try { if (window.ZGui && window.ZGui.toast) window.ZGui.toast.show(msg); } catch (e) {} }
+  // The time window the active view is showing. null = list view = all time.
+  function activeRange() {
+    if (scope === 'day') {
+      var s = new Date(selected); s.setHours(0, 0, 0, 0);
+      var e = new Date(s); e.setDate(s.getDate() + 1);
+      return [s.getTime(), e.getTime()];
+    }
+    if (scope === 'week') return weekOf(selected);
+    if (scope === 'month') return monthRange(view);
+    return null;
+  }
+  function delUrl(url) {
+    try {
+      chrome.history.deleteUrl({ url: url }, function () {
+        void chrome.runtime.lastError;
+        toast('Removed ' + hostOf(url) + ' from history');
+      });
+    } catch (e) {}
+  }
+  function delActiveRange() {
+    var r = activeRange();
+    try {
+      if (!r) { chrome.history.deleteAll(function () { void chrome.runtime.lastError; toast('History cleared'); }); return; }
+      chrome.history.deleteRange({ startTime: r[0], endTime: r[1] }, function () {
+        void chrome.runtime.lastError;
+        toast('Cleared history for ' + activeLabel());
+      });
+    } catch (e) {}
+  }
+  // ✕ on a row — deletes every visit to that URL (deleteUrl is URL-scoped, not
+  // visit-scoped, which is what the native page does too).
+  function delButton(url) {
+    var b = el('button', 'zh-del', '✕');
+    b.title = 'Delete ' + url + ' from history';
+    b.addEventListener('click', function (ev) { ev.stopPropagation(); delUrl(url); });
+    return b;
+  }
+  // Header "Delete" — the whole visible range, behind a popconfirm because
+  // there is no undo on the history store.
+  function delRangeButton() {
+    var label = activeRange() ? 'Delete range' : 'Delete all';
+    var b = el('button', 'zh-btn zh-del-range', label);
+    var what = activeRange() ? activeLabel() : 'your entire browsing history';
+    if (window.ZGui && window.ZGui.popconfirm) {
+      window.ZGui.popconfirm(b, { title: 'Delete ' + what + '?', description: 'This cannot be undone.',
+        okText: 'Delete', danger: true, onConfirm: delActiveRange });
+    } else {
+      b.addEventListener('click', delActiveRange);
+    }
+    return b;
+  }
+
   function ensureTip() { if (!tip) { tip = el('div', 'zh-tip'); document.body.appendChild(tip); } return tip; }
   function showTip(ev, dateObj, vs) {
     var t = ensureTip();
@@ -184,7 +242,8 @@
     var items = allItems;
     if (filterQ.trim()) { var ql = filterQ.toLowerCase(); items = items.filter(function (r) { return ((r.title || '') + ' ' + r.url).toLowerCase().indexOf(ql) >= 0; }); }
     var box = el('div', 'zh-entries zh-listfull');
-    var hd = el('div', 'zh-entries-hd'); hd.appendChild(el('span', null, 'History')); hd.appendChild(el('b', null, String(items.length))); box.appendChild(hd);
+    var hd = el('div', 'zh-entries-hd'); hd.appendChild(el('span', null, 'History')); hd.appendChild(el('b', null, String(items.length)));
+    hd.appendChild(delRangeButton()); box.appendChild(hd);
     var list = el('div', 'zh-list');
     if (!items.length) list.appendChild(el('div', 'zh-empty', 'No history.'));
     items.forEach(function (r) {
@@ -194,6 +253,7 @@
       var chip = el('span', 'zh-chip', (host[0] || '?').toUpperCase()); chip.style.background = chipColor(host); row.appendChild(chip);
       row.appendChild(el('span', 'zh-title', r.title || r.url));
       if ((r.visitCount || 1) > 1) row.appendChild(el('span', 'zh-count', String(r.visitCount)));
+      row.appendChild(delButton(r.url));
       row.title = r.url;
       row.addEventListener('click', function () { chrome.tabs.create({ url: r.url }); });
       list.appendChild(row);
@@ -249,6 +309,7 @@
     var hd = el('div', 'zh-entries-hd');
     hd.appendChild(el('span', null, 'Entries'));
     hd.appendChild(el('b', null, String(rows.length)));
+    hd.appendChild(delRangeButton());
     box.appendChild(hd);
     var list = el('div', 'zh-list');
     if (!rows.length) { list.appendChild(el('div', 'zh-empty', 'No history for this range.')); }
@@ -259,6 +320,7 @@
       var chip = el('span', 'zh-chip', (host[0] || '?').toUpperCase()); chip.style.background = chipColor(host); row.appendChild(chip);
       row.appendChild(el('span', 'zh-title', r.title || r.url));
       if (r.count > 1) row.appendChild(el('span', 'zh-count', String(r.count)));
+      row.appendChild(delButton(r.url));
       row.title = r.url;
       row.addEventListener('click', function () { chrome.tabs.create({ url: r.url }); });
       list.appendChild(row);

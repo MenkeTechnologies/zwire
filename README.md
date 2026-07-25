@@ -25,7 +25,11 @@ workspace layered on top:
 - a **⌘K command palette**, **vim-style navigation**, and a **find bar**;
 - durable, named **session management** with full CRUD + SVG layout previews;
 - **HUD reimplementations of Chrome's own internal pages** (extensions,
-  settings, history, bookmarks, version) plus a keyboard-remap page and a
+  settings, history, bookmarks, version) — Settings is sectioned like Chrome's
+  own (Appearance, Privacy & data, Autofill, Search, On startup, Downloads,
+  Languages, Performance, Accessibility, Advanced) and hosts a **clear browsing
+  data wizard** (time range → data types → origin scope → per-type result), and
+  History supports per-entry delete plus range/all clear — plus a keyboard-remap page and a
   **dashboard** — one searchable, drag-orderable tile grid that launches every
   HUD page *and* every `chrome://` internal page;
 - **8 color schemes** — each with a **light variant** — that drive the browser

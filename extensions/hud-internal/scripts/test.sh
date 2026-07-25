@@ -92,7 +92,7 @@ command rm -f /tmp/zwire-hud-urls.$$
 echo
 
 cyber_section "HISTORY DASHBOARD (calendar / analytics aggregation + render)"
-if node tests/history.mjs 2>/tmp/zwire-hud-history.$$ && node tests/history-render.mjs 2>>/tmp/zwire-hud-history.$$; then
+if node tests/history.mjs 2>/tmp/zwire-hud-history.$$ && node tests/history-render.mjs 2>>/tmp/zwire-hud-history.$$ && node tests/history-delete.mjs 2>>/tmp/zwire-hud-history.$$; then
   cyber_ok "history dashboard nominal"
 else
   FAIL=1; cyber_fail "history dashboard compromised"
@@ -139,6 +139,16 @@ else
   command sed 's/^/    /' /tmp/zwire-hud-vt.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-vt.$$
+echo
+
+cyber_section "SETTINGS (section routing + clear-browsing-data wizard)"
+if node tests/settings-sections.mjs 2>/tmp/zwire-hud-set.$$ && node tests/cleardata.mjs 2>>/tmp/zwire-hud-set.$$ && node tests/settings-render.mjs 2>>/tmp/zwire-hud-set.$$; then
+  cyber_ok "settings + clear data nominal"
+else
+  FAIL=1; cyber_fail "settings + clear data compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-set.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-set.$$
 echo
 
 cyber_section "NATIVE HOST (rust build)"

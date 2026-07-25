@@ -972,14 +972,29 @@ function execZbCmd(c) {
         else if (c.a === 'retryDownload' && dl.url) chrome.downloads.download({ url: dl.url }, function () { void chrome.runtime.lastError; });
       }); } catch (e) {}
     // --- browsing data ---
-    } else if (c.a === 'clearCache' || c.a === 'clearCookies' || c.a === 'clearCacheAndCookies' || c.a === 'clearAllData' || c.a === 'clearPasswords') {
+    // One-keystroke, all-time variants of the Settings clear-data wizard
+    // (pages/cleardata.js) — the wizard is for a scoped delete, these are for
+    // "flush it now" from ⌘K. Deletion is silent otherwise, so each reports.
+    // No clearPasswords: removePasswords maps to removal mask 0 in this
+    // Chromium (browsing_data_api.cc BrowsingDataRemovePasswordsFunction) —
+    // it would claim success and delete nothing.
+    } else if (c.a === 'clearCache' || c.a === 'clearCookies' || c.a === 'clearCacheAndCookies' || c.a === 'clearAllData') {
       var since = { since: 0 };
+      var clearLabel = { clearCache: 'Cache cleared', clearCookies: 'Cookies cleared',
+        clearCacheAndCookies: 'Cache and cookies cleared', clearAllData: 'All browsing data cleared' }[c.a];
+      var clearDone = function () {
+        var e = chrome.runtime.lastError;
+        try {
+          chrome.notifications.create({ type: 'basic', iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+            title: 'zwire', message: e ? ('Clear failed: ' + e.message) : clearLabel },
+          function () { void chrome.runtime.lastError; });
+        } catch (ex) {}
+      };
       try {
-        if (c.a === 'clearCache') chrome.browsingData.removeCache(since, function () { void chrome.runtime.lastError; });
-        else if (c.a === 'clearCookies') chrome.browsingData.removeCookies(since, function () { void chrome.runtime.lastError; });
-        else if (c.a === 'clearPasswords') chrome.browsingData.removePasswords(since, function () { void chrome.runtime.lastError; });
-        else if (c.a === 'clearCacheAndCookies') chrome.browsingData.remove(since, { cache: true, cookies: true }, function () { void chrome.runtime.lastError; });
-        else chrome.browsingData.remove(since, { cache: true, cookies: true, history: true, downloads: true, formData: true, localStorage: true }, function () { void chrome.runtime.lastError; });
+        if (c.a === 'clearCache') chrome.browsingData.removeCache(since, clearDone);
+        else if (c.a === 'clearCookies') chrome.browsingData.removeCookies(since, clearDone);
+        else if (c.a === 'clearCacheAndCookies') chrome.browsingData.remove(since, { cache: true, cookies: true }, clearDone);
+        else chrome.browsingData.remove(since, { cache: true, cacheStorage: true, cookies: true, history: true, downloads: true, formData: true, localStorage: true, indexedDB: true, serviceWorkers: true, fileSystems: true }, clearDone);
       } catch (e) {}
     // --- reading list (current tab) ---
     } else if (c.a === 'addReadingList') {
