@@ -73,14 +73,40 @@ if [[ ! -d "$BASE_APP" ]]; then
     printf '%s\n' "$RECOVERED_BIN" > "$STATE/base.path"
     BASE_BIN="$RECOVERED_BIN"; BASE_APP="$RECOVERED"
   else
-    cyber_warn "recorded base missing — rebuilding …"
-    bash scripts/build.sh >/dev/null || { cyber_fail "base build failed"; exit 1; }
-    BASE_BIN="$(cat "$STATE/base.path")"; BASE_APP="${BASE_BIN%/Contents/MacOS/*}"
+    # NOT a silent scripts/build.sh here: that fetches a STOCK Chromium snapshot,
+    # and swapping the engine under the same product name is invisible in the
+    # output — a fork base that had gone missing was replaced with stock
+    # Chromium, packaged, and shipped as a zwire release. Say what is missing and
+    # stop; the fork is rebuilt deliberately (fork/build.sh + fork/package.sh).
+    cyber_fail "recorded base is gone: $BASE_APP"
+    cyber_status "FIX" "fork/fetch.sh && fork/build.sh && fork/package.sh \$ZWIRE_SRC/out/<dir>   (patched engine)"
+    cyber_status "OR" "scripts/fetch-base.sh   (stock Chromium — NOT the fork; no HUD chrome patches)"
+    exit 1
   fi
 fi
 APP_DIRNAME="$(basename "$BASE_APP")"              # zbrowser.app
 [[ -d "$BASE_APP" ]] || { cyber_fail "base bundle missing: $BASE_APP"; exit 1; }
-cyber_ok "base bundle // $BASE_APP"
+
+# Is this the patched fork, or a stock snapshot? The fork's branding patch
+# (0006) renames the bundle + executable to zwire and the framework carries the
+# HUD scheme bridge; a stock snapshot is Chromium.app with neither. Packaging
+# stock as "zwire" produces a browser with none of the 25 native patches — no
+# HUD chrome, no native palette, no browser-wide audio EQ — that still looks
+# right in Finder, so refuse it unless it was asked for explicitly.
+# `|| true` on both: set -e would abort the script on a no-match glob here, and a
+# base with no framework is exactly the case this check exists to report.
+BASE_FW="$(ls -d "$BASE_APP"/Contents/Frameworks/*.framework/Versions/*/ 2>/dev/null | head -1 || true)"
+BASE_FW_BIN="$BASE_FW$(ls "$BASE_FW" 2>/dev/null | grep -i 'Framework$' | head -1 || true)"
+if [[ -f $BASE_FW_BIN ]] && strings -a "$BASE_FW_BIN" 2>/dev/null | grep -q 'hud-scheme'; then
+  cyber_ok "base bundle // $BASE_APP  (fork build — native patches present)"
+elif [[ ${ZWIRE_ALLOW_STOCK_BASE:-} == 1 ]]; then
+  cyber_warn "base bundle // $BASE_APP  (STOCK Chromium — no fork patches; ZWIRE_ALLOW_STOCK_BASE=1)"
+else
+  cyber_fail "base bundle is NOT the patched fork: $BASE_APP"
+  cyber_status "FIX" "fork/build.sh && fork/package.sh \$ZWIRE_SRC/out/<dir>   (build + install the fork base)"
+  cyber_status "OR" "ZWIRE_ALLOW_STOCK_BASE=1 $0   (deliberately package stock Chromium)"
+  exit 1
+fi
 echo
 
 cyber_section "BUILD NATIVE HOST (rust)"
