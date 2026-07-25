@@ -142,7 +142,7 @@ command rm -f /tmp/zwire-hud-vt.$$
 echo
 
 cyber_section "SETTINGS (section routing + clear-browsing-data wizard)"
-if node tests/settings-sections.mjs 2>/tmp/zwire-hud-set.$$ && node tests/cleardata.mjs 2>>/tmp/zwire-hud-set.$$ && node tests/settings-render.mjs 2>>/tmp/zwire-hud-set.$$; then
+if node tests/settings-sections.mjs 2>/tmp/zwire-hud-set.$$ && node tests/cleardata.mjs 2>>/tmp/zwire-hud-set.$$ && node tests/settings-render.mjs 2>>/tmp/zwire-hud-set.$$ && node tests/hud-accel.mjs 2>>/tmp/zwire-hud-set.$$; then
   cyber_ok "settings + clear data nominal"
 else
   FAIL=1; cyber_fail "settings + clear data compromised"

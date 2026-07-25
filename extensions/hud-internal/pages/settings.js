@@ -328,6 +328,16 @@
     if (!query.trim()) pshell.select(activeId);
   }
 
+  // Jump to the wizard in place. pages/hud-accel.js calls this when ⌘⇧⌫ is
+  // pressed while Settings is already the active page, so the shortcut doesn't
+  // open a second copy of the page you're standing on.
+  function openClearData() {
+    activeId = 'privacy';
+    if (pshell) pshell.select('privacy');
+    var card = body && body.querySelector('[data-cleardata]');
+    if (card) { try { card.scrollIntoView({ block: 'start' }); } catch (e) { card.scrollIntoView(); } }
+  }
+
   // Land the chrome://settings/<slug> deep-link on a real section, and open the
   // wizard when the slug was a clear-data one.
   function applyDeepLink() {
@@ -356,6 +366,7 @@
     shell = ZBHUD.mount({ title: 'SETTINGS', current: 'settings.html', filterPlaceholder: 'filter settings…',
       onFilter: function (q, rx) { query = q; regexOn = rx; render(); } });
     body = shell.body;
+    window.__zbOpenClearData = openClearData;
     render();
     sp.getAllPrefs(function (list) {
       void chrome.runtime.lastError;

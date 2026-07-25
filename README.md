@@ -276,7 +276,13 @@ of `chrome://{extensions,settings,history,bookmarks,downloads,version}` — the
 **History** page defaults to a full-height, all-time list (Cmd+Y) and adds a
 Vivaldi-style calendar dashboard (Month/Week/Day: a month calendar with per-day
 activity, a per-day Entries list, and an analytics rail — a Browsing Activity area
-chart, a Link Transition donut, and Top Domains) — plus a **Feeds** RSS/Atom
+chart, a Link Transition donut, and Top Domains) with per-entry delete and a
+range/all clear, while **Settings** carries Chrome's section layout over
+`settingsPrivate` and hosts the **clear browsing data wizard** (time range →
+data types → origin scope → per-type result) — reachable from
+`chrome://settings/clearBrowserData` and from Chrome's own ⌘⇧⌫ / Ctrl+Shift+Del,
+which the HUD pages bind themselves (a HUD page focuses its filter box on load,
+and a focused field swallows the key before the browser command can run) — plus a **Feeds** RSS/Atom
 reader, a **Reading List**, a **Notes** manager
 (Markdown notes in folders, ported from Vivaldi), a **Translate** panel
 (30+ languages, auto-detect, ported from Vivaldi),
