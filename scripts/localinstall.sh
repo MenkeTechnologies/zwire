@@ -93,10 +93,15 @@ APP_DIRNAME="$(basename "$BASE_APP")"              # zbrowser.app
 # stock as "zwire" produces a browser with none of the 25 native patches — no
 # HUD chrome, no native palette, no browser-wide audio EQ — that still looks
 # right in Finder, so refuse it unless it was asked for explicitly.
-# `|| true` on both: set -e would abort the script on a no-match glob here, and a
-# base with no framework is exactly the case this check exists to report.
-BASE_FW="$(ls -d "$BASE_APP"/Contents/Frameworks/*.framework/Versions/*/ 2>/dev/null | head -1 || true)"
-BASE_FW_BIN="$BASE_FW$(ls "$BASE_FW" 2>/dev/null | grep -i 'Framework$' | head -1 || true)"
+# Globs, not `ls` — the bundle names contain a space ("zwire Framework"), and an
+# unmatched glob just leaves BASE_FW_BIN empty, which is the case this check
+# exists to report anyway.
+BASE_FW_BIN=""
+for _fw_ver in "$BASE_APP"/Contents/Frameworks/*.framework/Versions/*/; do
+  for _fw_bin in "$_fw_ver"*Framework; do
+    if [[ -f $_fw_bin ]]; then BASE_FW_BIN=$_fw_bin; break 2; fi
+  done
+done
 # grep reads the binary directly (-a): piping `strings` into `grep -q` returns
 # 141 under `set -o pipefail` — grep exits at the first match and strings dies on
 # SIGPIPE — which read as "not the fork" for a base that IS the fork.
