@@ -401,6 +401,46 @@
     document.head.appendChild(s);
   }
 
+  /* ---- tmux overlay (ZGui.tmux) on every HUD page ------------------------
+   * The HUD shell is a top frame like any web page, so the in-browser tmux
+   * tiling WM belongs here too. Content scripts inject the tmux stack only on
+   * http/https/file pages (manifest) — never the extension's own pages — so on
+   * a HUD page ZGui.tmux was never loaded and the prefix (C-b + the remaps set
+   * on the Keyboard page) did nothing. Load the stack here and let
+   * ztmux-config.js self-boot: its prefsLoad feeds zb_tmux_prefix / zb_tmux_opts
+   * / zb_keys, so the CUSTOM keybindings drive the overlay on the HUD too. */
+  function loadCss(rel) {
+    if (document.querySelector('link[data-ztx="' + rel + '"]')) return;
+    var l = document.createElement('link'); l.rel = 'stylesheet';
+    l.href = chrome.runtime.getURL(rel); l.setAttribute('data-ztx', rel);
+    document.head.appendChild(l);
+  }
+  // Load same-origin extension scripts IN ORDER (each next only after the prior
+  // ran) so tmux.js sees its deps and ztmux-config.js sees ZGui.tmux.
+  function loadScriptsSeq(list) {
+    (function next(i) {
+      if (i >= list.length) return;
+      var s = document.createElement('script');
+      s.src = chrome.runtime.getURL(list[i]); s.setAttribute('data-ztx', list[i]);
+      s.onload = function () { next(i + 1); };
+      s.onerror = function () { next(i + 1); };
+      document.head.appendChild(s);
+    })(0);
+  }
+  function bootTmux() {
+    if (window.__zbHudTmuxBooted) return; window.__zbHudTmuxBooted = true;
+    loadCss('lib/zgui-core/webui/tmux.css'); loadCss('ztmux-config.css');
+    // HUD pages already ship util.js + toast.js; inject only the tmux deps the
+    // page lacks (guarded by their ZGui namespace), then tmux.js + its config.
+    var G = window.ZGui || {}, deps = [];
+    if (!G.splitPane) deps.push('lib/zgui-core/webui/split-pane.js');
+    if (!G.modal) deps.push('lib/zgui-core/webui/modal.js');
+    if (!G.buttonBar) deps.push('lib/zgui-core/webui/button-bar.js');
+    deps.push('lib/zgui-core/webui/tmux.js');   // window.ZGui.tmux — the tiling WM
+    deps.push('ztmux-config.js');               // self-boots ZGui.tmux.init() with the chrome.storage prefs feed
+    loadScriptsSeq(deps);
+  }
+
   /* ---- shell mount: the old strykelang HUD page (no appShell top bar) ----- */
   function mount(opts) {
     opts = opts || {};
@@ -571,6 +611,8 @@
       }, true);
     }
     bridge();
+    // Wire the in-browser tmux overlay into the HUD surface (prefix + custom keymap).
+    try { bootTmux(); } catch (e) {}
     return { body: main, el: app, filterHost: filterHost };
   }
 
