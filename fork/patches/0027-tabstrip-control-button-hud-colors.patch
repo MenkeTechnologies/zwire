@@ -1,0 +1,42 @@
+diff --git a/chrome/browser/ui/color/chrome_color_mixer.cc b/chrome/browser/ui/color/chrome_color_mixer.cc
+index 0d62722ece..00d4cbb8bc 100644
+--- a/chrome/browser/ui/color/chrome_color_mixer.cc
++++ b/chrome/browser/ui/color/chrome_color_mixer.cc
+@@ -1558,4 +1558,37 @@ void AddZwireHudFinalMixer(ui::ColorProvider* provider,
+   mixer[ui::kColorDisabledForeground] = {ui::kColorSysOnSurfaceSubtle};
+   mixer[ui::kColorEndpointBackground] = {ui::kColorSysSurface};
+   mixer[ui::kColorMidground] = {ui::kColorSysOutline};
++
++  // zwire HUD: the tab-strip control buttons (new-tab "+", tab search, the
++  // combo/flat-edge buttons) are the same "always red" class as the tab wells
++  // above, one layer out. TabStripControlButton binds its hover ink drop to
++  // kColorTabStripControlButtonInkDrop, which AddMaterialTabStripColorMixer
++  // points at ui::kColorSysStateHeaderHover — and that is kColorRefPrimary30 /
++  // …80, straight off the Material ref palette built from the profile's seed
++  // color. Nothing in the HUD pipeline rebinds the Ref family, so the seed
++  // showed through as a red hover fill on "+". The idle state has the same gap
++  // from the other direction: the new-tab-button background / foreground /
++  // focus-ring recipes live in AddTabStripColorMixer and REFERENCE the tab ids,
++  // but a ColorMixer recipe resolves its inputs against earlier mixers only
++  // (ColorMixer::GetInputColor walks previous_mixer_), so those references
++  // resolve to the pre-HUD tab colors and never see this mixer's overrides.
++  // Bind the whole family to the scheme directly.
++  mixer[kColorTabStripControlButtonInkDrop] = {tab_hover};
++  // Alpha IS the ink-drop opacity (toolbar_ink_drop_util.cc reads SkColorGetA
++  // and paints the layer at alpha/255), so keep upstream's 0.14 press ratio.
++  mixer[kColorTabStripControlButtonInkDropRipple] = {SkColorSetA(hs.cy, 0x24)};
++  mixer[kColorNewTabButtonInkDropFrameActive] = {hs.cy};
++  mixer[kColorNewTabButtonInkDropFrameInactive] = {hs.cy};
++  mixer[kColorNewTabButtonBackgroundFrameActive] = {tab_inactive};
++  mixer[kColorNewTabButtonBackgroundFrameInactive] = {tab_inactive};
++  mixer[kColorNewTabButtonCRBackgroundFrameActive] = {tab_inactive};
++  mixer[kColorNewTabButtonCRBackgroundFrameInactive] = {tab_inactive};
++  mixer[kColorNewTabButtonForegroundFrameActive] = {hs.cy};
++  mixer[kColorNewTabButtonForegroundFrameInactive] = {tab_fg_dim};
++  mixer[kColorNewTabButtonCRForegroundFrameActive] = {hs.cy};
++  mixer[kColorNewTabButtonCRForegroundFrameInactive] = {tab_fg_dim};
++  mixer[kColorTabSearchButtonCRForegroundFrameActive] = {hs.cy};
++  mixer[kColorTabSearchButtonCRForegroundFrameInactive] = {tab_fg_dim};
++  mixer[kColorNewTabButtonFocusRing] = {hs.cy};
++  mixer[kColorTabStripComboButtonSeparator] = {hs.b};
+ }
