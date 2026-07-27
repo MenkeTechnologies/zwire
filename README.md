@@ -8,7 +8,7 @@
 
 [![Base](https://img.shields.io/badge/base-chromium%20fork-05d9e8.svg)](#0x02-architecture)
 [![Workspace](https://img.shields.io/badge/HUD-tiling%20workspace-ff2a6d.svg)](#0x01-the-hud-workspace)
-[![Patches](https://img.shields.io/badge/native%20fork-25%20patches-d300c5.svg)](#0x05-full-hud-fork)
+[![Patches](https://img.shields.io/badge/native%20fork-26%20patches-d300c5.svg)](#0x05-full-hud-fork)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zwire/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -476,7 +476,7 @@ fork/build.sh          ~/zwire-chromium/src  # the long compile
 fork/package.sh        ~/zwire-chromium/src/out/zwire
 ```
 
-All **25** HUD patches are **authored** against the pinned tag (`150.0.7871.46`)
+All **26** HUD patches are **authored** against the pinned tag (`150.0.7871.46`)
 and verified apply-clean. The nine styling/behavior patches: hard trapezoid tabs
 (`tab_style_views.cc`), the cyberpunk palette + the 8 HUD schemes on
 frame/toolbar/tabs/omnibox (`chrome_color_mixer.cc`), the Share Tech Mono /
@@ -512,7 +512,11 @@ spatial + limiter) compiled into the audio service so
 `chrome_content_browser_client.cc`), tab-capture with no picker so the Audio page
 can analyze a playing tab (`tab_capture_api.cc`), and live EQ reconfiguration +
 an output-meters back-channel to the Audio page
-(`audio_service.mojom` + `service.cc` + `audio_service.cc`). Apply-clean proves
+(`audio_service.mojom` + `service.cc` + `audio_service.cc`). One retargets a
+native toast: the **Open** button on "Page added to reading list" opens the HUD
+reading-list page (`pages/readinglist.html`, as a singleton tab) instead of
+Chromium's read-later side panel — the toast is registered in C++
+(`toast_service.cc`), so no extension API can redirect it. Apply-clean proves
 the diff context matches; `fork/build.sh` is the compile gate. See
 [`fork/README.md`](fork/README.md) and [`fork/patches/README.md`](fork/patches/README.md).
 

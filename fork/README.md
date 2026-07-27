@@ -54,7 +54,7 @@ stream to H.264 for browser playback.
 
 ## Status
 
-Pipeline: ready. HUD patches (`patches/series`): **all 25 authored** against the
+Pipeline: ready. HUD patches (`patches/series`): **all 26 authored** against the
 pinned tag `150.0.7871.46` and verified **apply-clean** (`git apply --check`
 against each target file read at that exact tag):
 

@@ -1,0 +1,47 @@
+diff --git a/chrome/browser/ui/toasts/toast_service.cc b/chrome/browser/ui/toasts/toast_service.cc
+index bc64121225..f53603e75b 100644
+--- a/chrome/browser/ui/toasts/toast_service.cc
++++ b/chrome/browser/ui/toasts/toast_service.cc
+@@ -28,6 +28,7 @@
+ #include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
+ #include "chrome/browser/ui/side_panel/side_panel_enums.h"
+ #include "chrome/browser/ui/side_panel/side_panel_ui.h"
++#include "chrome/browser/ui/singleton_tabs.h"
+ #include "chrome/browser/ui/tabs/public/tab_features.h"
+ #include "chrome/browser/ui/tabs/saved_tab_groups/collaboration_messaging_observer.h"
+ #include "chrome/browser/ui/tabs/saved_tab_groups/collaboration_messaging_observer_factory.h"
+@@ -56,6 +57,7 @@
+ #include "ui/base/ui_base_features.h"
+ #include "ui/menus/simple_menu_model.h"
+ #include "ui/strings/grit/ui_strings.h"
++#include "url/gurl.h"
+ 
+ #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+ #include "components/plus_addresses/core/browser/resources/vector_icons.h"
+@@ -121,6 +123,26 @@ void ToastService::RegisterToasts(
+           .AddActionButton(IDS_READING_LIST_TOAST_BUTTON,
+                            base::BindRepeating(
+                                [](BrowserWindowInterface* window) {
++                                 // zwire: the reading list UI is the HUD
++                                 // extension page (pages/readinglist.html) —
++                                 // the same list the HUD palette and the
++                                 // dashboard tile open — not the native
++                                 // read-later side panel, which shows the same
++                                 // chrome.readingList entries in unthemed
++                                 // Chromium chrome. Singleton so repeated Opens
++                                 // re-focus the one HUD tab instead of piling
++                                 // up duplicates. Incognito, where the HUD
++                                 // extension may not be enabled, keeps the
++                                 // native panel.
++                                 Profile* profile = window->GetProfile();
++                                 if (profile && !profile->IsOffTheRecord()) {
++                                   ShowSingletonTab(
++                                       window,
++                                       GURL("chrome-extension://"
++                                            "omcgnnjfmbmpdlofklbpddkhnfibfhgg/"
++                                            "pages/readinglist.html"));
++                                   return;
++                                 }
+                                  window->GetFeatures().side_panel_ui()->Show(
+                                      SidePanelEntryId::kReadingList,
+                                      SidePanelOpenTrigger::kReadingListToast);
