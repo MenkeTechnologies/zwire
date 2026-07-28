@@ -411,9 +411,17 @@ but is four.
   zpwrchrome page → 4 via cross-extension message).
 - **Gotchas:** content scripts (surface 1) can't cross-extension message, so the
   zpwrchrome rows are registered unconditionally there rather than gated on a
-  liveness ping. MV3 service-worker code changes need the profile's SW script
-  cache purged (`localinstall.sh` does it on a manifest **version bump**);
-  content-script / extension-page / HTML changes only need a page reload.
+  liveness ping. MV3 service-worker code changes are the one thing a reinstall
+  cannot deliver on its own: Chromium keys the worker's script cache on the
+  worker's **script URL**, and a manifest version bump does not evict it —
+  measured on 150.0.7871.46, the browser served the new `background.js` over
+  `chrome-extension://` while still running the previous build's worker, across
+  a full restart. Symptom: every message kind the new pages send but the cached
+  worker never learned fails with *"The message port closed before a response
+  was received."* `localinstall.sh` therefore points each staged manifest at a
+  content-keyed shim worker (`background.sw-<hash>.js`, one line importing the
+  real `background.js`), so changed worker code always registers as a new
+  worker. Content-script / extension-page / HTML changes only need a page reload.
 
 ## `[0x03] INSTALL`
 

@@ -240,6 +240,82 @@ if [ -f "$MANIFEST_JSON" ]; then
   cyber_ok "version // stamped extension manifest → v$VERSION"
 fi
 
+# Same worker-cache trap for the extensions that carry their OWN version
+# (zpwrchrome, newtab): a submodule can ship a behaviour change without a
+# release bump, and Chrome then keeps serving the cached service worker — the
+# page JS is re-read from disk, so the UI gains callers for message kinds the
+# stale worker has no handler for, and every one of them fails with "The
+# message port closed before a response was received."
+#
+# Appending a content-derived 4th component makes the version follow the code:
+# same files -> same version -> no needless reload, changed files -> new version
+# -> Chrome re-registers the worker. Manifest versions allow 4 dot-separated
+# integers of at most 65535, hence the modulo.
+stamp_content_version() {
+  local dir="$1" name="$2" manifest="$1/manifest.json"
+  [ -f "$manifest" ] || return 0
+  local base rev
+  base="$(perl -ne 'if (!$seen && /"version"\s*:\s*"([^"]+)"/) { print "$1"; $seen = 1 }' "$manifest")"
+  [ -n "$base" ] || return 0
+  # Hash every file the browser actually loads; the manifest is excluded so the
+  # stamp we are about to write cannot feed back into the next hash.
+  rev="$(find "$dir" -type f ! -name manifest.json ! -path '*/_metadata/*' -exec shasum -a 256 {} + \
+         | shasum -a 256 | cut -c1-8)"
+  rev=$(( 0x$rev % 65536 ))
+  # Keep at most 3 components from the extension's own version so the appended
+  # component stays inside Chrome's 4-integer limit.
+  base="$(printf '%s' "$base" | cut -d. -f1-3)"
+  perl -i -pe "s/(\"version\"\s*:\s*)\"[^\"]*\"/\${1}\"$base.$rev\"/ if \$. < 12" "$manifest"
+  cyber_ok "version // $name manifest → v$base.$rev (content-keyed, forces worker refresh)"
+}
+stamp_content_version "$RES/ext/zpwrchrome" "zpwrchrome"
+stamp_content_version "$RES/ext/newtab" "newtab"
+
+# …and the version stamp alone is NOT enough. Measured against this Chromium
+# (150.0.7871.46) with `--load-extension`: after replacing background.js and
+# bumping the manifest version, the browser served the NEW file over
+# chrome-extension:// (197,490 bytes, new handlers present) while the worker it
+# actually parsed was the OLD cached script (196,642 bytes, handlers absent) —
+# across a full browser restart. Every message kind the new page JS sends but
+# the cached worker has no handler for then fails with "The message port closed
+# before a response was received."
+#
+# Service-worker registration is keyed on the worker's SCRIPT URL, so the staged
+# manifest is pointed at a content-keyed shim that imports the real
+# background.js. New code -> new filename -> new registration -> the worker and
+# the pages are always the same build. background.js keeps its name, so nothing
+# that references it by URL has to change.
+stamp_service_worker() {
+  local dir="$1" name="$2" manifest="$1/manifest.json"
+  [ -f "$manifest" ] || return 0
+  local worker isModule rev shim
+  worker="$(perl -ne 'if (/"service_worker"\s*:\s*"([^"]+)"/) { print $1; exit }' "$manifest")"
+  [ -n "$worker" ] || return 0
+  # Re-stamping an already-shimmed manifest would chain shims; resolve back to
+  # the real worker first.
+  case "$worker" in *.sw-*.js) worker="background.js" ;; esac
+  [ -f "$dir/$worker" ] || return 0
+  find "$dir" -maxdepth 1 -name '*.sw-*.js' -delete
+  rev="$(find "$dir" -type f ! -name manifest.json ! -path '*/_metadata/*' -exec shasum -a 256 {} + \
+         | shasum -a 256 | cut -c1-12)"
+  shim="background.sw-$rev.js"
+  # A module worker imports; a classic one importScripts. Getting this wrong
+  # breaks the extension outright, so it follows the manifest's own declaration.
+  isModule="$(perl -0777 -ne 'print "yes" if /"background"\s*:\s*\{[^}]*"type"\s*:\s*"module"/s' "$manifest")"
+  if [ "$isModule" = "yes" ]; then
+    printf '// Generated at install: content-keyed worker URL so Chromium cannot\n// serve a cached worker from an older build. Real code: %s\nimport "./%s";\n' \
+      "$worker" "$worker" > "$dir/$shim"
+  else
+    printf '// Generated at install: content-keyed worker URL so Chromium cannot\n// serve a cached worker from an older build. Real code: %s\nimportScripts("./%s");\n' \
+      "$worker" "$worker" > "$dir/$shim"
+  fi
+  perl -i -pe "s/(\"service_worker\"\s*:\s*)\"[^\"]*\"/\${1}\"$shim\"/" "$manifest"
+  cyber_ok "worker // $name -> $shim (content-keyed; defeats the cached-worker trap)"
+}
+stamp_service_worker "$RES/ext/zpwrchrome" "zpwrchrome"
+stamp_service_worker "$RES/ext/hud-internal" "hud-internal"
+stamp_service_worker "$RES/ext/newtab" "newtab"
+
 # 3) the native hosts — self-contained Rust binaries (no python/psutil)
 cp "$HOST_BIN" "$RES/native/zwire-host"
 chmod +x "$RES/native/zwire-host"
