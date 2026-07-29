@@ -240,26 +240,41 @@ if [ -f "$MANIFEST_JSON" ]; then
   cyber_ok "version // stamped extension manifest → v$VERSION"
 fi
 
-# Same worker-cache trap for the extensions that carry their OWN version
-# (zpwrchrome, newtab): a submodule can ship a behaviour change without a
-# release bump, and Chrome then keeps serving the cached service worker — the
-# page JS is re-read from disk, so the UI gains callers for message kinds the
-# stale worker has no handler for, and every one of them fails with "The
-# message port closed before a response was received."
+# Same worker-cache trap for EVERY staged extension: a submodule (or an unbumped
+# rebuild of this repo) can ship a behaviour change without a release bump, and
+# Chrome then keeps serving the cached service worker — the page JS is re-read
+# from disk, so the UI gains callers for message kinds the stale worker has no
+# handler for, and every one of them fails with "The message port closed before
+# a response was received."
 #
 # Appending a content-derived 4th component makes the version follow the code:
 # same files -> same version -> no needless reload, changed files -> new version
 # -> Chrome re-registers the worker. Manifest versions allow 4 dot-separated
 # integers of at most 65535, hence the modulo.
+#
+# hud-internal MUST be stamped like the others. It used to carry the bare release
+# version, so two installs of the SAME release produced identical manifest
+# versions while stamp_service_worker (below) renamed its worker on every content
+# change. Chrome saw "same extension version", kept the registration pointing at
+# the PREVIOUS shim URL, and `rsync --delete` had already removed that file from
+# the staged dir — a dangling registration, so hud-internal's worker never
+# started. Everything the worker owns died silently with it, most visibly the
+# browser-level ⌘K `open-palette` command: the accelerator stays bound in the
+# profile and swallows the keystroke, but nothing is listening, so the palette
+# stopped opening on web pages and from the omnibox while HUD pages (which bind
+# ⌘K in page JS) still worked.
 stamp_content_version() {
   local dir="$1" name="$2" manifest="$1/manifest.json"
   [ -f "$manifest" ] || return 0
   local base rev
   base="$(perl -ne 'if (!$seen && /"version"\s*:\s*"([^"]+)"/) { print "$1"; $seen = 1 }' "$manifest")"
   [ -n "$base" ] || return 0
-  # Hash every file the browser actually loads; the manifest is excluded so the
-  # stamp we are about to write cannot feed back into the next hash.
-  rev="$(find "$dir" -type f ! -name manifest.json ! -path '*/_metadata/*' -exec shasum -a 256 {} + \
+  # Hash every file the browser actually loads. The manifest is excluded so the
+  # stamp we are about to write cannot feed back into the next hash, and the
+  # generated worker shims are excluded because $RES/ext is rsynced WITHOUT
+  # --delete: a leftover shim from the previous install would otherwise churn
+  # the version on every run even when no real file changed.
+  rev="$(find "$dir" -type f ! -name manifest.json ! -name '*.sw-*.js' ! -path '*/_metadata/*' -exec shasum -a 256 {} + \
          | shasum -a 256 | cut -c1-8)"
   rev=$(( 0x$rev % 65536 ))
   # Keep at most 3 components from the extension's own version so the appended
@@ -270,6 +285,7 @@ stamp_content_version() {
 }
 stamp_content_version "$RES/ext/zpwrchrome" "zpwrchrome"
 stamp_content_version "$RES/ext/newtab" "newtab"
+stamp_content_version "$RES/ext/hud-internal" "hud-internal"
 
 # …and the version stamp alone is NOT enough. Measured against this Chromium
 # (150.0.7871.46) with `--load-extension`: after replacing background.js and
@@ -443,16 +459,33 @@ EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$BROWSER_APP/Cont
 USEREXT="$STATE/ext"
 mkdir -p "$USEREXT"
 rsync -a --delete --exclude '_metadata' "$RES/ext/" "$USEREXT/"
-# Force the extension service worker to reload when the build changes. Chrome does NOT restart a
-# registered MV3 service worker when unpacked --load-extension files change: content scripts
+# Force the extension service workers to re-register when the build changes. Chrome does NOT restart
+# a registered MV3 service worker when unpacked --load-extension files change: content scripts
 # re-inject per page, but the worker keeps running its OLD background.js. So service-worker fixes
 # silently never take effect across a redeploy. Deleting the profile's Service Worker script cache
 # (safe here — the launcher runs before Chrome starts; workers re-register from source) forces a
-# fresh background.js eval. Gated on a version marker so it only happens on an actual version bump.
+# fresh eval.
+#
+# The marker is every staged extension's manifest version AND its declared
+# service_worker filename. The filename is the part that matters: localinstall
+# points each manifest at a content-keyed `background.sw-<hash>.js` shim and the
+# rsync above (--delete) removes the previous run's shim. If the profile still
+# holds a registration for that deleted filename, its worker can never start —
+# a dangling registration, silent, and it survives restarts. Keying the marker
+# on the filename means any shim rename evicts the stale registration on the
+# very next launch. The old marker read only the first 3 version components, so
+# two installs of one release looked identical and the eviction never ran.
 # NOTE: Chrome keeps the SW cache under the PROFILE subdir ($PROFILE/Default/Service Worker), NOT
 # $PROFILE/Service Worker — deleting the latter (which never exists) is why SW fixes silently never
 # took effect. Delete both to cover any profile layout.
-SWVER="$(grep -m1 '"version"' "$USEREXT/hud-internal/manifest.json" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+SWVER=""
+for m in "$USEREXT"/*/manifest.json; do
+  [ -f "$m" ] || continue
+  SWVER="$SWVER$(perl -0777 -ne '
+    my ($v) = /"version"\s*:\s*"([^"]+)"/;
+    my ($w) = /"service_worker"\s*:\s*"([^"]+)"/;
+    print defined $v ? "$v|" : "-|", defined $w ? "$w|" : "-|";' "$m")"
+done
 if [ -n "$SWVER" ] && [ "$(cat "$STATE/.sw_version" 2>/dev/null)" != "$SWVER" ]; then
   rm -rf "$PROFILE/Default/Service Worker" "$PROFILE/Service Worker" 2>/dev/null || true
   printf '%s' "$SWVER" > "$STATE/.sw_version" 2>/dev/null || true

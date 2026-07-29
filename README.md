@@ -422,6 +422,19 @@ but is four.
   content-keyed shim worker (`background.sw-<hash>.js`, one line importing the
   real `background.js`), so changed worker code always registers as a new
   worker. Content-script / extension-page / HTML changes only need a page reload.
+  The rename has a second half that is just as load-bearing: the staged tree is
+  rsynced with `--delete`, so the *previous* shim file is gone, and a profile
+  that still holds a registration for it holds a **dangling** one — that worker
+  can never start, silently, across restarts. Two defences, both in
+  `localinstall.sh`: every extension (hud-internal included — it was the one
+  left out, and the one that broke) gets a content-derived 4th manifest-version
+  component so Chromium sees a version change and re-registers; and the
+  launcher's Service-Worker-cache eviction is keyed on each staged manifest's
+  version **and** its declared `service_worker` filename, so any shim rename
+  clears the old registration on the next launch. Failure signature when this
+  goes wrong: hud-internal's worker never starts, so browser-level ⌘K stays
+  bound in the profile but has no listener — the palette stops opening on web
+  pages and from the omnibox, while HUD pages (page-level ⌘K) still work.
 
 ## `[0x03] INSTALL`
 
