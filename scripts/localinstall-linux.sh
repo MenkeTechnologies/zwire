@@ -63,6 +63,16 @@ ZPWR_HOST_BIN="$ROOT/extensions/zpwrchrome/zpwrchrome-host/target/release/zpwrch
 cyber_ok "host // zpwrchrome-host $(du -h "$ZPWR_HOST_BIN" | awk '{print $1}') (downloads · otp · search)"
 echo
 
+cyber_section "BUILD HOOKS EDITOR (monaco)"
+# lib/hooks-editor/ is a gitignored esbuild artifact, so a fresh clone (or a tree whose
+# extensions/hud-internal/node_modules was cleaned) has NOTHING for the copy below to
+# take — and the Hooks / Commands / Triggers pages then mount no editor at all, silently:
+# they only build one `if (window.HooksEditor)`, which the dead <script src> never defines.
+HE_OUT="$(scripts/build-hooks-editor.sh 2>/dev/null)" \
+  || { cyber_fail "hooks-editor (monaco) bundle build failed — run scripts/build-hooks-editor.sh to see why"; exit 1; }
+cyber_ok "monaco // $(printf '%s\n' "$HE_OUT" | awk -F': ' '{printf "%s%s", (NR>1?" + ":""), $2}') bundle + 2 workers"
+echo
+
 cyber_section "BUILD SELF-CONTAINED INSTALL"
 command rm -rf "$DEST"
 mkdir -p "$DEST/browser" "$DEST/ext" "$DEST/native"
@@ -79,6 +89,10 @@ for ext in newtab extensions/zpwrchrome extensions/hud-internal; do
     "$ROOT/$ext/" "$DEST/ext/$name/"
   cyber_ok "ext // $name"
 done
+
+# The Monaco bundle built above must have SURVIVED the copy — the pages 404 silently if not.
+[ -s "$DEST/ext/hud-internal/lib/hooks-editor/hooks-editor.bundle.js" ] \
+  || { cyber_fail "installed hud-internal is missing lib/hooks-editor/ — Hooks/Commands/Triggers would ship without Monaco"; exit 1; }
 
 # 3) the native host — one self-contained Rust binary
 cp "$HOST_BIN" "$DEST/native/zwire-host"; chmod +x "$DEST/native/zwire-host"

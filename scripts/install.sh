@@ -22,6 +22,14 @@ if [[ ! -f ${ZWIRE_STATE:-$(zwire_default_state)}/base.path ]]; then
   "$ROOT/scripts/fetch-base.sh"
 fi
 
+# 1b. Monaco hooks-editor bundle. lib/hooks-editor/ is a gitignored esbuild artifact and
+# bin/zwire loads the extensions straight out of the repo, so on a fresh clone the Hooks /
+# Commands / Triggers pages come up with NO editor at all: each only mounts one
+# `if (window.HooksEditor)` and the <script src> 404s — silently, nothing on screen says why.
+# Needs node >=20 + pnpm (the monaco/esbuild devDeps).
+"$ROOT/scripts/build-hooks-editor.sh" >/dev/null
+echo "install: built the Monaco hooks editor bundle (lib/hooks-editor)" >&2
+
 # 2. launcher on PATH
 mkdir -p "$BINDIR"
 ln -sf "$ROOT/bin/zwire" "$BINDIR/zwire"

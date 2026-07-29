@@ -88,6 +88,33 @@ $ZpwrHostBin = Join-Path $ZpwrHostDir "target\release\zpwrchrome-host.exe"
 if (-not (Test-Path $ZpwrHostBin)) { throw "zpwrchrome host build produced no zpwrchrome-host.exe" }
 Say "host // zpwrchrome-host.exe"
 
+# --- 2b. hooks editor bundle (Monaco) ----------------------------------------
+# lib\hooks-editor\ is a gitignored esbuild artifact, so a fresh clone (or a tree whose
+# extensions\hud-internal\node_modules was cleaned) has NOTHING for the copy below to
+# take — and the Hooks / Commands / Triggers pages then mount no editor at all,
+# silently: each only builds one `if (window.HooksEditor)`, which the dead <script src>
+# never defines. Same build the bash installers run (via node directly — no bash needed).
+$HeExt = Join-Path $Root "extensions\hud-internal"
+$HeOut = Join-Path $HeExt "lib\hooks-editor"
+$HeBuilder = Join-Path $HeExt "vendor\zpwr-hooks-editor\scripts\build-hooks-editor.mjs"
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "node not found (need >=20) — required for the Monaco hooks editor bundle" }
+if (-not (Test-Path $HeBuilder)) { throw "hooks editor builder missing: $HeBuilder" }
+if (-not (Test-Path (Join-Path $HeExt "node_modules\monaco-editor"))) {
+  if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) { throw "pnpm not found — needed for the monaco devDeps" }
+  Push-Location $HeExt
+  try { pnpm install | Out-Null } finally { Pop-Location }
+}
+Push-Location $HeExt
+try {
+  $env:HOOKS_EDITOR_OUT = $HeOut
+  node $HeBuilder | Out-Null
+} finally { Pop-Location; Remove-Item Env:\HOOKS_EDITOR_OUT -ErrorAction SilentlyContinue }
+foreach ($f in @("hooks-editor.bundle.js","hooks-editor.bundle.css","hooks-editor.worker.js","hooks-editor.ts.worker.js")) {
+  $p = Join-Path $HeOut $f
+  if (-not (Test-Path $p) -or (Get-Item $p).Length -eq 0) { throw "hooks editor artifact missing/empty: $f — Hooks/Commands/Triggers would ship without Monaco" }
+}
+Say "monaco // hooks editor bundle + 2 workers"
+
 # --- 3. assemble the self-contained install ----------------------------------
 if (Test-Path $Dest) { Remove-Item -Recurse -Force $Dest }
 New-Item -ItemType Directory -Force -Path (Join-Path $Dest "browser"),(Join-Path $Dest "ext"),(Join-Path $Dest "native") | Out-Null
@@ -104,6 +131,12 @@ foreach ($pair in @(@("newtab","newtab"), @("extensions\zpwrchrome","zpwrchrome"
     $p = Join-Path $out $junk; if (Test-Path $p) { Remove-Item -Recurse -Force $p }
   }
   Say "ext // $name"
+}
+
+# The Monaco bundle built above must have SURVIVED the copy — the pages 404 silently if not.
+$HeStaged = Join-Path $Dest "ext\hud-internal\lib\hooks-editor\hooks-editor.bundle.js"
+if (-not (Test-Path $HeStaged) -or (Get-Item $HeStaged).Length -eq 0) {
+  throw "installed hud-internal is missing lib\hooks-editor\ — Hooks/Commands/Triggers would ship without Monaco"
 }
 
 Copy-Item -Force $HostBin (Join-Path $Dest "native\zwire-host.exe")

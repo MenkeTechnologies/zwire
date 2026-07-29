@@ -16,15 +16,16 @@ echo
 
 cyber_section "HOOKS EDITOR"
 # (Re)build the vendored stryke Hooks editor bundle (Monaco + vim/emacs) into
-# lib/hooks-editor/ so pages/hooks.html ships a fresh artifact. Skipped cleanly
-# when the monaco/esbuild devDeps aren't installed (source-only checkout).
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-if command -v node >/dev/null && [[ -d "$ROOT/node_modules/monaco-editor" && -f "$ROOT/vendor/zpwr-hooks-editor/scripts/build-hooks-editor.mjs" ]]; then
-  ( cd "$ROOT" && HOOKS_EDITOR_OUT="$ROOT/lib/hooks-editor" node vendor/zpwr-hooks-editor/scripts/build-hooks-editor.mjs ) \
-    && cyber_ok "hooks editor bundled" || cyber_fail "hooks editor build failed (non-fatal)"
-else
-  cyber_ok "hooks editor: skipped (deps absent) — run 'pnpm install' to bundle"
-fi
+# lib/hooks-editor/, which pages/{hooks,commands,triggers}.html load to get
+# window.HooksEditor. This used to be "skipped cleanly when the devDeps aren't
+# installed" — and that is exactly how the zip shipped with no editor at all: the
+# pages 404 on a gitignored artifact that was never built, and each page only mounts
+# an editor `if (window.HooksEditor)`, so the panes come up EMPTY with no error.
+# build-hooks-editor.sh installs the devDeps itself and verifies every artifact, so
+# there is nothing left to skip — a failure here is fatal to the package.
+HE_OUT="$(scripts/build-hooks-editor.sh 2>/dev/null)" \
+  || { cyber_fail "hooks editor bundle failed — run scripts/build-hooks-editor.sh to see why"; exit 1; }
+cyber_ok "hooks editor // $(printf '%s\n' "$HE_OUT" | awk -F': ' '{printf "%s%s", (NR>1?" + ":""), $2}') bundle + 2 workers"
 
 cyber_section "PACKAGE"
 mkdir -p dist

@@ -445,9 +445,18 @@ scripts/install.sh          # fetch base + link `zwire` on PATH + rebrand (macOS
 zwire                    # launch
 ```
 
-`install.sh` downloads the Chromium base into `$ZWIRE_STATE/base`, symlinks
-`bin/zwire` into `~/.local/bin`, and on macOS rebrands the base bundle's Dock
-name and icon in place. Re-run after a base upgrade.
+`install.sh` downloads the Chromium base into `$ZWIRE_STATE/base`, builds the Monaco
+code-editor bundle the Hooks / Commands / Triggers pages load, symlinks `bin/zwire`
+into `~/.local/bin`, and on macOS rebrands the base bundle's Dock name and icon in
+place. Re-run after a base upgrade.
+
+The editor bundle (`extensions/hud-internal/lib/hooks-editor/`) is a build artifact, not
+checked in: `scripts/build-hooks-editor.sh` esbuilds it from
+`extensions/hud-internal/vendor/zpwr-hooks-editor/src` and needs node ≥ 20 + pnpm (which
+pulls the `monaco-editor` / `monaco-vim` / `monaco-emacs` devDeps). `install.sh`, both
+`localinstall` scripts, and the extension's own `scripts/build.sh` all run it and hard-fail
+if any artifact is missing — without it those three pages render their surrounding chrome
+and simply no editor.
 
 `--recurse-submodules` pulls the three submodules zwire depends on:
 `extensions/zpwrchrome` (the MV3 power-tool), `extensions/hud-internal/lib/zgui-core`
