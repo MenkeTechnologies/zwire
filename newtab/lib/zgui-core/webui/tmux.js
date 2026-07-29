@@ -105,7 +105,7 @@
     { name: "tmux-paste", def: "]", label: "Paste buffer (most recent)" },
     { name: "tmux-buffers", def: "=", label: "Choose paste buffer" },
     { name: "tmux-command", def: ":", label: "Command prompt (tmux CLI)" },
-    { name: "tmux-detach", def: "d", label: "Detach (hide overlay)" },
+    { name: "tmux-detach", def: "d", label: "Detach (save layout + hide overlay)" },
     { name: "tmux-sessions", def: "s", label: "Sessions (load a saved layout)" },
     { name: "tmux-session-save", def: "S", label: "Save current layout as a session" },
     { name: "tmux-sessions-edit", def: "M", label: "Manage saved layouts (editor)" },
@@ -129,6 +129,11 @@
   // file via Tauri, chrome.storage, localStorage…). We read the whole blob, mutate
   // our keys, write it back.
   var SESSIONS = [], sessHotkeys = {};
+  // Reserved auto-session: detaching a scratch layout (no saved session attached)
+  // commits it here so the working tree survives a subsequent load (prefix s),
+  // mirroring tmux keeping the live session on detach. A single stable id means
+  // repeated detaches overwrite one entry instead of accumulating junk.
+  var AUTO_SESSION_ID = "__auto_last__", AUTO_SESSION_NAME = "last";
   async function loadCfg() {
     try {
       var p = (await cfgPrefsLoad()) || {};
@@ -570,7 +575,7 @@
       case "tmux-reload": reloadPane(); return;
       case "tmux-clock": showClock(); return;
       case "tmux-command": commandPrompt(); return;
-      case "tmux-detach": open = wasClosed; break;
+      case "tmux-detach": commitLiveSession(); open = wasClosed; break;
       case "tmux-sessions": chooseSession(); return;
       case "tmux-session-save": saveCurrentSession(); return;
       case "tmux-sessions-edit": openSessionEditor(); return;
@@ -854,6 +859,113 @@
     body.appendChild(el("div", "zt-help-note", "Arrows focus panes · Ctrl/⌥+arrows or drag borders resize · 0–9 select window · m mark then m elsewhere to swap · e sync typing across panes · [ copy-mode (hjkl move, y yank), ] paste."));
     z.modal.open({ title: "tmux — prefix Ctrl-b (or ⌥b), then…", body: body, dismissable: true });
   }
+  // ---- keybinding editor: remap the post-prefix keys + the prefix chord + arm
+  // timeout, from one modal. Self-contained (ZGui.modal) and persisted through the
+  // host's own prefs blob via savePrefs (tmuxKeys / tmuxPrefix / tmuxOpts), so every
+  // app that init()s tmux gets user-customizable bindings with ZERO per-app code —
+  // the appShell just calls ZGui.tmux.editKeymap(). Post-prefix keys share ONE
+  // keyspace, so a clash is any other action already bound to the same key.
+  function fmtChord(c) {
+    var s = ""; if (c.ctrl) s += "C-"; if (c.alt) s += "⌥"; if (c.meta) s += "⌘"; if (c.shift) s += "⇧";
+    var k = c.key || (c.code ? c.code.replace(/^Key/, "") : "?");
+    return s + (k.length === 1 ? k.toUpperCase() : k);
+  }
+  function prefixLabel() { return (PREFIX && PREFIX.length) ? PREFIX.map(fmtChord).join(" / ") : "C-b / ⌥B"; }
+  function injectKeymapCss() {
+    if (document.getElementById("zg-tmux-keys-css")) return;
+    var s = document.createElement("style"); s.id = "zg-tmux-keys-css";
+    // Class-based (no per-element inline styles — release WKWebView strips those on
+    // dynamically inserted nodes). Reuses the scheme vars so it tracks light/dark.
+    s.textContent =
+      ".zg-ke{min-width:min(560px,86vw);max-height:64vh;overflow:auto;}" +
+      ".zg-ke-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:2px 0 12px;}" +
+      ".zg-ke-hint{color:var(--text-muted,#7d8aa0);font-size:12px;flex:1;min-width:180px;line-height:1.5;}" +
+      ".zg-ke-row{display:flex;align-items:center;gap:10px;padding:4px 2px;border-bottom:1px solid var(--border,#1a2436);}" +
+      ".zg-ke-lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
+      ".zg-ke-warn{color:var(--magenta,#ff2e97);font-size:11px;white-space:nowrap;}" +
+      ".zg-ke-kbd{display:inline-block;min-width:1.6em;text-align:center;padding:2px 8px;border:1px solid var(--border,#1a2436);border-radius:3px;background:var(--bg-card,#0a0d16);color:var(--cyan,#05d9e8);cursor:pointer;font:12px \"Share Tech Mono\",monospace;}" +
+      ".zg-ke-kbd.cap{border-color:var(--cyan,#05d9e8);color:var(--bg-primary,#05060a);background:var(--cyan,#05d9e8);}" +
+      ".zg-ke-in{width:90px;background:var(--bg-primary,#05060a);border:1px solid var(--border,#1a2436);border-radius:4px;color:var(--text,#c8d2e0);font:inherit;padding:3px 6px;}";
+    (document.head || document.documentElement).appendChild(s);
+  }
+  function editKeymap() {
+    var z = ZG(); if (!z.modal || !z.modal.open) return;
+    injectKeymapCss();
+    var body = el("div", "zg-ke");
+    var capping = null;   // { kbd, action } while a per-action row is listening
+    var capPrefix = null; // the prefix <kbd> while the chord row is listening
+    function keyOf(a) { return keyOverrides[a.name] || a.def; }
+    function conflict(name, key) { var hit = null; ACTIONS.forEach(function (a) { if (a.name !== name && keyOf(a) === key) hit = a.label; }); return hit; }
+    function persist() {
+      buildKeys();
+      savePrefs(function (p) {
+        p.tmuxKeys = keyOverrides;
+        if (PREFIX && PREFIX.length) p.tmuxPrefix = PREFIX; else delete p.tmuxPrefix;
+        p.tmuxOpts = Object.assign({}, p.tmuxOpts || {}, { timeout: ARM_MS });
+      });
+    }
+    function endCap() { if (!capping) return; document.removeEventListener("keydown", onCap, true); capping.kbd.classList.remove("cap"); capping = null; }
+    function onCap(e) {
+      if (!capping) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (e.key === "Escape") { endCap(); render(); return; }
+      if (["Shift", "Control", "Alt", "Meta"].indexOf(e.key) >= 0) return;   // wait for the real key
+      var a = capping.action, key = e.key; endCap();
+      if (key === a.def) delete keyOverrides[a.name]; else keyOverrides[a.name] = key;   // default clears the override
+      var c = conflict(a.name, key); persist(); render();
+      if (c) toast('"' + (key === " " ? "Space" : key) + '" also runs "' + c + '"', "warn");
+    }
+    function startCap(kbd, a) { endCap(); capping = { kbd: kbd, action: a }; kbd.classList.add("cap"); kbd.textContent = "press…"; document.addEventListener("keydown", onCap, true); }
+    function endCapPrefix() { if (!capPrefix) return; document.removeEventListener("keydown", onCapPrefix, true); capPrefix = null; }
+    function onCapPrefix(e) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (e.key === "Escape") { endCapPrefix(); render(); return; }
+      if (["Shift", "Control", "Alt", "Meta"].indexOf(e.key) >= 0) return;
+      if (!e.ctrlKey && !e.altKey && !e.metaKey) { if (capPrefix) capPrefix.textContent = "need Ctrl/⌥/⌘…"; return; }   // a bare key would arm constantly
+      var c = {}; if (e.ctrlKey) c.ctrl = true; if (e.altKey) c.alt = true; if (e.metaKey) c.meta = true;
+      c.key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      endCapPrefix(); PREFIX = [c]; persist(); render();
+    }
+    function render() {
+      body.textContent = "";
+      var bar = el("div", "zg-ke-bar");
+      bar.appendChild(el("div", "zg-ke-hint", "Click a key to remap · Esc cancels · press the default to clear. Shared across every pane."));
+      var resetAll = el("button", "zt-le-btn mini", "RESET ALL");
+      resetAll.addEventListener("click", function () { keyOverrides = {}; persist(); render(); });
+      bar.appendChild(resetAll);
+      body.appendChild(bar);
+      // prefix chord
+      var pr = el("div", "zg-ke-row");
+      pr.appendChild(el("span", "zg-ke-lbl", "Prefix (arms the overlay)"));
+      var pk = el("span", "zg-ke-kbd", prefixLabel());
+      pk.addEventListener("click", function () { endCap(); pk.classList.add("cap"); pk.textContent = "press a chord…"; capPrefix = pk; document.addEventListener("keydown", onCapPrefix, true); });
+      pr.appendChild(pk);
+      if (PREFIX && PREFIX.length) { var prb = el("button", "zt-le-btn mini", "reset"); prb.addEventListener("click", function () { PREFIX = defaultPrefix(); persist(); render(); }); pr.appendChild(prb); }
+      body.appendChild(pr);
+      // arm timeout
+      var tr = el("div", "zg-ke-row");
+      tr.appendChild(el("span", "zg-ke-lbl", "Prefix timeout (ms)"));
+      var ti = document.createElement("input"); ti.type = "number"; ti.min = "200"; ti.step = "100"; ti.className = "zg-ke-in"; ti.value = ARM_MS;
+      ti.addEventListener("change", function () { var v = parseInt(ti.value, 10); ARM_MS = (v > 0 ? v : 2500); persist(); });
+      tr.appendChild(ti); body.appendChild(tr);
+      // one row per post-prefix action
+      var used = {}; ACTIONS.forEach(function (a) { var k = keyOf(a); (used[k] = used[k] || []).push(a.label); });
+      ACTIONS.forEach(function (a) {
+        var row = el("div", "zg-ke-row");
+        row.appendChild(el("span", "zg-ke-lbl", a.label));
+        var k = keyOf(a), shared = (used[k] || []).filter(function (l) { return l !== a.label; });
+        if (shared.length) row.appendChild(el("span", "zg-ke-warn", "⚠ " + shared.join(", ")));
+        var kbd = el("span", "zg-ke-kbd", k === " " ? "Space" : k);
+        kbd.addEventListener("click", function () { startCap(kbd, a); });
+        row.appendChild(kbd);
+        if (keyOverrides[a.name]) { var rb = el("button", "zt-le-btn mini", "reset"); rb.addEventListener("click", function () { delete keyOverrides[a.name]; persist(); render(); }); row.appendChild(rb); }
+        body.appendChild(row);
+      });
+    }
+    z.modal.open({ title: "tmux keybindings", body: body, dismissable: true, className: "zg-ke-modal", id: "zg-tmux-keys", onClose: function () { endCap(); endCapPrefix(); } });
+    render();
+  }
+
   function showClock() {
     var z = ZG(); if (!z.modal || !z.modal.open) return;
     var c = el("div", "zt-clock");
@@ -1144,20 +1256,84 @@
   }
 
   // ------------------------------------------------------------------ sessions
-  // A saved session = windows[] -> panes[] -> ref (the host's opaque, JSON-
-  // serializable pane reference). Persisted in prefs 'tmuxSessions'; loading
-  // rebuilds the tiling tree (auto-tiled via buildEven).
-  function sessionSnapshot() {
-    return S.windows.map(function (win) { return { name: win.name || "", panes: leaves(win.tree).map(function (l) { return l.doc || null; }) }; });
+  // A saved session = windows[] -> { panes[] -> ref, tree }. `panes` is the flat
+  // leaf-order list of the host's opaque, JSON-serializable pane refs (what the
+  // layouts editor edits); `tree` is the tiling SHAPE — split direction + ratio,
+  // no ids, no content. Both are needed: saving panes alone rebuilt every layout
+  // with buildEven(list,"row"), so a top/bottom split came back side-by-side after
+  // detach + attach. Persisted in prefs 'tmuxSessions'.
+  function treeSnapshot(n) {
+    if (!n) return null;
+    if (n.t === "leaf") return { t: "leaf" };
+    return { t: "split", dir: n.dir === "col" ? "col" : "row", ratio: n.ratio == null ? 0.5 : n.ratio, a: treeSnapshot(n.a), b: treeSnapshot(n.b) };
   }
-  function windowFromPanes(name, ps) {
+  // Leaf count of a saved shape, or -1 if it is absent/malformed (prefs are a
+  // user-editable blob and layouts are importable, so this validates too).
+  function snapLeafCount(n) {
+    if (!n || typeof n !== "object") return -1;
+    if (n.t === "leaf") return 1;
+    if (n.t !== "split") return -1;
+    var a = snapLeafCount(n.a); if (a < 0) return -1;
+    var b = snapLeafCount(n.b); if (b < 0) return -1;
+    return a + b;
+  }
+  // Rebuild a live tree from a saved shape, taking leaves from `list` in order (the
+  // same depth-first order sessionSnapshot() wrote them in). Null when the shape is
+  // missing, malformed, or stale — a pane added/removed in the editor changes the
+  // count — and the caller then falls back to the even-horizontal rebuild.
+  function reviveTree(snap, list) {
+    if (snapLeafCount(snap) !== list.length) return null;
+    var i = 0;
+    return (function build(n) {
+      if (n.t === "leaf") return list[i++];
+      var r = (typeof n.ratio === "number" && n.ratio > 0.02 && n.ratio < 0.98) ? n.ratio : 0.5;
+      return { t: "split", dir: n.dir === "col" ? "col" : "row", ratio: r, a: build(n.a), b: build(n.b) };
+    })(snap);
+  }
+  function sessionSnapshot() {
+    return S.windows.map(function (win) {
+      return { name: win.name || "", panes: leaves(win.tree).map(function (l) { return l.doc || null; }), tree: treeSnapshot(win.tree), layout: win.layout || "" };
+    });
+  }
+  function windowFromPanes(name, ps, tree, layoutName) {
     var list = (ps && ps.length ? ps : [null]).map(function (p) { return leaf(p || null); });
-    return { id: nid("w"), name: name || "", tree: buildEven(list, "row"), active: list[0].id, zoom: null, layout: "", marked: null, last: null };
+    var root = reviveTree(tree, list);
+    // The layout name only describes a tree buildEven/buildTiled produced; a revived
+    // custom shape keeps its saved name, a rebuilt one has none (so Space cycles from
+    // the start rather than claiming a layout the tiling does not match).
+    return { id: nid("w"), name: name || "", tree: root || buildEven(list, "row"), active: list[0].id, zoom: null, layout: root ? (layoutName || "") : "", marked: null, last: null };
+  }
+  // Commit the live layout into the durable saved-sessions store so a later load
+  // (prefix s) returns the working state. tmux keeps the live session on detach;
+  // here the tree lives only in memory + sessionStorage until committed. If a
+  // saved session is attached, write back into it; otherwise fold a non-empty
+  // scratch layout into the reserved auto-session so it's recoverable without
+  // spawning a new entry each detach. An empty scratch layout commits nothing.
+  function commitLiveSession() {
+    if (!S.windows || !S.windows.length) return;
+    var snap = sessionSnapshot();
+    if (S.sessId) {
+      for (var i = 0; i < SESSIONS.length; i++) {
+        if (SESSIONS[i].id === S.sessId) {
+          SESSIONS[i].windows = snap; SESSIONS[i].updated = Date.now();
+          savePrefs(function (p) { p.tmuxSessions = SESSIONS; });
+          return;
+        }
+      }
+    }
+    var hasContent = S.windows.some(function (w) { return leaves(w.tree).some(function (l) { return l.doc != null; }); });
+    if (!hasContent) return;
+    var auto = null;
+    for (var j = 0; j < SESSIONS.length; j++) if (SESSIONS[j].id === AUTO_SESSION_ID) { auto = SESSIONS[j]; break; }
+    if (auto) { auto.windows = snap; auto.updated = Date.now(); }
+    else { SESSIONS.unshift({ id: AUTO_SESSION_ID, name: AUTO_SESSION_NAME, windows: snap, updated: Date.now(), auto: true }); }
+    S.sessId = AUTO_SESSION_ID; S.sessName = AUTO_SESSION_NAME;
+    loadSessHotkeys(); savePrefs(function (p) { p.tmuxSessions = SESSIONS; });
   }
   function applySession(sess) {
     if (!sess || !sess.windows || !sess.windows.length) return;
     S.windows.forEach(function (win) { leaves(win.tree).forEach(function (l) { dropPane(l.id); }); });
-    S.windows = sess.windows.map(function (w) { return windowFromPanes(w.name, w.panes); });
+    S.windows = sess.windows.map(function (w) { return windowFromPanes(w.name, w.panes, w.tree, w.layout); });
     S.active = 0; S.last = null; open = true; S.sessId = sess.id || null; S.sessName = sess.name || "";
     render(); focusActive();
     setStatusVisible(true);   // attaching a session forces the powerline on so the reserved 22px strip is filled (no empty gap)
@@ -1240,17 +1416,30 @@
     return Promise.resolve(window.confirm(message || title));
   }
 
-  // Preview geometry — mirrors windowFromPanes()'s buildEven(list,"row") EXACTLY so
-  // the SVG shows precisely what Load will render. Keep in lockstep with buildEven.
+  // Preview geometry — mirrors windowFromPanes() EXACTLY so the SVG shows precisely
+  // what Load will render: the saved shape when it still fits the pane count, else
+  // the buildEven(list,"row") rebuild. Keep in lockstep with computeRects+buildEven.
   function edTileRects(n, x, y, w, h) {
     if (n <= 1) return [{ x: x, y: y, w: w, h: h }];
     var mid = Math.ceil(n / 2), wa = w * (mid / n);
     return edTileRects(mid, x, y, wa, h).concat(edTileRects(n - mid, x + wa, y, w - wa, h));
   }
-  function edSvg(panes, W, H) {
-    var n = Math.max(1, (panes || []).length), pad = 3;
+  function edSnapRects(n, x, y, w, h, out) {
+    if (n.t === "leaf") { out.push({ x: x, y: y, w: w, h: h }); return out; }
+    var r = (typeof n.ratio === "number" && n.ratio > 0.02 && n.ratio < 0.98) ? n.ratio : 0.5;
+    if (n.dir === "col") { edSnapRects(n.a, x, y, w, h * r, out); edSnapRects(n.b, x, y + h * r, w, h * (1 - r), out); }
+    else { edSnapRects(n.a, x, y, w * r, h, out); edSnapRects(n.b, x + w * r, y, w * (1 - r), h, out); }
+    return out;
+  }
+  function edRects(panes, tree, W, H) {
+    var n = Math.max(1, (panes || []).length);
+    if (snapLeafCount(tree) === n) return edSnapRects(tree, 0, 0, W, H, []);
+    return edTileRects(n, 0, 0, W, H);
+  }
+  function edSvg(panes, W, H, tree) {
+    var pad = 3;
     var out = ['<svg class="zt-le-svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">'];
-    edTileRects(n, 0, 0, W, H).forEach(function (r, i) {
+    edRects(panes, tree, W, H).forEach(function (r, i) {
       var x = r.x + pad / 2, y = r.y + pad / 2, w = Math.max(1, r.w - pad), hh = Math.max(1, r.h - pad);
       out.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="2" class="zt-le-svgpane"/>');
       out.push('<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y + hh / 2).toFixed(1) + '" text-anchor="middle" dominant-baseline="central" class="zt-le-svgnum">' + i + '</text>');
@@ -1276,7 +1465,7 @@
   function edNewBlank() {
     edAskText("New layout — name", "layout").then(function (name) {
       if (name == null) return;
-      var s = { id: edUid(), name: edUniqueName(name.trim() || "layout"), created: edStamp(), updated: edStamp(), windows: [{ name: "", panes: [null] }] };
+      var s = { id: edUid(), name: edUniqueName(name.trim() || "layout"), created: edStamp(), updated: edStamp(), windows: [{ name: "", panes: [null], tree: null, layout: "" }] };
       SESSIONS.unshift(s); edEditingId = s.id; edPersist(); edPaint();
     });
   }
@@ -1306,11 +1495,73 @@
   function edLoad(s) { if (edHandle) edHandle.close(); applySession(s); }
 
   // --- window / pane structure ops ---
-  function edAddWindow(s) { s.windows.push({ name: "", panes: [null] }); edTouch(s); edPersist(); edPaint(); }
-  function edDelWindow(s, wi) { s.windows.splice(wi, 1); if (!s.windows.length) s.windows.push({ name: "", panes: [null] }); edTouch(s); edPersist(); edPaint(); }
+  function edAddWindow(s) { s.windows.push({ name: "", panes: [null], tree: null, layout: "" }); edTouch(s); edPersist(); edPaint(); }
+  function edDelWindow(s, wi) { s.windows.splice(wi, 1); if (!s.windows.length) s.windows.push({ name: "", panes: [null], tree: null, layout: "" }); edTouch(s); edPersist(); edPaint(); }
   function edMoveWindow(s, wi, dir) { if (edMove(s.windows, wi, dir)) { edTouch(s); edPersist(); edPaint(); } }
-  function edAddPane(s, w) { w.panes.push(null); edTouch(s); edPersist(); edPaint(); }
-  function edDelPane(s, w, pi) { w.panes.splice(pi, 1); if (!w.panes.length) w.panes.push(null); edTouch(s); edPersist(); edPaint(); }
+  /* --- the window's tiling shape, as edited here ---------------------------
+   * A window is panes[] (flat, depth-first: the content) + tree (the shape). The
+   * editor works on both at once: splitting a pane inserts a leaf in the tree AND
+   * a ref slot in panes[] at the matching index, closing one collapses its parent
+   * split, and reordering moves refs between leaf slots without touching the shape.
+   * Layouts saved before shapes existed (or hand-edited to disagree with panes[])
+   * get the even-horizontal shape Load would have rebuilt, so editing one is never
+   * blocked and never silently changes what Load draws. */
+  function edEvenShape(n) {   // mirrors buildEven(list, "row") — the Load fallback
+    if (n <= 1) return { t: "leaf" };
+    var mid = Math.ceil(n / 2);
+    return { t: "split", dir: "row", ratio: mid / n, a: edEvenShape(mid), b: edEvenShape(n - mid) };
+  }
+  function edEnsureTree(w) {
+    var n = Math.max(1, (w.panes || []).length);
+    if (snapLeafCount(w.tree) !== n) w.tree = edEvenShape(n);
+    return w.tree;
+  }
+  // Swap the pi-th leaf (depth-first) for whatever make() returns.
+  function edReplaceLeaf(node, pi, make, st) {
+    if (node.t === "leaf") return (st.i++ === pi) ? make() : node;
+    node.a = edReplaceLeaf(node.a, pi, make, st);
+    node.b = edReplaceLeaf(node.b, pi, make, st);
+    return node;
+  }
+  // Drop the pi-th leaf; its sibling takes the parent split's place. Null if the
+  // whole (single-leaf) tree went away.
+  function edRemoveLeaf(node, pi, st) {
+    if (node.t === "leaf") return (st.i++ === pi) ? null : node;
+    var a = edRemoveLeaf(node.a, pi, st), b = edRemoveLeaf(node.b, pi, st);
+    if (!a) return b;
+    if (!b) return a;
+    node.a = a; node.b = b; return node;
+  }
+  // The split direction each leaf sits in, in the same order as panes[] (null for a
+  // lone pane) — the editor labels its rows with it.
+  function edLeafDirs(node, parent, out) {
+    if (node.t === "leaf") { out.push(parent); return out; }
+    edLeafDirs(node.a, node.dir, out); edLeafDirs(node.b, node.dir, out);
+    return out;
+  }
+  // The two structural edits, as pure mutations of a saved window { panes, tree } —
+  // shared with hosts that ship their own session manager (see api.layout below) so
+  // there is exactly one implementation of "what splitting a saved pane means".
+  function shapeSplit(w, pi, dir) {
+    edEnsureTree(w);
+    w.tree = edReplaceLeaf(w.tree, pi, function () {
+      return { t: "split", dir: dir === "col" ? "col" : "row", ratio: 0.5, a: { t: "leaf" }, b: { t: "leaf" } };
+    }, { i: 0 });
+    w.panes.splice(pi + 1, 0, null);
+    w.layout = "";              // no longer one of the named even/main/tiled layouts
+    return w;
+  }
+  function shapeClose(w, pi) {
+    if (!w.panes || w.panes.length <= 1) return false;
+    edEnsureTree(w);
+    w.tree = edRemoveLeaf(w.tree, pi, { i: 0 });
+    w.panes.splice(pi, 1);
+    w.layout = "";
+    return true;
+  }
+  function edSplitPane(s, w, pi, dir) { shapeSplit(w, pi, dir); edTouch(s); edPersist(); edPaint(); }
+  function edAddPane(s, w) { edSplitPane(s, w, Math.max(0, w.panes.length - 1), "row"); }
+  function edDelPane(s, w, pi) { if (shapeClose(w, pi)) { edTouch(s); edPersist(); edPaint(); } }
   function edMovePane(s, w, pi, dir) { if (edMove(w.panes, pi, dir)) { edTouch(s); edPersist(); edPaint(); } }
   function edSetPane(s, w, pi) {
     if (!CFG.pickPaneRef) return;
@@ -1342,7 +1593,13 @@
           arr.forEach(function (s) {
             if (!s || !Array.isArray(s.windows)) return;
             SESSIONS.push({ id: edUid(), name: edUniqueName(String(s.name || "imported")), hotkey: (s.hotkey ? String(s.hotkey).slice(0, 1) : ""), created: edStamp(), updated: edStamp(),
-              windows: s.windows.map(function (w) { return { name: String((w && w.name) || ""), panes: ((w && w.panes) || []).map(function (p) { return p == null ? null : p; }) }; }) });
+              windows: s.windows.map(function (w) {
+                var ps = ((w && w.panes) || []).map(function (p) { return p == null ? null : p; });
+                // Keep the tiling shape only when it is well-formed and still fits the
+                // pane count; anything else imports as a plain even-horizontal layout.
+                var tr = (w && snapLeafCount(w.tree) === ps.length) ? treeSnapshot(w.tree) : null;
+                return { name: String((w && w.name) || ""), panes: ps, tree: tr, layout: (w && typeof w.layout === "string") ? w.layout : "" };
+              }) });
             added++;
           });
           edPersist(); edPaint(); toast("imported " + added + " layout" + (added === 1 ? "" : "s"));
@@ -1366,15 +1623,25 @@
       whead.appendChild(edButton("▼", "mini", function () { edMoveWindow(s, wi, 1); }, wi === s.windows.length - 1));
       whead.appendChild(edButton("remove window", "mini", function () { edDelWindow(s, wi); }));
       win.appendChild(whead);
-      win.appendChild(edSvg(w.panes, 168, 92));
+      win.appendChild(edSvg(w.panes, 168, 92, w.tree));
+      // Each row is one leaf of the tiling tree, in the tree's own order, tagged with
+      // the split it sits in (→ left-right, ↓ top-bottom) — so the list reads as the
+      // shape the preview draws rather than as an orderless bag of panes.
+      var dirs = edLeafDirs(edEnsureTree(w), null, []);
       w.panes.forEach(function (p, pi) {
         var row = el("div", "zt-le-pane");
         row.appendChild(el("span", "zt-le-ptag", String(pi)));
+        row.appendChild(el("span", "zt-le-pdir", dirs[pi] === "col" ? "↓" : (dirs[pi] === "row" ? "→" : "·")));
         row.appendChild(el("span", "zt-le-plabel", edRefLabel(p)));
         if (CFG.pickPaneRef) row.appendChild(edButton("set…", "mini", function () { edSetPane(s, w, pi); }));
+        var sr = edButton("split →", "mini", function () { edSplitPane(s, w, pi, "row"); });
+        sr.title = "Split this pane left/right (a new pane beside it)";
+        var sd = edButton("split ↓", "mini", function () { edSplitPane(s, w, pi, "col"); });
+        sd.title = "Split this pane top/bottom (a new pane under it)";
+        row.appendChild(sr); row.appendChild(sd);
         row.appendChild(edButton("▲", "mini", function () { edMovePane(s, w, pi, -1); }, pi === 0));
         row.appendChild(edButton("▼", "mini", function () { edMovePane(s, w, pi, 1); }, pi === w.panes.length - 1));
-        row.appendChild(edButton("✕", "mini danger", function () { edDelPane(s, w, pi); }));
+        row.appendChild(edButton("✕", "mini danger", function () { edDelPane(s, w, pi); }, w.panes.length < 2));
         win.appendChild(row);
       });
       box.appendChild(win);
@@ -1424,7 +1691,7 @@
       var prev = el("div", "zt-le-preview");
       (s.windows || []).forEach(function (w, wi) {
         var cell = el("div", "zt-le-prevcell");
-        cell.appendChild(edSvg(w.panes, 96, 58));
+        cell.appendChild(edSvg(w.panes, 96, 58, w.tree));
         cell.appendChild(el("span", "zt-le-prevlabel", (w.name && w.name.trim()) ? w.name : ("win " + wi)));
         prev.appendChild(cell);
       });
@@ -1514,10 +1781,27 @@
     // import / export / hotkey / structural edit / load). Lets a ⌘K palette command open
     // the same editor as the `M` post-prefix key.
     editSessions: function () { openSessionEditor(); },
+    // Open the keybinding editor (remap post-prefix keys + the prefix chord + arm
+    // timeout, persisted into the host's prefs blob). Lets the appShell settings +
+    // a ⌘K command give every tmux app user-customizable bindings with no per-app code.
+    editKeymap: function () { editKeymap(); },
     // Attach a saved session by id (rebuild the tiling tree + open). Lets an external
     // driver — the HUD Sessions page relaying via the background → tabs.sendMessage —
     // open a fresh tab and load a whole layout into it without a keypress.
     loadSession: function (id) { loadSessionById(id); },
+    // The tiling shape of a SAVED window ({ name, panes[], tree }) — the same helpers
+    // the built-in layouts editor runs on, exposed for hosts that ship their own
+    // session manager (zwire's HUD Sessions page stores its layouts in the very same
+    // prefs array) so they draw and edit identical geometry instead of reimplementing
+    // it against the flat pane list. rects() mirrors what Load tiles, including the
+    // even-horizontal rebuild used when a window has no shape yet; split()/close()
+    // mutate the window in place (the caller persists) and return whether it changed.
+    layout: {
+      rects: function (panes, tree, w, h) { return edRects(panes, tree, w, h); },
+      dirs: function (win) { return edLeafDirs(edEnsureTree(win), null, []); },
+      split: function (win, i, dir) { shapeSplit(win, i, dir); return true; },
+      close: function (win, i) { return shapeClose(win, i); }
+    },
     // True once a host has called init() — i.e. this app actually USES tmux. The
     // appShell gates its "Toggle status bar" ⌘K command on this so non-tmux zgui
     // apps don't get a command that toggles a bar they don't have.
@@ -1525,7 +1809,7 @@
   };
   // Self-inject this component's stylesheet once, so it works from the JS alone (no
   // manifest/all.css step needed). Idempotent + prepended so a consumer's own CSS wins.
-  (function(){var _c="/* tmux mode — overlay geometry + absolute-position tiling. Dialogs/toasts/tabs come\n * from zgui-core (ZGui.modal / .toast / .buttonBar); this file positions the\n * full-screen tiling surface, its absolutely-tiled panes + draggable dividers, and\n * the per-pane chrome. Themed with the shared scheme vars (--bg-primary/--cyan/…) so\n * it tracks the active colour scheme + light/dark like the rest of the app. */\n\n#zg-tmux {\n  position: fixed;\n  top: 0; left: 0; right: 0;\n  bottom: 22px;                  /* leave the bottom 22px for the powerline status bar (like zwire's ztmux reserve) */\n  z-index: 8500;                 /* above app chrome + the vim status bar (8000); below the appShell ⌘K palette (9998), zgui modals (25000) and toasts (30000) so those render over it. Documents open via the native picker / in-overlay recents, not the file-browser overlay. */\n  display: none;\n  flex-direction: column;\n  background: var(--bg-primary, #05060a);\n  color: var(--text, #c8d2e0);\n  font-family: \"Share Tech Mono\", Monaco, monospace;\n}\n#zg-tmux.on { display: flex; }\n\n/* detached command-only surface: the : prompt floats over the page, no tiling chrome */\n#zg-tmux.zt-cmdonly { background: transparent; }\n#zg-tmux.zt-cmdonly .zt-tabs,\n#zg-tmux.zt-cmdonly .zt-pane,\n#zg-tmux.zt-cmdonly .zt-div { display: none; }\n\n/* top window-tab strip (a zgui button bar; we only tune the active-tab look) */\n#zg-tmux .zt-tabs {\n  display: flex;\n  align-items: stretch;\n  gap: 2px;\n  height: 30px;\n  flex-shrink: 0;\n  padding: 0 6px;\n  background: var(--bg-card, #0a0d16);\n  border-bottom: 1px solid var(--cyan, #05d9e8);\n  overflow-x: auto;\n}\n#zg-tmux .zt-tab { white-space: nowrap; }\n#zg-tmux .zt-tab.act {\n  color: var(--bg-primary, #05060a);\n  background: var(--cyan, #05d9e8);\n  box-shadow: 0 0 12px var(--cyan-glow, rgba(5, 217, 232, .4));\n}\n\n/* the tiling surface — panes + dividers are absolutely positioned within it */\n#zg-tmux .zt-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }\n\n/* draggable split dividers (own drag; a shield keeps mousemove out of the iframes) */\n#zg-tmux .zt-div { position: absolute; z-index: 6; background: transparent; transition: background .1s; }\n#zg-tmux .zt-div:hover { background: var(--cyan, #05d9e8); box-shadow: 0 0 8px var(--cyan-glow, rgba(5, 217, 232, .5)); }\n#zg-tmux .zt-div-v { width: 8px; transform: translateX(-4px); cursor: col-resize; }\n#zg-tmux .zt-div-h { height: 8px; transform: translateY(-4px); cursor: row-resize; }\n#zg-tmux .zt-shield { position: absolute; inset: 0; z-index: 50; }\n\n/* a pane (document tile) — absolutely positioned; left/top/width/height set inline in % by layout() */\n#zg-tmux .zt-pane {\n  position: absolute;\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  min-height: 0;\n  overflow: hidden;\n  box-sizing: border-box;\n  border: 1px solid var(--border, #1a2436);\n  background: var(--bg-primary, #05060a);\n  outline: none;\n}\n#zg-tmux .zt-pane.act {\n  border-color: var(--cyan, #05d9e8);\n  box-shadow: inset 0 0 0 1px var(--cyan, #05d9e8), 0 0 16px var(--cyan-glow, rgba(5, 217, 232, .35));\n}\n#zg-tmux .zt-pane.zt-mark { border-color: var(--accent, #ff2a6d); }\n/* panes in the synchronize-panes group */\n#zg-tmux .zt-pane.zt-synced { border-color: var(--cyan, #05d9e8); }\n#zg-tmux .zt-pane.zt-synced .zt-ttl::after { content: \"⇄\"; color: var(--cyan, #05d9e8); margin-left: auto; }\n\n/* copy-mode: indicator banner + synthetic caret (position:fixed, viewport-anchored) */\n.zt-copy-ind {\n  position: fixed; top: 6px; left: 50%; transform: translateX(-50%); z-index: 26000;\n  background: var(--accent, #ff2a6d); color: var(--bg-primary, #05060a);\n  padding: 3px 10px; border-radius: 3px; font: 12px \"Share Tech Mono\", monospace;\n  white-space: nowrap; max-width: 96vw; overflow: hidden; text-overflow: ellipsis; pointer-events: none;\n}\n.zt-copy-cur {\n  position: fixed; width: 2px; z-index: 25999; pointer-events: none;\n  background: var(--cyan, #05d9e8); box-shadow: 0 0 6px var(--cyan, #05d9e8);\n  animation: ztcurbl 1s steps(1) infinite;\n}\n\n#zg-tmux .zt-ttl {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  height: 24px;\n  flex-shrink: 0;\n  padding: 0 8px;\n  font-size: 11px;\n  color: var(--text-muted, #7d8aa0);\n  background: var(--bg-card, #0a0d16);\n  border-bottom: 1px solid var(--border, #1a2436);\n}\n#zg-tmux .zt-pane.act .zt-ttl { color: var(--cyan, #05d9e8); }\n#zg-tmux .zt-pane.zt-mark .zt-ttl::before { content: \"◆ \"; color: var(--accent, #ff2a6d); }\n#zg-tmux .zt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n#zg-tmux .zt-x { cursor: pointer; color: var(--accent, #ff2a6d); padding: 0 2px; }\n\n/* the pane's document render surface — hosts whatever app.js setMain produced */\n#zg-tmux .zt-pane-body { flex: 1; min-height: 0; overflow: auto; position: relative; }\n\n/* empty-pane chooser */\n#zg-tmux .zt-chooser { padding: 16px; display: flex; flex-direction: column; gap: 12px; }\n#zg-tmux .zt-chooser-head { color: var(--text-muted, #5a6b82); letter-spacing: 1px; font-size: 12px; }\n#zg-tmux .zt-chooser-tiles { min-height: 0; }\n\n/* pane-number badges (C-b q) */\n#zg-tmux .zt-pnum {\n  position: absolute;\n  inset: 24px 0 0 0;\n  z-index: 40;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  font-size: 56px;\n  font-weight: 700;\n  color: var(--cyan, #05d9e8);\n  background: rgba(0, 0, 0, .35);\n  text-shadow: 0 0 16px var(--cyan-glow, rgba(5, 217, 232, .6));\n  pointer-events: none;\n}\n\n/* ---- content inside zgui modals (help / list chooser / clock / command CLI) ---- */\n.zt-help-grid { columns: 2; column-gap: 28px; font-size: 13px; line-height: 1.8; }\n.zt-help-row { break-inside: avoid; }\n.zt-help-row kbd {\n  display: inline-block; min-width: 1.4em; text-align: center;\n  padding: 1px 5px; border: 1px solid var(--border, #1a2436); border-radius: 3px;\n  background: var(--bg-card, #0a0d16); color: var(--cyan, #05d9e8); font-size: 11px;\n}\n.zt-help-note { margin-top: 12px; opacity: .7; font-size: 12px; line-height: 1.6; }\n.zt-clock { font-size: 64px; letter-spacing: 4px; text-align: center; color: var(--cyan, #05d9e8); text-shadow: 0 0 18px var(--cyan-glow, rgba(5, 217, 232, .6)); }\n\n.zt-list { min-width: 380px; }\n.zt-lrow { padding: 6px 10px; cursor: pointer; border-radius: 3px; }\n.zt-lrow:hover, .zt-lrow.sel { background: var(--cyan, #05d9e8); color: var(--bg-primary, #05060a); }\n\n/* command prompt (C-b :) — ported verbatim from zwire's ztmux.js. Anchored by its\n   TOP (the input row) so the box grows/shrinks DOWNWARD as the list changes — the\n   input never moves while you type. top:72% ≈ a quarter up from the bottom. */\n#zg-tmux .zt-cmdback { position: absolute; inset: 0; z-index: 70; }\n#zg-tmux .zt-cmdwrap {\n  position: absolute; left: 50%; top: 72%; transform: translateX(-50%); width: min(560px, 82%);\n  display: flex; flex-direction: column; background: var(--bg-card, #0a0d16); border: 1px solid var(--cyan, #05d9e8);\n  border-radius: 6px; box-shadow: 0 0 44px var(--cyan-glow, rgba(5, 217, 232, .4)); overflow: hidden;\n}\n#zg-tmux .zt-cmdrow { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }\n#zg-tmux .zt-cmdlbl { color: var(--cyan, #05d9e8); font-weight: 700; font-size: 16px; }\n#zg-tmux .zt-cmdin { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text, #c8d2e0); font: inherit; font-size: 15px; }\n#zg-tmux .zt-cmdin::placeholder { color: var(--text-muted, #5a6b82); }\n#zg-tmux .zt-cmdlist { max-height: min(240px, 22vh); overflow-y: auto; border-top: 1px solid var(--border, #1a2233); }\n#zg-tmux .zt-cmdlist:empty { display: none; border-top: none; }\n#zg-tmux .zt-cmditem { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 14px; cursor: pointer; font-size: 13px; color: var(--text, #c8d2e0); }\n#zg-tmux .zt-cmditem .zt-cmddesc { color: var(--text-muted, #5a6b82); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n#zg-tmux .zt-cmditem:hover { background: rgba(5, 217, 232, .08); }\n#zg-tmux .zt-cmditem.sel { background: var(--cyan, #05d9e8); color: var(--bg-primary, #05060a); }\n#zg-tmux .zt-cmditem.sel .zt-cmddesc { color: var(--bg-primary, #05060a); opacity: .75; }\n#zg-tmux .zt-cmdmsg { padding: 7px 14px; color: var(--magenta, #ff2e97); font-size: 12px; border-top: 1px solid var(--border, #1a2233); }\n#zg-tmux .zt-cmdmsg:empty { display: none; }\n\n/* ---- 'Layouts' button in the overlay tab strip ---- */\n#zg-tmux .zt-tab-btn { margin-left: auto; align-self: center; flex: none; height: 22px; padding: 0 12px; cursor: pointer; font: 700 11px/1 \"Share Tech Mono\", ui-monospace, monospace; letter-spacing: .5px; color: var(--bg-primary, #05060a); background: var(--cyan, #05d9e8); border: 1px solid var(--cyan, #05d9e8); border-radius: 5px; white-space: nowrap; }\n#zg-tmux .zt-tab-btn:hover { box-shadow: 0 0 10px var(--cyan-glow, rgba(5, 217, 232, .5)); }\n\n/* ---- saved-layouts editor (ZGui.tmux.editSessions / prefix M / tab-strip button), inside a zgui modal ---- */\n.modal-content.zg-le-modal { max-width: 920px; width: 92%; }\n.zt-le { overflow: visible; }\n.zt-le-toolbar { display: flex; gap: 8px; align-items: center; padding: 2px 0 14px; flex-wrap: wrap; }\n.zt-le-btn { min-height: 26px; padding: 3px 10px; cursor: pointer; font: 600 12px/1.4 \"Share Tech Mono\", ui-monospace, monospace; color: var(--cyan, #05d9e8); background: var(--bg-card, #0a0d16); border: 1px solid var(--border, #1a2436); border-radius: 6px; }\n.zt-le-btn:hover { background: var(--bg-hover, #12203a); color: var(--text, #c8d2e0); }\n.zt-le-btn:disabled { opacity: .4; cursor: default; }\n.zt-le-btn.primary { color: var(--bg-primary, #05060a); background: var(--cyan, #05d9e8); border-color: var(--cyan, #05d9e8); }\n.zt-le-btn.mini { padding: 2px 7px; font-size: 11px; }\n.zt-le-btn.danger { color: var(--magenta, #ff2e97); border-color: var(--magenta, #ff2e97); background: var(--bg-card, #0a0d16); }\n.zt-le-btn.danger:hover { background: var(--magenta, #ff2e97); color: var(--bg-primary, #05060a); }\n.zt-le-in { background: var(--bg-primary, #05060a); border: 1px solid var(--border, #1a2436); border-radius: 4px; color: var(--text, #c8d2e0); font: inherit; font-size: 13px; padding: 3px 6px; }\n.zt-le-in:focus { outline: none; border-color: var(--cyan, #05d9e8); }\n.zt-le-card { border: 1px solid var(--border, #1a2436); background: var(--bg-card, #0a0d16); border-radius: 6px; margin: 0 0 12px; padding: 10px 12px; }\n.zt-le-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }\n.zt-le-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }\n.zt-le-name { color: var(--text, #c8d2e0); font-weight: 600; font-size: 15px; }\n.zt-le-hotkey { display: inline-flex; align-items: center; gap: 5px; margin: 1px 0; }\n.zt-le-hklbl { color: var(--text-muted, #7d8aa0); font-size: 11px; }\n.zt-le-hkin { width: 2.4em; text-align: center; }\n.zt-le-hkwarn { color: var(--magenta, #ff2e97); font-size: 11px; margin-left: 6px; }\n.zt-le-meta { color: var(--text-muted, #7d8aa0); font-size: 12px; }\n.zt-le-acts { display: flex; gap: 6px; flex-wrap: wrap; }\n.zt-le-editor { margin-top: 12px; border-top: 1px solid var(--border, #1a2436); padding-top: 10px; }\n.zt-le-window { border: 1px solid var(--border, #1a2436); border-radius: 5px; padding: 8px; margin: 0 0 8px; }\n.zt-le-whead { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }\n.zt-le-wtag, .zt-le-ptag { color: var(--accent, #ff2a6d); font: 11px \"Share Tech Mono\", monospace; flex: none; }\n.zt-le-wname { flex: 1; min-width: 120px; }\n.zt-le-pane { display: flex; gap: 6px; align-items: center; margin: 4px 0; }\n.zt-le-plabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted, #7d8aa0); font-size: 12px; }\n.zt-le-efoot { margin-top: 4px; }\n.zt-le-empty { color: var(--text-muted, #7d8aa0); text-align: center; padding: 32px 0; }\n.zt-le-hint { font-size: 12px; opacity: .8; }\n.zt-le-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }\n.zt-le-prevcell { display: flex; flex-direction: column; align-items: center; gap: 3px; }\n.zt-le-prevlabel { color: var(--text-muted, #7d8aa0); font: 11px \"Share Tech Mono\", monospace; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.zt-le-svgwrap { line-height: 0; }\n.zt-le-window .zt-le-svgwrap { margin: 0 0 8px; }\n.zt-le-svg { display: block; background: var(--bg-primary, #05060a); border: 1px solid var(--border, #1a2436); border-radius: 3px; }\n.zt-le-svgpane { fill: var(--bg-hover, #12203a); stroke: var(--cyan, #05d9e8); stroke-width: 1; }\n.zt-le-svgnum { fill: var(--text-muted, #7d8aa0); font: 10px \"Share Tech Mono\", monospace; }\n";try{if(typeof document!=="undefined"&&!document.getElementById("zg-tmux-css")){var _s=document.createElement("style");_s.id="zg-tmux-css";_s.textContent=_c;var _h=document.head||document.documentElement;_h.insertBefore(_s,_h.firstChild);}}catch(_e){}})();
+  (function(){var _c="/* tmux mode — overlay geometry + absolute-position tiling. Dialogs/toasts/tabs come\n * from zgui-core (ZGui.modal / .toast / .buttonBar); this file positions the\n * full-screen tiling surface, its absolutely-tiled panes + draggable dividers, and\n * the per-pane chrome. Themed with the shared scheme vars (--bg-primary/--cyan/…) so\n * it tracks the active colour scheme + light/dark like the rest of the app. */\n\n#zg-tmux {\n  position: fixed;\n  top: 0; left: 0; right: 0;\n  bottom: 22px;                  /* leave the bottom 22px for the powerline status bar (like zwire's ztmux reserve) */\n  z-index: 8500;                 /* above app chrome + the vim status bar (8000); below the appShell ⌘K palette (9998), zgui modals (25000) and toasts (30000) so those render over it. Documents open via the native picker / in-overlay recents, not the file-browser overlay. */\n  display: none;\n  flex-direction: column;\n  background: var(--bg-primary, #05060a);\n  color: var(--text, #c8d2e0);\n  font-family: \"Share Tech Mono\", Monaco, monospace;\n}\n#zg-tmux.on { display: flex; }\n\n/* detached command-only surface: the : prompt floats over the page, no tiling chrome */\n#zg-tmux.zt-cmdonly { background: transparent; }\n#zg-tmux.zt-cmdonly .zt-tabs,\n#zg-tmux.zt-cmdonly .zt-pane,\n#zg-tmux.zt-cmdonly .zt-div { display: none; }\n\n/* top window-tab strip (a zgui button bar; we only tune the active-tab look) */\n#zg-tmux .zt-tabs {\n  display: flex;\n  align-items: stretch;\n  gap: 2px;\n  height: 30px;\n  flex-shrink: 0;\n  padding: 0 6px;\n  background: var(--bg-card, #0a0d16);\n  border-bottom: 1px solid var(--cyan, #05d9e8);\n  overflow-x: auto;\n}\n#zg-tmux .zt-tab { white-space: nowrap; }\n#zg-tmux .zt-tab.act {\n  color: var(--bg-primary, #05060a);\n  background: var(--cyan, #05d9e8);\n  box-shadow: 0 0 12px var(--cyan-glow, rgba(5, 217, 232, .4));\n}\n\n/* the tiling surface — panes + dividers are absolutely positioned within it */\n#zg-tmux .zt-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }\n\n/* draggable split dividers (own drag; a shield keeps mousemove out of the iframes) */\n#zg-tmux .zt-div { position: absolute; z-index: 6; background: transparent; transition: background .1s; }\n#zg-tmux .zt-div:hover { background: var(--cyan, #05d9e8); box-shadow: 0 0 8px var(--cyan-glow, rgba(5, 217, 232, .5)); }\n#zg-tmux .zt-div-v { width: 8px; transform: translateX(-4px); cursor: col-resize; }\n#zg-tmux .zt-div-h { height: 8px; transform: translateY(-4px); cursor: row-resize; }\n#zg-tmux .zt-shield { position: absolute; inset: 0; z-index: 50; }\n\n/* a pane (document tile) — absolutely positioned; left/top/width/height set inline in % by layout() */\n#zg-tmux .zt-pane {\n  position: absolute;\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  min-height: 0;\n  overflow: hidden;\n  box-sizing: border-box;\n  border: 1px solid var(--border, #1a2436);\n  background: var(--bg-primary, #05060a);\n  outline: none;\n}\n#zg-tmux .zt-pane.act {\n  border-color: var(--cyan, #05d9e8);\n  box-shadow: inset 0 0 0 1px var(--cyan, #05d9e8), 0 0 16px var(--cyan-glow, rgba(5, 217, 232, .35));\n}\n#zg-tmux .zt-pane.zt-mark { border-color: var(--accent, #ff2a6d); }\n/* panes in the synchronize-panes group */\n#zg-tmux .zt-pane.zt-synced { border-color: var(--cyan, #05d9e8); }\n#zg-tmux .zt-pane.zt-synced .zt-ttl::after { content: \"⇄\"; color: var(--cyan, #05d9e8); margin-left: auto; }\n\n/* copy-mode: indicator banner + synthetic caret (position:fixed, viewport-anchored) */\n.zt-copy-ind {\n  position: fixed; top: 6px; left: 50%; transform: translateX(-50%); z-index: 26000;\n  background: var(--accent, #ff2a6d); color: var(--bg-primary, #05060a);\n  padding: 3px 10px; border-radius: 3px; font: 12px \"Share Tech Mono\", monospace;\n  white-space: nowrap; max-width: 96vw; overflow: hidden; text-overflow: ellipsis; pointer-events: none;\n}\n.zt-copy-cur {\n  position: fixed; width: 2px; z-index: 25999; pointer-events: none;\n  background: var(--cyan, #05d9e8); box-shadow: 0 0 6px var(--cyan, #05d9e8);\n  animation: ztcurbl 1s steps(1) infinite;\n}\n\n#zg-tmux .zt-ttl {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  height: 24px;\n  flex-shrink: 0;\n  padding: 0 8px;\n  font-size: 11px;\n  color: var(--text-muted, #7d8aa0);\n  background: var(--bg-card, #0a0d16);\n  border-bottom: 1px solid var(--border, #1a2436);\n}\n#zg-tmux .zt-pane.act .zt-ttl { color: var(--cyan, #05d9e8); }\n#zg-tmux .zt-pane.zt-mark .zt-ttl::before { content: \"◆ \"; color: var(--accent, #ff2a6d); }\n#zg-tmux .zt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n#zg-tmux .zt-x { cursor: pointer; color: var(--accent, #ff2a6d); padding: 0 2px; }\n\n/* the pane's document render surface — hosts whatever app.js setMain produced */\n#zg-tmux .zt-pane-body { flex: 1; min-height: 0; overflow: auto; position: relative; }\n\n/* empty-pane chooser */\n#zg-tmux .zt-chooser { padding: 16px; display: flex; flex-direction: column; gap: 12px; }\n#zg-tmux .zt-chooser-head { color: var(--text-muted, #5a6b82); letter-spacing: 1px; font-size: 12px; }\n#zg-tmux .zt-chooser-tiles { min-height: 0; }\n\n/* pane-number badges (C-b q) */\n#zg-tmux .zt-pnum {\n  position: absolute;\n  inset: 24px 0 0 0;\n  z-index: 40;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  font-size: 56px;\n  font-weight: 700;\n  color: var(--cyan, #05d9e8);\n  background: rgba(0, 0, 0, .35);\n  text-shadow: 0 0 16px var(--cyan-glow, rgba(5, 217, 232, .6));\n  pointer-events: none;\n}\n\n/* ---- content inside zgui modals (help / list chooser / clock / command CLI) ---- */\n.zt-help-grid { columns: 2; column-gap: 28px; font-size: 13px; line-height: 1.8; }\n.zt-help-row { break-inside: avoid; }\n.zt-help-row kbd {\n  display: inline-block; min-width: 1.4em; text-align: center;\n  padding: 1px 5px; border: 1px solid var(--border, #1a2436); border-radius: 3px;\n  background: var(--bg-card, #0a0d16); color: var(--cyan, #05d9e8); font-size: 11px;\n}\n.zt-help-note { margin-top: 12px; opacity: .7; font-size: 12px; line-height: 1.6; }\n.zt-clock { font-size: 64px; letter-spacing: 4px; text-align: center; color: var(--cyan, #05d9e8); text-shadow: 0 0 18px var(--cyan-glow, rgba(5, 217, 232, .6)); }\n\n.zt-list { min-width: 380px; }\n.zt-lrow { padding: 6px 10px; cursor: pointer; border-radius: 3px; }\n.zt-lrow:hover, .zt-lrow.sel { background: var(--cyan, #05d9e8); color: var(--bg-primary, #05060a); }\n\n/* command prompt (C-b :) — ported verbatim from zwire's ztmux.js. Anchored by its\n   TOP (the input row) so the box grows/shrinks DOWNWARD as the list changes — the\n   input never moves while you type. top:72% ≈ a quarter up from the bottom. */\n#zg-tmux .zt-cmdback { position: absolute; inset: 0; z-index: 70; }\n#zg-tmux .zt-cmdwrap {\n  position: absolute; left: 50%; top: 72%; transform: translateX(-50%); width: min(560px, 82%);\n  display: flex; flex-direction: column; background: var(--bg-card, #0a0d16); border: 1px solid var(--cyan, #05d9e8);\n  border-radius: 6px; box-shadow: 0 0 44px var(--cyan-glow, rgba(5, 217, 232, .4)); overflow: hidden;\n}\n#zg-tmux .zt-cmdrow { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }\n#zg-tmux .zt-cmdlbl { color: var(--cyan, #05d9e8); font-weight: 700; font-size: 16px; }\n#zg-tmux .zt-cmdin { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text, #c8d2e0); font: inherit; font-size: 15px; }\n#zg-tmux .zt-cmdin::placeholder { color: var(--text-muted, #5a6b82); }\n#zg-tmux .zt-cmdlist { max-height: min(240px, 22vh); overflow-y: auto; border-top: 1px solid var(--border, #1a2233); }\n#zg-tmux .zt-cmdlist:empty { display: none; border-top: none; }\n#zg-tmux .zt-cmditem { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 14px; cursor: pointer; font-size: 13px; color: var(--text, #c8d2e0); }\n#zg-tmux .zt-cmditem .zt-cmddesc { color: var(--text-muted, #5a6b82); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n#zg-tmux .zt-cmditem:hover { background: rgba(5, 217, 232, .08); }\n#zg-tmux .zt-cmditem.sel { background: var(--cyan, #05d9e8); color: var(--bg-primary, #05060a); }\n#zg-tmux .zt-cmditem.sel .zt-cmddesc { color: var(--bg-primary, #05060a); opacity: .75; }\n#zg-tmux .zt-cmdmsg { padding: 7px 14px; color: var(--magenta, #ff2e97); font-size: 12px; border-top: 1px solid var(--border, #1a2233); }\n#zg-tmux .zt-cmdmsg:empty { display: none; }\n\n/* ---- 'Layouts' button in the overlay tab strip ---- */\n#zg-tmux .zt-tab-btn { margin-left: auto; align-self: center; flex: none; height: 22px; padding: 0 12px; cursor: pointer; font: 700 11px/1 \"Share Tech Mono\", ui-monospace, monospace; letter-spacing: .5px; color: var(--bg-primary, #05060a); background: var(--cyan, #05d9e8); border: 1px solid var(--cyan, #05d9e8); border-radius: 5px; white-space: nowrap; }\n#zg-tmux .zt-tab-btn:hover { box-shadow: 0 0 10px var(--cyan-glow, rgba(5, 217, 232, .5)); }\n\n/* ---- saved-layouts editor (ZGui.tmux.editSessions / prefix M / tab-strip button), inside a zgui modal ---- */\n.modal-content.zg-le-modal { max-width: 920px; width: 92%; }\n.zt-le { overflow: visible; }\n.zt-le-toolbar { display: flex; gap: 8px; align-items: center; padding: 2px 0 14px; flex-wrap: wrap; }\n.zt-le-btn { min-height: 26px; padding: 3px 10px; cursor: pointer; font: 600 12px/1.4 \"Share Tech Mono\", ui-monospace, monospace; color: var(--cyan, #05d9e8); background: var(--bg-card, #0a0d16); border: 1px solid var(--border, #1a2436); border-radius: 6px; }\n.zt-le-btn:hover { background: var(--bg-hover, #12203a); color: var(--text, #c8d2e0); }\n.zt-le-btn:disabled { opacity: .4; cursor: default; }\n.zt-le-btn.primary { color: var(--bg-primary, #05060a); background: var(--cyan, #05d9e8); border-color: var(--cyan, #05d9e8); }\n.zt-le-btn.mini { padding: 2px 7px; font-size: 11px; }\n.zt-le-btn.danger { color: var(--magenta, #ff2e97); border-color: var(--magenta, #ff2e97); background: var(--bg-card, #0a0d16); }\n.zt-le-btn.danger:hover { background: var(--magenta, #ff2e97); color: var(--bg-primary, #05060a); }\n.zt-le-in { background: var(--bg-primary, #05060a); border: 1px solid var(--border, #1a2436); border-radius: 4px; color: var(--text, #c8d2e0); font: inherit; font-size: 13px; padding: 3px 6px; }\n.zt-le-in:focus { outline: none; border-color: var(--cyan, #05d9e8); }\n.zt-le-card { border: 1px solid var(--border, #1a2436); background: var(--bg-card, #0a0d16); border-radius: 6px; margin: 0 0 12px; padding: 10px 12px; }\n.zt-le-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }\n.zt-le-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }\n.zt-le-name { color: var(--text, #c8d2e0); font-weight: 600; font-size: 15px; }\n.zt-le-hotkey { display: inline-flex; align-items: center; gap: 5px; margin: 1px 0; }\n.zt-le-hklbl { color: var(--text-muted, #7d8aa0); font-size: 11px; }\n.zt-le-hkin { width: 2.4em; text-align: center; }\n.zt-le-hkwarn { color: var(--magenta, #ff2e97); font-size: 11px; margin-left: 6px; }\n.zt-le-meta { color: var(--text-muted, #7d8aa0); font-size: 12px; }\n.zt-le-acts { display: flex; gap: 6px; flex-wrap: wrap; }\n.zt-le-editor { margin-top: 12px; border-top: 1px solid var(--border, #1a2436); padding-top: 10px; }\n.zt-le-window { border: 1px solid var(--border, #1a2436); border-radius: 5px; padding: 8px; margin: 0 0 8px; }\n.zt-le-whead { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }\n.zt-le-wtag, .zt-le-ptag { color: var(--accent, #ff2a6d); font: 11px \"Share Tech Mono\", monospace; flex: none; }\n/* the split a pane sits in: -> left-right, v top-bottom, . lone pane */\n.zt-le-pdir { color: var(--cyan, #05d9e8); font: 12px \"Share Tech Mono\", monospace; flex: none; width: 1.2em; text-align: center; }\n.zt-le-wname { flex: 1; min-width: 120px; }\n.zt-le-pane { display: flex; gap: 6px; align-items: center; margin: 4px 0; }\n.zt-le-plabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted, #7d8aa0); font-size: 12px; }\n.zt-le-efoot { margin-top: 4px; }\n.zt-le-empty { color: var(--text-muted, #7d8aa0); text-align: center; padding: 32px 0; }\n.zt-le-hint { font-size: 12px; opacity: .8; }\n.zt-le-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }\n.zt-le-prevcell { display: flex; flex-direction: column; align-items: center; gap: 3px; }\n.zt-le-prevlabel { color: var(--text-muted, #7d8aa0); font: 11px \"Share Tech Mono\", monospace; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.zt-le-svgwrap { line-height: 0; }\n.zt-le-window .zt-le-svgwrap { margin: 0 0 8px; }\n.zt-le-svg { display: block; background: var(--bg-primary, #05060a); border: 1px solid var(--border, #1a2436); border-radius: 3px; }\n.zt-le-svgpane { fill: var(--bg-hover, #12203a); stroke: var(--cyan, #05d9e8); stroke-width: 1; }\n.zt-le-svgnum { fill: var(--text-muted, #7d8aa0); font: 10px \"Share Tech Mono\", monospace; }\n";try{if(typeof document!=="undefined"&&!document.getElementById("zg-tmux-css")){var _s=document.createElement("style");_s.id="zg-tmux-css";_s.textContent=_c;var _h=document.head||document.documentElement;_h.insertBefore(_s,_h.firstChild);}}catch(_e){}})();
   window.ZGui = window.ZGui || {};
   window.ZGui.tmux = api;
 })();

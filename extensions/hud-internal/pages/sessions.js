@@ -5,7 +5,9 @@
  * browsing tab at the layout's first web page; the tmux overlay content script there
  * attaches the whole session (background → tabs.sendMessage 'zbTmuxLoadSession').
  *
- * Schema:  [{ id, name, created, updated, windows:[{ name, panes:[{ url, title }] }] }] */
+ * Schema:  [{ id, name, created, updated, windows:[{ name, panes:[{ url, title }], tree }] }]
+ * where tree is the tiling shape ZGui.tmux stores + rebuilds: { t:'split', dir:'row'|'col',
+ * ratio, a, b } over { t:'leaf' }, one leaf per panes[] entry in depth-first order. */
 (function () {
   'use strict';
   var Z = window.ZGui || {};
@@ -35,19 +37,28 @@
   function paneCount(s) { return (s.windows || []).reduce(function (n, w) { return n + ((w.panes || []).length || 0); }, 0); }
   function fmtWhen(t) { if (!t) return ''; try { return new Date(t).toLocaleString(); } catch (e) { return ''; } }
 
-  // Faithful layout preview: ztmux's windowFromPanes() tiles a window's flat pane
-  // list via buildEven(list, 'row') — a recursive binary split entirely in the row
-  // direction (vertical columns). tileRects mirrors that geometry exactly, so the
-  // SVG shows precisely what "Load" will render. Keep in lockstep with ztmux.js.
-  function tileRects(n, x, y, w, h) {
+  /* Layout geometry + structural edits come from ZGui.tmux.layout — the SAME code the
+   * overlay tiles with and its built-in layouts editor runs on. A window is panes[]
+   * (flat, depth-first) plus tree (the tiling shape: split direction + ratio); this
+   * page used to know only about panes[] and mirrored the even-horizontal rebuild by
+   * hand, so a top/bottom split previewed — and reloaded — as side-by-side columns.
+   * The fallbacks below keep the page usable if tmux.js ever fails to load. */
+  function TL() { var t = (window.ZGui || {}).tmux; return (t && t.layout) || null; }
+  function evenRects(n, x, y, w, h) {
     if (n <= 1) return [{ x: x, y: y, w: w, h: h }];
     var mid = Math.ceil(n / 2), wa = w * (mid / n);
-    return tileRects(mid, x, y, wa, h).concat(tileRects(n - mid, x + wa, y, w - wa, h));
+    return evenRects(mid, x, y, wa, h).concat(evenRects(n - mid, x + wa, y, w - wa, h));
   }
-  function layoutSvg(panes, W, H) {
-    var n = Math.max(1, (panes || []).length), pad = 3;
+  function paneRects(panes, tree, W, H) {
+    var tl = TL();
+    return tl ? tl.rects(panes, tree, W, H) : evenRects(Math.max(1, (panes || []).length), 0, 0, W, H);
+  }
+  function paneDirs(w) { var tl = TL(); return tl ? tl.dirs(w) : (w.panes || []).map(function () { return 'row'; }); }
+  function dirGlyph(d) { return d === 'col' ? '↓' : (d === 'row' ? '→' : '·'); }
+  function layoutSvg(panes, tree, W, H) {
+    var pad = 3;
     var out = ['<svg class="zsm-svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">'];
-    tileRects(n, 0, 0, W, H).forEach(function (r, i) {
+    paneRects(panes, tree, W, H).forEach(function (r, i) {
       var x = r.x + pad / 2, y = r.y + pad / 2, w = Math.max(1, r.w - pad), hh = Math.max(1, r.h - pad);
       out.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="2" class="zsm-svg-pane"/>');
       out.push('<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y + hh / 2).toFixed(1) + '" text-anchor="middle" dominant-baseline="central" class="zsm-svg-num">' + i + '</text>');
@@ -101,8 +112,7 @@
     for (var n = 2; ; n++) { var cand = base + ' ' + n; if (!taken[cand.toLowerCase()]) return cand; }
   }
   function blankSession(name) {
-    return { id: uid(), name: name || 'session', created: stamp(), updated: stamp(),
-             windows: [{ name: '', panes: [{ url: '', title: '' }] }] };
+    return { id: uid(), name: name || 'session', created: stamp(), updated: stamp(), windows: [blankWindow()] };
   }
   function newSession() {
     askText('New session', 'Session name', 'session').then(function (name) {
@@ -154,10 +164,25 @@
   }
 
   /* --------------------------- window / pane ops -------------------------- */
-  function addWindow(s) { s.windows.push({ name: '', panes: [{ url: '', title: '' }] }); touch(s); persist(render); }
-  function delWindow(s, wi) { s.windows.splice(wi, 1); if (!s.windows.length) s.windows.push({ name: '', panes: [{ url: '', title: '' }] }); touch(s); persist(render); }
-  function addPane(s, w) { w.panes.push({ url: '', title: '' }); touch(s); persist(render); }
-  function delPane(s, w, pi) { w.panes.splice(pi, 1); if (!w.panes.length) w.panes.push({ url: '', title: '' }); touch(s); persist(render); }
+  function blankWindow() { return { name: '', panes: [{ url: '', title: '' }], tree: null }; }
+  function addWindow(s) { s.windows.push(blankWindow()); touch(s); persist(render); }
+  function delWindow(s, wi) { s.windows.splice(wi, 1); if (!s.windows.length) s.windows.push(blankWindow()); touch(s); persist(render); }
+  // Structural edits go through ZGui.tmux.layout so the shape stays in step with
+  // panes[]: splitting inserts a leaf beside the pane it split (a new empty pane at
+  // the matching index), closing collapses the split and promotes the sibling.
+  function splitPane(s, w, pi, dir) {
+    var tl = TL();
+    if (tl) tl.split(w, pi, dir); else w.panes.splice(pi + 1, 0, { url: '', title: '' });
+    if (w.panes[pi + 1] == null) w.panes[pi + 1] = { url: '', title: '' };
+    touch(s); persist(render);
+  }
+  function addPane(s, w) { splitPane(s, w, Math.max(0, (w.panes || []).length - 1), 'row'); }
+  function delPane(s, w, pi) {
+    var tl = TL();
+    if (tl) { if (!tl.close(w, pi)) return; }
+    else { if (w.panes.length <= 1) return; w.panes.splice(pi, 1); }
+    touch(s); persist(render);
+  }
 
   /* ------------------------------ import / export ------------------------- */
   function exportAll() {
@@ -180,9 +205,13 @@
             if (!s || !Array.isArray(s.windows)) return;
             sessions.push({ id: uid(), name: uniqueName(String(s.name || 'imported')), created: stamp(), updated: stamp(),
               windows: s.windows.map(function (w) {
-                return { name: String((w && w.name) || ''), panes: ((w && w.panes) || []).map(function (p) {
+                var panes = ((w && w.panes) || []).map(function (p) {
                   return { url: String((p && p.url) || ''), title: String((p && p.title) || '') };
-                }) };
+                });
+                // The shape rides along when the file has one; ZGui.tmux ignores a tree
+                // whose leaf count no longer matches panes[] and tiles evenly instead.
+                var tree = (w && w.tree && typeof w.tree === 'object') ? w.tree : null;
+                return { name: String((w && w.name) || ''), panes: panes, tree: tree };
               }) });
             added++;
           });
@@ -212,18 +241,22 @@
       whead.appendChild(Z.button({ label: '+ pane', variant: 'mini', onClick: function () { addPane(s, w); } }));
       whead.appendChild(Z.button({ label: 'remove window', variant: 'mini', onClick: function () { delWindow(s, wi); } }));
       win.appendChild(whead);
-      win.appendChild(svgEl(layoutSvg(w.panes, 168, 92)));   // live tiling preview for this window
+      win.appendChild(svgEl(layoutSvg(w.panes, w.tree, 168, 92)));   // live tiling preview for this window
 
+      var dirs = paneDirs(w);
       w.panes.forEach(function (p, pi) {
         var row = el('div', 'zsm-pane');
         row.appendChild(el('span', 'zsm-ptag', String(pi)));
+        row.appendChild(el('span', 'zsm-pdir', dirGlyph(dirs[pi])));
         // Panes can be null (an "empty" pane from a tmux snapshot). Materialise on first edit.
         var url = el('input', 'zs-input zsm-purl'); url.value = (p && p.url) || ''; url.placeholder = 'https://…  (webview URL)';
         bindInput(url, function (v) { if (w.panes[pi] == null) w.panes[pi] = {}; w.panes[pi].url = v.trim(); touch(s); persist(); });
         var ttl = el('input', 'zs-input zsm-ptitle'); ttl.value = (p && p.title) || ''; ttl.placeholder = 'title (optional)';
         bindInput(ttl, function (v) { if (w.panes[pi] == null) w.panes[pi] = {}; w.panes[pi].title = v.trim(); touch(s); persist(); });
         row.appendChild(url); row.appendChild(ttl);
-        row.appendChild(Z.button({ label: '✕', variant: 'mini', onClick: function () { delPane(s, w, pi); } }));
+        row.appendChild(Z.button({ label: 'split →', variant: 'mini', onClick: function () { splitPane(s, w, pi, 'row'); } }));
+        row.appendChild(Z.button({ label: 'split ↓', variant: 'mini', onClick: function () { splitPane(s, w, pi, 'col'); } }));
+        row.appendChild(Z.button({ label: '✕', variant: 'mini', onClick: function () { delPane(s, w, pi); }, disabled: w.panes.length < 2 }));
         win.appendChild(row);
       });
       box.appendChild(win);
@@ -289,7 +322,7 @@
       var prev = el('div', 'zsm-preview');
       (s.windows || []).forEach(function (w, wi) {
         var cell = el('div', 'zsm-prevcell');
-        cell.appendChild(svgEl(layoutSvg(w.panes, 96, 58)));
+        cell.appendChild(svgEl(layoutSvg(w.panes, w.tree, 96, 58)));
         cell.appendChild(el('span', 'zsm-prevlabel', (w.name && w.name.trim()) ? w.name : ('win ' + wi)));
         prev.appendChild(cell);
       });
@@ -317,6 +350,8 @@
     '.zsm-window{border:1px solid var(--border);border-radius:5px;padding:8px;margin:0 0 8px;}',
     '.zsm-whead{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}',
     '.zsm-wtag,.zsm-ptag{color:var(--accent);font:11px monospace;flex:none;}',
+    /* the split a pane sits in: -> left-right, v top-bottom, . lone pane */
+    '.zsm-pdir{color:var(--cyan);font:12px monospace;flex:none;width:1.2em;text-align:center;}',
     '.zsm-wname{flex:1;min-width:120px;}',
     '.zsm-pane{display:flex;gap:6px;align-items:center;margin:4px 0;}',
     '.zsm-purl{flex:2;min-width:160px;}',
