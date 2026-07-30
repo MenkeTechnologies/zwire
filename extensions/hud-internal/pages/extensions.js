@@ -57,6 +57,15 @@
   }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 
+  // developerPrivate hands back a chrome://extension-icon/<id>/<px>/<match> URL
+  // sized for a list row, but the card tile paints it at 4rem — 128 device px on
+  // a HiDPI display. ExtensionIconSource serves whatever size the path asks for,
+  // so ask for the size actually painted instead of upscaling a small bitmap.
+  // Any other URL shape (data:, an app's own icon) falls through unchanged.
+  function iconOf(e) {
+    return (e.iconUrl || '').replace(/^(chrome:\/\/extension-icon\/[a-p]{32}\/)\d+(\/)/, '$1128$2') || null;
+  }
+
   /* -------------------------------------------------------------- dev bar */
   function buildDevBar() {
     var bar = el('div', 'xt-devbar');
@@ -108,7 +117,7 @@
     view = 'list'; detailId = null;
     body.innerHTML = '';
     body.appendChild(buildDevBar());
-    listEl = el('div', 'product-grid');
+    listEl = el('div', 'product-grid uniform');   // every tile is a fixed-height icon, so rows align
     body.appendChild(listEl);
     var rows = matched();
     var foot = el('div', 'footer-docs');
@@ -145,7 +154,7 @@
     }
     // app-store style card (ZGui.productCard)
     var pc = ZGui.productCard({
-      thumb: e.iconUrl || null,
+      icon: iconOf(e),
       glyph: e.iconUrl ? null : (e.name[0] || '?').toUpperCase(),
       badge: locLabel(e),
       category: enabled(e) ? 'ENABLED' : 'DISABLED',
@@ -171,7 +180,7 @@
     body.appendChild(wrap);
 
     var head = el('div', 'xt-detail-head');
-    head.innerHTML = (e.iconUrl ? '<img class="xt-dicon" src="' + esc(e.iconUrl) + '">' : '<div class="xt-dicon"></div>') +
+    head.innerHTML = (e.iconUrl ? '<img class="xt-dicon" src="' + esc(iconOf(e)) + '">' : '<div class="xt-dicon"></div>') +
       '<div class="xt-dtitle"><div class="xt-dname">' + esc(e.name) + ' <span class="card-chip">v' + esc(e.version) + '</span></div>' +
       '<div class="p-cat">' + (enabled(e) ? 'ENABLED' : 'DISABLED') + ' · ' + esc(locLabel(e)) + '</div></div>';
     head.appendChild(el('span', 'grow'));
