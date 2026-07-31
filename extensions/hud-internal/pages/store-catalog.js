@@ -15,6 +15,12 @@
 
   var PRODUCTS = [
     // ---- Desktop Apps -------------------------------------------------------
+    { id: 'zmusic',      glyph: 'MU', name: 'zmusic',      category: 'Desktop Apps', badge: 'WIP',
+      tag: 'Play-along instrument trainer graded against your own files; a Melodics superset.', pills: ['Tauri v2', 'JUCE sidecar'] },
+    { id: 'ztorrent',    glyph: 'BT', name: 'ztorrent',    category: 'Desktop Apps', badge: 'WIP',
+      tag: 'BitTorrent client — queue, seeding limits, RPC; replaces Transmission.', pills: ['Tauri v2', 'Transmission RPC'] },
+    { id: 'zlatex',      glyph: 'LX', name: 'zlatex',      category: 'Desktop Apps', badge: 'WIP',
+      tag: 'LaTeX equation editor — TeX box-and-glue in Rust, no TeX install.', pills: ['Tauri v2', 'No TeX install'] },
     { id: 'zpdf',        glyph: 'P',  name: 'zpdf',        category: 'Desktop Apps', badge: 'NEW',
       tag: 'PDF editor — edit, annotate, sign; replaces Acrobat & Preview.', pills: ['Tauri v2', 'Rust'] },
     { id: 'zphoto',      glyph: 'PH', name: 'zphoto',      category: 'Desktop Apps', badge: 'NEW',
