@@ -10,6 +10,12 @@
  */
 var HOST = 'com.zwire.hud';
 
+// The browser-side transaction journal (see zjournal.js): captures the pre-state of every
+// `_seq`-stamped action so an aborted transaction can be unwound. Loaded first so execZbCmd and the
+// tab/window listeners below can reach `self.ZB_JOURNAL`.
+try { importScripts('zjournal.js'); } catch (e) { /* journal unavailable: actions still execute, undo does not */ }
+try { if (self.ZB_JOURNAL) self.ZB_JOURNAL.hydrate(); } catch (e) {}
+
 // Surface uncaught worker errors to the host log — the MV3 service worker has no visible DevTools
 // console, and fireHook is the one worker->host channel that logs reliably.
 function reportErr(where, e) {
@@ -292,6 +298,11 @@ function startSysStream() {
     port.onMessage.addListener(function (m) {
       if (!m) return;
       if (m.sys) { try { chrome.storage.local.set({ zb_sys: m.sys }); } catch (e) {} }
+      // A `browser.*` verb called over the GUI Automation Bus. This is the only path that delivers a
+      // CHAIN: the kv the stryke_run reply piggybacks holds one action, so N calls in a script would
+      // arrive as one. Both paths stamp the same `_n`, and execZbCmd runs each `_n` exactly once, so
+      // subscribing here adds delivery without reintroducing double execution.
+      else if (m.ev === 'pub' && m.topic === 'zbus.action') execZbCmd(m.data);
       else if (m.ev === 'pub') applyThemeFromHost(m.topic, m.data);
       // Correlated reply to a content-script stryke_run relayed over this port. The host attaches the
       // browser.* action as m.zbAction; we are its single consumer (execZbCmd runs the tab op in the SW).
@@ -304,6 +315,7 @@ function startSysStream() {
     });
     port.onDisconnect.addListener(function () { void chrome.runtime.lastError; sysPort = null; setTimeout(startSysStream, 5000); });
     port.postMessage({ cmd: 'sysinfo_start' });
+    port.postMessage({ cmd: 'sub', topic: 'zbus.action' });
     port.postMessage({ cmd: 'sub', topic: 'scheme' });
     port.postMessage({ cmd: 'sub', topic: 'ui' });
     port.postMessage({ cmd: 'sub', topic: 'palette' });
@@ -762,12 +774,49 @@ try {
   }
 } catch (e) {}
 
+// Feed the same events to the transaction journal. It only records while armed (i.e. while a
+// `_seq`-stamped action is executing), so outside a transaction these are one dead comparison each.
+// Journaling the OBSERVED effects — rather than re-deriving what each verb was going to do — is what
+// keeps the inverses correct when a branch of execZbCmd is rewritten. See zjournal.js.
+try {
+  if (self.ZB_JOURNAL) {
+    var ZJ = self.ZB_JOURNAL.on;
+    chrome.tabs.onCreated.addListener(function (t) { ZJ.tabCreated(t); });
+    chrome.tabs.onRemoved.addListener(function (id) { ZJ.tabRemoved(id); });
+    chrome.tabs.onMoved.addListener(function (id, info) { ZJ.tabMoved(id, info); });
+    chrome.tabs.onDetached.addListener(function (id, info) { ZJ.tabDetached(id, info); });
+    chrome.tabs.onUpdated.addListener(function (id, info) { ZJ.tabUpdated(id, info); });
+    chrome.tabs.onActivated.addListener(function (info) { ZJ.tabActivated(info); });
+    if (chrome.tabs.onZoomChange) chrome.tabs.onZoomChange.addListener(function (info) { ZJ.tabZoom(info); });
+    if (chrome.windows) chrome.windows.onCreated.addListener(function (w) { ZJ.windowCreated(w); });
+  }
+} catch (e) {}
+
 // The single browser-action executor. Every path feeds it through the zb_cmd storage bus:
 // content-script commands, the HUD-page drains, and the SW drain all write zb_cmd and this
 // storage.onChanged listener runs it. storage.onChanged is a reliable MV3 wakeup (unlike sendMessage
 // to a sleeping/stale worker). onChanged fires only on a real value CHANGE, so every writer stamps a
 // unique _zbn — that keeps a repeated action from silently not re-firing ("worked 1x then stopped").
+//
+// TRANSACTIONS. `zwire-host` stamps `_txn`/`_seq` onto any action it journaled (only `inverse` verbs
+// per its REV table), and forwards an aborted transaction as ONE `{a:'undo', txn, steps}` frame — an
+// N-step unwind is a single native-messaging round trip, not N. This wrapper is where the browser half
+// lives: a stamped action runs INSIDE the journal's capture window, and `undo` replays the inverses.
 function execZbCmd(c) {
+  if (!c || !c.a) return;
+  var J = self.ZB_JOURNAL;
+  // Host-stamped actions reach this worker over more than one transport (the zbus.action
+  // subscription AND the kv the stryke_run reply piggybacks). Run each stamp once.
+  if (c._n != null && J && !J.freshAction(c._n)) return;
+  if (c.a === 'undo') {
+    if (J) J.undo(c, function (report) { fireHook('txn-undone', report); });
+    return;
+  }
+  if (J && c._seq != null) { J.arm(c, function () { execZbAction(c); }); return; }
+  execZbAction(c);
+}
+
+function execZbAction(c) {
   if (!c || !c.a) return;
   function active(cb) {
     chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (tabs) {

@@ -62,6 +62,17 @@ workspace layered on top:
   reading list, extensions, power, screenshot, notify, tmux toggle) that the ⌘K
   palette, keyboard shortcuts, and stryke hooks all drive through a single
   service-worker executor, published as a typed, introspectable manifest;
+- **undoable browsing** — a chain of those verbs runs as one unit that rolls
+  back. "Open 40 tabs from this list, group them, pin three, close the
+  duplicates" is a transaction: each step's pre-state is journaled in the service
+  worker as it executes, and an abort replays the inverses in reverse order —
+  reopening closed tabs at their prior index, window, pinned and muted state,
+  restoring prior positions, selection, url and zoom. Nothing else does this:
+  Chrome, Arc, Vivaldi, Edge and Safari stop at ⇧⌘T (reopen the last tab) and
+  cannot roll back a chain. A verb with no compensation is refused when the
+  transaction opens rather than stranding one half-done, and the whole N-step
+  unwind arrives as a single `browser.undo` frame — one native-messaging round
+  trip, not N;
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 

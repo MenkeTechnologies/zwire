@@ -151,6 +151,16 @@ fi
 command rm -f /tmp/zwire-hud-set.$$
 echo
 
+cyber_section "TRANSACTION JOURNAL (pre-state capture + browser.undo replay)"
+if node tests/undo.mjs 2>/tmp/zwire-hud-undo.$$; then
+  cyber_ok "undo journal nominal"
+else
+  FAIL=1; cyber_fail "undo journal compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-undo.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-undo.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then
