@@ -41,7 +41,7 @@ workspace layered on top:
   with nothing open) plus a live **Audio HUD page** with real post-DSP spectrum
   and meters;
 - **lifecycle hooks** — a **Hooks HUD page** that binds
-  [stryke](https://github.com/MenkeTechnologies/strykelang) scripts to ~160
+  [stryke](https://github.com/MenkeTechnologies/strykelang) scripts to 54
   browser events (tab / window / navigation / download / bookmark / terminal /
   scheme / audio / ⌘K-command lifecycle, plus an `action` catch-all), with a
   searchable event picker;
@@ -65,9 +65,9 @@ workspace layered on top:
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 
-The HUD layer (`extensions/hud-internal`) is ~11,800 lines of extension code
+The HUD layer (`extensions/hud-internal`) is ~14,600 lines of extension code
 across 11 subsystems and 23 pages, assembled on the **`zgui-core`** shared GUI
-toolkit (258 `ZGui.*` components, a git submodule loaded straight from
+toolkit (260 `ZGui.*` components, a git submodule loaded straight from
 `lib/zgui-core/webui/`) and bridged to the **`zwire-host`** native agent (a
 single Rust binary, its own submodule). Under it, a **27-patch C++ fork**
 restyles the *native* chrome the extension layer can't reach.
@@ -99,7 +99,7 @@ Chrome can no longer be scripted this way; a Chromium build can.
 ## `[0x01] THE HUD WORKSPACE`
 
 `extensions/hud-internal` is where zwire stops being "a browser" and becomes a
-workspace. It is a content-script + page bundle (~11,800 LOC), not a theme.
+workspace. It is a content-script + page bundle (~14,600 LOC), not a theme.
 
 **`ztmux` — the tiling overlay.** A tmux server, in the browser. The tiling
 window-manager itself is `ZGui.tmux` from the shared `zgui-core` toolkit; zwire
@@ -114,7 +114,8 @@ Keyboard page, with a configurable timeout). 49 prefix actions, all remappable:
 
 - **panes** — split h/v, directional nav (arrows + `h/j/k/l`), resize
   (`H/J/K/L`), zoom, close, swap, rotate, break-to-window, pane numbers;
-- **layouts** — cycle even/main/tiled, plus preset grids (4 / 8 / 16 panes);
+- **layouts** — cycle even/main/tiled, plus preset grids (4 / 8 / 16 panes), and
+  a saved-layouts editor (`M`, or the overlay tab strip's Layouts button);
 - **windows** — new, next/prev/last, rename, move, go-to, list, kill;
 - **partial synchronize-panes** — broadcast typing to a *chosen subset* of
   panes, not just all-or-nothing (`Ctrl-b e` toggles all, `Ctrl-b E` toggles one);
@@ -128,14 +129,28 @@ Beyond the 49 remappable actions, the prefix then `|` starts a **pane pipeline**
 panes, and each pane's webview — saved to `chrome.storage` (survives restart).
 A full CRUD page: create / rename / duplicate / delete / load / import-export,
 per-pane URL editing, and a **live SVG preview** of each window's tiling. Save
-the current layout with `Ctrl-b S`, attach a saved one with `Ctrl-b s`. Loading
-picks the layout's first web page as the carrier tab the overlay attaches to; an
+the current layout with `Ctrl-b S` and attach a saved one with `Ctrl-b s`, or give
+a layout its own one-key `C-b <key>` **hotkey** on its card — the page warns when
+that key shadows a built-in tmux binding. Loading picks the layout's first web
+page as the carrier tab the overlay attaches to; an
 all-new-tab layout (no web page) instead opens the new-tab extension's own
 carrier page, which hosts the overlay and tiles the new-tab panes itself.
 
+The page is **split-aware**: a saved window is `panes[]` (flat, depth-first)
+*plus* `tree` — the tiling shape (split direction + ratio) — and every geometry
+read and structural edit goes through **`ZGui.tmux.layout`** (`rects` / `dirs` /
+`split` / `close`), the same helpers the overlay tiles with and its built-in
+saved-layouts editor (prefix `M`) runs on. So the preview draws the real shape, a
+per-pane glyph shows which split that pane sits in (`→` left-right, `↓`
+top-bottom, `·` lone pane), and *split →* / *split ↓* insert a leaf beside the
+pane they split while close collapses the split and promotes the sibling. The
+page used to keep its own flat copy of the rebuild, so a top/bottom split
+previewed — and reloaded — as side-by-side columns. Both surfaces read and write
+the one `zb_tmux_sessions` array, so an edit in either shows up in the other.
+
 **Hooks (`pages/hooks.html`).** Bind
 [stryke](https://github.com/MenkeTechnologies/strykelang) scripts to browser
-lifecycle events. The service worker fires ~160 events — tab
+lifecycle events. The service worker fires 54 catalogued events — tab
 open/close/activate/update/move, window open/close/focus, navigation, downloads,
 bookmarks, history, the HUD terminal, scheme changes, the audio engine, ⌘K
 palette commands, plus an `action` catch-all for every command — and `zwire-host`
@@ -333,7 +348,7 @@ patch 0022 and asserts per-effect invariants.
 
 **`zgui-core` — the shared GUI toolkit (`lib/zgui-core`, submodule).** The HUD is
 not hand-rolled per page; it is assembled from **`ZGui`**, a cyberpunk web-component
-library (258 modules under `webui/`) shared across the MenkeTechnologies app
+library (260 modules under `webui/`) shared across the MenkeTechnologies app
 suite and loaded **directly from the submodule path** (never copied — copies go
 stale). The tiling WM (`ZGui.tmux`), the ⌘K palette (`ZGui.palette`), fuzzy find
 (`ZGui.fzf`), the scheme engine (`ZGui.colorscheme`), the powerline
@@ -366,7 +381,7 @@ without a host and silently hand them back to the browser's built-in downloader.
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
 | **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 23 HUD pages (incl. the Sessions manager, the Pipelines editor, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
-| **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (258 `webui/*` modules), a submodule loaded straight from path (never copied). Every HUD page composes `ZGui` components; zwire supplies only the glue |
+| **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (260 `webui/*` modules), a submodule loaded straight from path (never copied). Every HUD page composes `ZGui` components; zwire supplies only the glue |
 | **Native host** | `extensions/hud-internal/native/zwire-host` — a single Rust binary (native-messaging host + Unix-socket daemon: sysmon, fs, exec, PTY, KV, hooks, OS ops), a submodule. Backs the Host console + powerline stats + the audio EQ/meters file bridge |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension (in-repo, not a submodule): the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |
@@ -450,10 +465,25 @@ code-editor bundle the Hooks / Commands / Triggers pages load, symlinks `bin/zwi
 into `~/.local/bin`, and on macOS rebrands the base bundle's Dock name and icon in
 place. Re-run after a base upgrade.
 
+That path runs zwire **out of the checkout**. For a **self-contained** install that
+survives deleting the repo, run `scripts/localinstall.sh` (`pnpm localinstall`)
+instead — it bundles the browser, all three extensions, and the native binaries
+(`zwire-host`, `zpwrchrome-host`, `stryke`) into one artifact per platform, and
+needs the Rust toolchain (`cargo`) at build time:
+
+| Platform | Script | Installs to |
+|---|---|---|
+| macOS | `scripts/localinstall.sh` | `/Applications/zwire.app` (self-contained `.app`) |
+| Linux | `scripts/localinstall-linux.sh` (auto-dispatched by `localinstall.sh`) | `~/.local/opt/zwire` + a `zwire` launcher on PATH + a `.desktop` entry |
+| Windows | `scripts/localinstall-windows.ps1` | `%LOCALAPPDATA%\zwire` + a `zwire.cmd` launcher + Start Menu shortcut; the native host is registered under `HKCU` (Windows doesn't read host manifests from the profile dir) |
+
+Only the per-user profile lives outside the install, so the install dir stays
+disposable.
+
 The editor bundle (`extensions/hud-internal/lib/hooks-editor/`) is a build artifact, not
 checked in: `scripts/build-hooks-editor.sh` esbuilds it from
 `extensions/hud-internal/vendor/zpwr-hooks-editor/src` and needs node ≥ 20 + pnpm (which
-pulls the `monaco-editor` / `monaco-vim` / `monaco-emacs` devDeps). `install.sh`, both
+pulls the `monaco-editor` / `monaco-vim` / `monaco-emacs` devDeps). `install.sh`, all three
 `localinstall` scripts, and the extension's own `scripts/build.sh` all run it and hard-fail
 if any artifact is missing — without it those three pages render their surrounding chrome
 and simply no editor.
@@ -572,9 +602,10 @@ scripts/rebrand-macos.sh           # re-apply the rebrand after the swap
 - **Developer-mode banner:** unpacked extensions loaded via `--load-extension`
   show Chromium's developer-extensions notice. It is cosmetic; the extensions
   run fully.
-- **Cross-platform:** the `zwire` launcher works on macOS (aarch64/x64) and
-  Linux (x86_64). The in-place Dock rebrand is macOS-only; on Linux the launcher
-  name is the brand.
+- **Cross-platform:** the `bin/zwire` launcher works on macOS (aarch64/x64) and
+  Linux (x86_64); Windows is installed with `scripts/localinstall-windows.ps1`,
+  which drops its own `zwire.cmd` launcher. The in-place Dock rebrand is
+  macOS-only; on Linux and Windows the launcher name is the brand.
 
 ## `[0x08] LICENSE`
 
