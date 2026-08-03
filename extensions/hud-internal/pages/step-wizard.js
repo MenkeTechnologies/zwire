@@ -376,9 +376,73 @@
     };
   }
 
+  /* ---- reversibility, at AUTHORING time --------------------------------------------------
+   * A self-reverting chain can only revert what zwire-host journaled, and the host decides that
+   * from its REV table (zbus.rs). `stepVerb` says which bus verb a step becomes; `revProblems`
+   * answers WHICH steps a given rev table refuses.
+   *
+   * `revMap` is served by the host (`{cmd:'verbs'}` → `[{id, rev}]`) and is never mirrored here.
+   * A JS copy of the table would drift the moment a verb is added on the Rust side, and a drifted
+   * copy fails in the worst direction: it tells the author the chain is revertible and the host
+   * refuses it later, unattended, at 3am. Checking here means an un-undoable trigger is rejected
+   * while the author is still looking at it.
+   *
+   * The step types with no verb at all (shell / stryke / applescript / batch / js / scheme) are
+   * not a mirror of REV — they run a program or arbitrary code, so there is no verb for the host
+   * to class. That is a property of the executor, and zpalette.js's runStep refuses the same set. */
+  var BUS_ACTIONS = {
+    newTab: 1, newWindow: 1, duplicateTab: 1, reopenTab: 1, closeTab: 1, closeOthers: 1,
+    nextTab: 1, prevTab: 1, pinTab: 1, muteTab: 1, reload: 1
+  };
+  var NO_VERB = { shell: 1, stryke: 1, applescript: 1, batch: 1, js: 1, scheme: 1 };
+  // The bus verb a step becomes inside a transaction, or null when it has none.
+  function stepVerb(s) {
+    var t = (s && s.type) || 'url';
+    if (NO_VERB[t]) return null;
+    if (t === 'action') return BUS_ACTIONS[s.value] ? 'browser.' + s.value : null;
+    if (t === 'host') {
+      var o; try { o = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return null; }
+      return (o && o.cmd) || null;
+    }
+    return 'browser.openTab';   // url
+  }
+  // Steps a self-reverting chain cannot contain, given the host's rev table.
+  // -> [{ index, type, verb, rev, reason }]. Empty means every step is revertible.
+  function revProblems(steps, revMap) {
+    var out = [];
+    (steps || []).forEach(function (s, i) {
+      var verb = stepVerb(s);
+      if (!verb) {
+        out.push({ index: i, type: s.type, verb: null, rev: 'irreversible',
+          reason: 'a ' + ((TYPE_LABEL[s.type] || s.type)) + ' step is not a bus verb, so the host cannot undo it' });
+        return;
+      }
+      // Absent from the table means irreversible — the host's own default for an unknown verb.
+      var cls = (revMap && revMap[verb]) || 'irreversible';
+      if (cls === 'inverse' || cls === 'pure') return;
+      out.push({ index: i, type: s.type, verb: verb, rev: cls,
+        reason: verb + ' has no compensation, so the host refuses it inside a transaction' });
+    });
+    return out;
+  }
+  // Ask the host for its surface and reduce it to { verb: revClass }. `cb(map|null)`.
+  function loadRevMap(cb) {
+    try {
+      chrome.runtime.sendMessage({ type: 'zb-host', req: { cmd: 'verbs' } }, function (res) {
+        void chrome.runtime.lastError;
+        var verbs = res && res.ok && res.reply && res.reply.verbs;
+        if (!Array.isArray(verbs)) { cb(null); return; }
+        var m = {};
+        verbs.forEach(function (v) { if (v && v.id) m[v.id] = v.rev || 'irreversible'; });
+        cb(m);
+      });
+    } catch (e) { cb(null); }
+  }
+
   window.ZwireStepWizard = {
     create: create,
     TYPES: TYPES, TYPE_LABEL: TYPE_LABEL, ACTIONS: ACTIONS, SCHEMES: SCHEMES, HINTS: HINTS,
-    entrySteps: entrySteps, stepsSummary: stepsSummary, stepPreview: stepPreview
+    entrySteps: entrySteps, stepsSummary: stepsSummary, stepPreview: stepPreview,
+    BUS_ACTIONS: BUS_ACTIONS, stepVerb: stepVerb, revProblems: revProblems, loadRevMap: loadRevMap
   };
 })();

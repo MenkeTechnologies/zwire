@@ -50,7 +50,9 @@ workspace layered on top:
   on a match, runs a chain of typed steps — shell / stryke / JavaScript /
   AppleScript / batch / browser-action / scheme / host — the identical step set a
   ⌘K command runs, with the matched line passed as `{q}`; per-trigger cooldown, a
-  **once-per-page** mode, and an optional URL-filter regex keep it scoped;
+  **once-per-page** mode, and an optional URL-filter regex keep it scoped, and a
+  **self-reverting** mode runs the whole chain as one `zwire-host` transaction so a
+  failure at any step undoes the steps that already ran;
 - **pane pipelines** — a **Pipelines HUD page** (and the tmux prefix then `|`)
   that wires a persisted, reactive dataflow **edge** between tiled webviews:
   extract text from a source pane (selector / regex / selection / URL), transform
@@ -188,6 +190,18 @@ toasts — is excluded from scanning, so the palette's command text never matche
 a trigger's own result toast can't recursively re-fire it. Stored in
 `chrome.storage.local` (`zb_triggers`); the page is full CRUD with a per-trigger
 enable toggle.
+
+A trigger may also be **self-reverting**. Its chain then runs inside one
+`zwire-host` transaction: the steps run one at a time, and if any step fails the
+host replays the inverse of every step that already ran, so the browser is left as
+it was rather than two-thirds changed. A trigger fires unattended, which is exactly
+where a half-applied chain sits unnoticed until you happen to look. Only steps the
+host can undo are allowed — a browser action or a URL becomes a journaled bus verb,
+while `shell` / `stryke` / `js` / `applescript` / `batch` / `scheme` have no inverse
+and are refused. The refusal happens while you are still editing: the Triggers page
+reads the reversibility class of every verb from the host itself (`{"cmd":"verbs"}`)
+rather than keeping a copy that could drift, and declines to save a chain it could
+not revert.
 
 **Pane pipelines (`pages/pipes.html`).** Where a trigger's sink is a step chain,
 a pipeline's sink is *another pane*. A pipeline is a persisted, reactive dataflow

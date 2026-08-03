@@ -5,6 +5,11 @@
  * the shared executor zpalette.js exports as window.ZWIRE_CMD_EXEC. The matched line is
  * passed as the argument, so {q} in any step expands to it.
  *
+ * A trigger may be SELF-REVERTING (`revert`): its chain then runs inside a zwire-host transaction,
+ * and if any step fails the host replays the inverse of every step that already ran. The steps are
+ * run one at a time for exactly this reason — a failure has to be observed before the next step
+ * starts, or there is no "partial" for the revert to act on.
+ *
  * Triggers are managed on pages/triggers.js and stored in chrome.storage.local
  * 'zb_triggers'. This content script runs on real web pages only (http/https/file — the
  * manifest group excludes the HUD's own extension pages). Matching is throttled and
@@ -58,7 +63,7 @@
     return {
       id: t.id, name: t.name || t.id, regex: regex, urlRe: urlRe,
       cooldownMs: isFinite(cd) && cd >= 0 ? cd : 1500,
-      once: !!t.once, lastFired: 0, steps: t.steps || []
+      once: !!t.once, revert: !!t.revert, lastFired: 0, steps: t.steps || []
     };
   }
   function recompile(list) {
@@ -82,12 +87,24 @@
     return out;
   }
 
+  // Run the trigger's chain. A `revert` trigger runs it as ONE host transaction: every journaled
+  // step is undone if any step fails, so a trigger that fires unattended cannot leave the browser
+  // half-changed. A trigger fires on page text nobody is watching — it is the one automation where
+  // a partially-applied chain is discovered hours later, which is why the transaction lives here
+  // and not only behind a ⌘K keystroke a human is present for.
+  //
+  // The failure is reported, not swallowed: `runTxn`/`runCustom` hand back the first step's error,
+  // and the previous fire-and-forget call discarded it along with any chance of reverting.
   function fire(c, line) {
     c.lastFired = Date.now();
     try {
-      if (window.ZWIRE_CMD_EXEC && window.ZWIRE_CMD_EXEC.runCustom) {
-        window.ZWIRE_CMD_EXEC.runCustom({ steps: c.steps }, line);
+      var X = window.ZWIRE_CMD_EXEC;
+      if (!X) return;
+      function reported(err) {
+        if (err) { try { console.warn('zwire trigger "' + c.name + '": ' + err); } catch (x) {} }
       }
+      if (c.revert && X.runTxn) { X.runTxn({ steps: c.steps }, line, reported); return; }
+      if (X.runCustom) X.runCustom({ steps: c.steps }, line, reported);
     } catch (e) {}
   }
 

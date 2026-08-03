@@ -1081,6 +1081,28 @@ chrome.storage.onChanged.addListener(function (changes, area) {
 // MV3 worker teardown that zeroes the one-shot on external pages); every other command is a plain
 // one-shot. Any browser.* action the host stamps on a stryke_run reply is executed here via execZbCmd,
 // so it runs with the worker's full tab/window permissions regardless of which surface triggered it.
+//
+// Send `out` down the PERSISTENT native port and correlate the host's reply by `id` (the shared
+// `zbRun.pend` map the port's onMessage handler drains). `onUnavailable` runs when the port is down
+// or the post throws, so each caller decides its own fallback.
+function relayOverPort(out, respond, timeoutMs, onUnavailable) {
+  if (!sysPort) { onUnavailable(); return; }
+  var rid = 'r' + (++zbRun.seq);
+  out.id = rid;
+  zbRun.pend[rid] = {
+    respond: respond,
+    timer: setTimeout(function () {
+      if (!zbRun.pend[rid]) return;
+      delete zbRun.pend[rid];
+      try { respond({ ok: false, err: (out.cmd || 'host') + ' timeout' }); } catch (e) {}
+    }, timeoutMs)
+  };
+  try { sysPort.postMessage(out); }
+  catch (e) {
+    clearTimeout(zbRun.pend[rid].timer); delete zbRun.pend[rid];
+    reportErr('relay-port-post', e); onUnavailable();
+  }
+}
 function relayStrykeRun(req, respond) {
   function fallback() {   // port momentarily down (reconnecting) — best-effort one-shot so a run isn't dropped
     try {
@@ -1088,24 +1110,31 @@ function relayStrykeRun(req, respond) {
         if (!chrome.runtime.lastError && reply && reply.zbAction) execZbCmd(reply.zbAction);
       });
     } catch (e) { reportErr('relay-stryke', e); }
+    respond({ ok: true });
   }
-  if (!sysPort) { fallback(); respond({ ok: true }); return; }
-  var rid = 'r' + (++zbRun.seq);
-  var out = { cmd: 'stryke_run', code: req.code, id: rid };
+  var out = { cmd: 'stryke_run', code: req.code };
   if (req.stdin != null) out.stdin = req.stdin;
-  zbRun.pend[rid] = {
-    respond: respond,
-    timer: setTimeout(function () {
-      if (!zbRun.pend[rid]) return;
-      delete zbRun.pend[rid];
-      try { respond({ ok: false, err: 'stryke_run timeout' }); } catch (e) {}
-    }, 12000)
-  };
-  try { sysPort.postMessage(out); }
-  catch (e) { clearTimeout(zbRun.pend[rid].timer); delete zbRun.pend[rid]; reportErr('relay-stryke-post', e); fallback(); respond({ ok: true }); }
+  relayOverPort(out, respond, 12000, fallback);
 }
+// Commands that MUST share one host process. zwire-host's transaction journal is process-global
+// (txn.rs), so a `txn_begin` sent as a one-shot `sendNativeMessage` opens a transaction in a
+// process that exits before the first step runs: the chain journals nothing, and the abort
+// compensates nothing while still replying ok:true. The persistent port is the only connection
+// that outlives a single message — and it is also the one holding the `zbus.action` subscription,
+// so a journaled action comes straight back to this worker and lands inside ZB_JOURNAL's capture
+// window. There is deliberately NO one-shot fallback here: silently degrading to an unjournaled
+// path is the exact failure this routing exists to prevent, so with the port down the call fails.
+var TXN_SCOPED = { call: 1, txn_begin: 1, txn_commit: 1, txn_abort: 1 };
 function relayHost(req, respond) {
   if (req && req.cmd === 'stryke_run') { relayStrykeRun(req, respond); return; }
+  if (req && TXN_SCOPED[req.cmd]) {
+    var out = {};
+    for (var k in req) if (Object.prototype.hasOwnProperty.call(req, k)) out[k] = req[k];
+    relayOverPort(out, respond, 15000, function () {
+      respond({ ok: false, err: 'native host port unavailable — a transaction cannot use a one-shot connection' });
+    });
+    return;
+  }
   try {
     chrome.runtime.sendNativeMessage(HOST, req, function (reply) {
       if (chrome.runtime.lastError) { respond({ ok: false, err: chrome.runtime.lastError.message }); return; }

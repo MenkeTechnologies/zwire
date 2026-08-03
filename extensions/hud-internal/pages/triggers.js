@@ -20,6 +20,11 @@
   var matchFn = function () { return true; };
 
   var entrySteps = W.entrySteps, stepsSummary = W.stepsSummary, stepPreview = W.stepPreview;
+  // The host's reversibility table, fetched once. Null until it answers (and if the host is down
+  // it stays null), in which case revProblems classes every verb as irreversible — the safe
+  // direction: a chain is never called revertible on the strength of a table we could not read.
+  var revMap = null;
+  W.loadRevMap(function (m) { revMap = m; });
 
   function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
   function uid() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -44,6 +49,7 @@
   var cooldownF = Z.textfield({ placeholder: '1500' });
   var enabledToggle = Z.toggle({ checked: true });
   var onceToggle = Z.toggle({ checked: false });
+  var revertToggle = Z.toggle({ checked: false });
   var saveBtn = Z.button({ label: 'ADD TRIGGER', variant: 'primary', onClick: submit });
   var cancelBtn = Z.button({ label: 'CANCEL', variant: 'mini', onClick: resetForm });
   cancelBtn.style.display = 'none';
@@ -77,6 +83,10 @@
     stepsWrap.appendChild(Z.field({ label: 'Steps (run on match)', control: stepsHost, required: true }).el);
     stepsWrap.appendChild(wizard.addBtn);
     grid.appendChild(stepsWrap);
+    // Self-reverting: run the chain as ONE zwire-host transaction.
+    var revWrap = field('Self-reverting', revertToggle.el); revWrap.className += ' zb-trg-enfield';
+    grid.appendChild(row([revWrap]));
+    grid.appendChild(el('div', 'zb-cmd-hint', 'Self-reverting: run the whole chain as one zwire-host transaction. Steps run one at a time and, if any step fails, every step that already ran is undone. A trigger fires unattended, so a half-applied chain would otherwise sit there until you happened to notice. Only steps the host can undo are allowed — each verb’s reversibility comes from the host itself, and this form refuses to save a chain it could not revert.'));
     var bar = el('div', 'zb-cmd-actions');
     bar.appendChild(saveBtn); bar.appendChild(cancelBtn);
     var wrap = el('div');
@@ -99,6 +109,13 @@
     if (!isFinite(cooldownMs) || cooldownMs < 0) { toast('Cooldown must be a non-negative number', 'error'); return; }
     var res = wizard.collect();
     if (!res.ok) { toast(res.error, 'error'); return; }
+    // A self-reverting trigger is refused HERE if the host could not undo it. Doing this at save
+    // time is the point: the alternative is finding out when the trigger fires unattended and the
+    // host rejects a step mid-chain. `revMap` is the host's own table (see W.loadRevMap).
+    if (revertToggle.get()) {
+      var bad = W.revProblems(res.steps, revMap);
+      if (bad.length) { toast('Step ' + (bad[0].index + 1) + ' cannot be reverted: ' + bad[0].reason, 'error'); return; }
+    }
     // No two triggers may share a name — keeps the list unambiguous.
     var lname = name.toLowerCase();
     for (var d = 0; d < trigs.length; d++) {
@@ -114,6 +131,7 @@
       cooldownMs: cooldownMs,
       enabled: !!enabledToggle.get(),
       once: !!onceToggle.get(),
+      revert: !!revertToggle.get(),
       steps: res.steps
     };
     if (wasEdit) { for (var i = 0; i < trigs.length; i++) { if (trigs[i].id === editingId) { trigs[i] = entry; break; } } }
@@ -127,6 +145,7 @@
     urlsF.set(t.urls || ''); cooldownF.set(t.cooldownMs != null ? String(t.cooldownMs) : '');
     enabledToggle.set(t.enabled !== false);
     onceToggle.set(!!t.once);
+    revertToggle.set(!!t.revert);
     wizard.set(entrySteps(t));
     saveBtn.textContent = 'UPDATE'; cancelBtn.style.display = '';
     try { window.scrollTo(0, 0); } catch (e) {}
@@ -134,7 +153,7 @@
   function resetForm() {
     editingId = null;
     nameF.set(''); patternF.set(''); flagsF.set(''); urlsF.set(''); cooldownF.set('');
-    enabledToggle.set(true); onceToggle.set(false);
+    enabledToggle.set(true); onceToggle.set(false); revertToggle.set(false);
     wizard.reset();
     saveBtn.textContent = 'ADD TRIGGER'; cancelBtn.style.display = 'none';
   }

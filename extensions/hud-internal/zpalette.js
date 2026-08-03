@@ -243,7 +243,24 @@
   // flagged user:true — zgui-core's palette ranks user:true items in a tier that
   // ALWAYS sits above the built-in ("stdlib") + shipped-default rows.
   function isDefaultCmd(e) { return String((e && e.id) || '').indexOf('def-') === 0; }
-  function runAction(id) {
+  // Action ids that are ALSO bus verbs (`browser.<id>` in zwire-host's SURFACE_VERBS). Inside a
+  // transaction these route through the host instead of the extension's own storage action bus:
+  // only the host stamps `_txn`/`_seq`, and the service worker journals exactly the actions that
+  // carry a `_seq` (zjournal.js). An unstamped action inside a transaction still executes and is
+  // then invisible to the abort — a revert that reports success having restored nothing. This list
+  // is the id↔verb correspondence only; whether each verb can be reverted is the HOST's REV table,
+  // never mirrored here.
+  var BUS_ACTIONS = {
+    newTab: 1, newWindow: 1, duplicateTab: 1, reopenTab: 1, closeTab: 1, closeOthers: 1,
+    nextTab: 1, prevTab: 1, pinTab: 1, muteTab: 1, reload: 1
+  };
+  function runAction(id, done, txn) {
+    var d = done || noop;
+    if (txn != null) {
+      if (!BUS_ACTIONS[id]) { d('action ' + id + ': not a bus verb — cannot be reverted'); return; }
+      busCall('browser.' + id, {}, txn, d);
+      return;
+    }
     switch (id) {
       case 'reload': try { location.reload(); } catch (e) {} break;
       case 'copyUrl': clip(location.href); break;
@@ -252,6 +269,14 @@
       case 'toggleStatusbar': try { chrome.storage.local.get('zb_status', function (o) { var on = !(o && o.zb_status === false); chrome.storage.local.set({ zb_status: !on }); }); } catch (e) {} break;
       default: cmd({ a: id });   // newTab/newWindow/duplicateTab/reopenTab/closeTab/closeOthers/nextTab/prevTab/pinTab/muteTab
     }
+    d(null);
+  }
+  // One journaled bus call. The host applies its REV table here: an `irreversible` verb is REFUSED
+  // rather than run, so a chain fails at its first un-undoable step instead of stranding itself
+  // half-compensated at abort time. Errors come back as the refusal text.
+  function busCall(verb, args, txn, done) {
+    var d = settle(done, verb);
+    hostReq({ cmd: 'call', verb: verb, args: args || {}, txn: txn }, function (err) { d(err ? verb + ': ' + err : null); });
   }
   // Small transient toast for host-command feedback (content script — may not
   // have ZGui.toast; fall back to a self-styled corner popup).
@@ -280,86 +305,110 @@
     return { cmd: 'exec', program: '/bin/sh', args: ['-c', cmd], env: { PATH: path } };
   }
   function b64dec(s) { try { return s ? decodeURIComponent(escape(atob(s))) : ''; } catch (e) { try { return s ? atob(s) : ''; } catch (x) { return ''; } } }
-  function runShell(cmd) {
-    var req = shellReq(cmd);
+
+  /* ---- step completion --------------------------------------------------------
+   * Every runner below reports through `done(err)`: `null` when the step succeeded,
+   * a short reason when it did not. Before this the runners returned `void` and a
+   * failure existed only as a red toast — which is why a chain could not stop at a
+   * broken step, and why nothing could decide whether to commit or revert. The
+   * callback IS the feature: a chain reverts on partial failure only if "partial"
+   * is observable. */
+  function noop() {}
+  // One completion per step, ever, and never later than STEP_TIMEOUT_MS. A runner whose
+  // callback is dropped (a torn-down MV3 worker, a sandbox frame that never loads) would
+  // otherwise wedge the chain forever holding an open transaction.
+  var STEP_TIMEOUT_MS = 20000;
+  function settle(done, label) {
+    if (!done) return noop;   // fire-and-forget caller: nothing is waiting, so arm no watchdog
+    var fired = false, timer = null;
+    function fin(err) {
+      if (fired) return;
+      fired = true;
+      if (timer) clearTimeout(timer);
+      try { (done || noop)(err || null); } catch (x) {}
+    }
+    timer = setTimeout(function () { fin(label + ': timed out'); }, STEP_TIMEOUT_MS);
+    return fin;
+  }
+  // Send one request to zwire-host. `done(err, reply)` — `err` folds the three ways a
+  // host request fails (no relay answer, a transport error, a command that replied
+  // `ok:false`) into one value the chain can branch on.
+  function hostReq(req, done) {
+    var d = done || noop;
     try {
       chrome.runtime.sendMessage({ type: 'zb-host', req: req }, function (res) {
         void chrome.runtime.lastError;
-        if (!res || !res.ok) { hostToast('shell: ' + ((res && res.err) || 'no response'), true); return; }
+        if (!res || !res.ok) { d((res && res.err) || 'no response'); return; }
         var r = res.reply || {};
-        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
-        var bad = r.code != null && r.code !== 0;
-        var text = out || er;
-        hostToast('$ ' + cmd + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
+        d(r.ok === false ? (r.err || 'error') : null, r);
       });
-    } catch (err) { hostToast('shell: ' + err, true); }
+    } catch (err) { d(String(err)); }
   }
+  // shell / applescript / batch are all `exec` with a different program and a different
+  // label, so they share one runner rather than three copies that drift. A non-zero exit
+  // is a step FAILURE, not just a red toast — that is what lets a chain stop on it.
+  function runExec(label, prefix, req, done) {
+    var d = settle(done, label);
+    hostReq(req, function (err, r) {
+      if (err) { hostToast(label + ': ' + err, true); d(label + ': ' + err); return; }
+      var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
+      var bad = r.code != null && r.code !== 0;
+      var text = out || er;
+      hostToast(prefix + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
+      d(bad ? label + ': exit ' + r.code + (er ? ' — ' + er.slice(0, 120) : '') : null);
+    });
+  }
+  function runShell(cmd, done) { runExec('shell', '$ ' + cmd, shellReq(cmd), done); }
   // AppleScript steps run through zwire-host via `osascript` (macOS only). Each
   // source line becomes an `-e` arg (osascript's own multi-line convention), so
   // multi-line scripts run without a temp file. stdout/stderr toast back.
-  function runOsa(script) {
-    if (osKind() !== 'mac') { hostToast('applescript: macOS only', true); return; }
+  function runOsa(script, done) {
+    if (osKind() !== 'mac') { hostToast('applescript: macOS only', true); (done || noop)('applescript: macOS only'); return; }
     var args = [];
     String(script).split('\n').forEach(function (line) { args.push('-e'); args.push(line); });
-    var req = { cmd: 'exec', program: 'osascript', args: args };
-    try {
-      chrome.runtime.sendMessage({ type: 'zb-host', req: req }, function (res) {
-        void chrome.runtime.lastError;
-        if (!res || !res.ok) { hostToast('applescript: ' + ((res && res.err) || 'no response'), true); return; }
-        var r = res.reply || {};
-        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
-        var bad = r.code != null && r.code !== 0;
-        var text = out || er;
-        hostToast('⟨osa⟩' + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
-      });
-    } catch (err) { hostToast('applescript: ' + err, true); }
+    runExec('applescript', '⟨osa⟩', { cmd: 'exec', program: 'osascript', args: args }, done);
   }
   // Batch steps run through zwire-host via `cmd.exe /d /s /c` (Windows only). Output
   // (base64) is decoded and toasted, like the shell step.
-  function runBatch(cmd) {
-    var req = { cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', cmd] };
-    try {
-      chrome.runtime.sendMessage({ type: 'zb-host', req: req }, function (res) {
-        void chrome.runtime.lastError;
-        if (!res || !res.ok) { hostToast('batch: ' + ((res && res.err) || 'no response'), true); return; }
-        var r = res.reply || {};
-        var out = b64dec(r.stdout).trim(), er = b64dec(r.stderr).trim();
-        var bad = r.code != null && r.code !== 0;
-        var text = out || er;
-        hostToast('cmd> ' + cmd + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
-      });
-    } catch (err) { hostToast('batch: ' + err, true); }
+  function runBatch(cmd, done) {
+    runExec('batch', 'cmd> ' + cmd, { cmd: 'exec', program: 'cmd.exe', args: ['/d', '/s', '/c', cmd] }, done);
   }
   // stryke steps run inline stryke code through zwire-host (`stryke -E`, using the
-  // bundled sidecar — no PATH needed). stdout/stderr come back as plain strings.
-  function runStryke(code) {
-    try {
-      chrome.runtime.sendMessage({ type: 'zb-host', req: { cmd: 'stryke_run', code: code } }, function (res) {
-        void chrome.runtime.lastError;
-        // The worker runs stryke and executes any browser.* action from the reply. We only toast.
-        if (!res || !res.ok) { hostToast('stryke: ' + ((res && res.err) || 'no response'), true); return; }
-        var r = res.reply || {};
-        if (!r.ok) { hostToast('stryke: ' + (r.err || 'error'), true); return; }
-        var out = (r.stdout || '').trim(), er = (r.stderr || '').trim();
-        var bad = (r.code != null && r.code !== 0) || r.timedOut;
-        var text = out || er;
-        hostToast('⟨stryke⟩' + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
-      });
-    } catch (err) { hostToast('stryke: ' + err, true); }
+  // bundled sidecar — no PATH needed). stdout/stderr come back as plain strings, so
+  // this one does NOT share runExec's base64 decode.
+  function runStryke(code, done) {
+    var d = settle(done, 'stryke');
+    // The worker runs stryke and executes any browser.* action from the reply. We only toast.
+    hostReq({ cmd: 'stryke_run', code: code }, function (err, r) {
+      if (err) { hostToast('stryke: ' + err, true); d('stryke: ' + err); return; }
+      var out = (r.stdout || '').trim(), er = (r.stderr || '').trim();
+      var bad = (r.code != null && r.code !== 0) || r.timedOut;
+      var text = out || er;
+      hostToast('⟨stryke⟩' + (text ? ' ◂ ' + text.slice(0, 160) : (bad ? ' (exit ' + r.code + ')' : ' ✓')), bad);
+      d(bad ? 'stryke: ' + (r.timedOut ? 'timed out' : 'exit ' + r.code) : null);
+    });
   }
   // The 'js' step runs user JavaScript. MV3's default CSP forbids eval/new Function
   // in this realm, so relay the code to the manifest-declared sandbox page (its own
   // CSP allows unsafe-eval + modals) via a hidden, reused iframe and eval it there.
-  var _zjsFrame = null, _zjsReady = false, _zjsN = 0, _zjsQ = [], _zjsBound = false;
-  function zjsRun(code, arg) {
+  var _zjsFrame = null, _zjsReady = false, _zjsN = 0, _zjsQ = [], _zjsBound = false, _zjsPend = {};
+  function zjsRun(code, arg, done) {
     if (!_zjsBound) {
       _zjsBound = true;
       window.addEventListener('message', function (e) {
         var d = e.data;
-        if (d && d.zjs === 1 && d.ok === false) { try { console.error('zwire custom js:', d.err); } catch (x) {} }
+        if (!d || d.zjs !== 1) return;
+        if (d.ok === false) { try { console.error('zwire custom js:', d.err); } catch (x) {} }
+        // The sandbox echoes the id it was sent, so a reply resolves ITS step rather than
+        // whichever step happens to be running — a chain can have more than one js step, and
+        // resolving the wrong one would let a chain continue past a throw.
+        var p = _zjsPend[d.id];
+        if (p) { delete _zjsPend[d.id]; p(d.ok === false ? 'js: ' + (d.err || 'error') : null); }
       });
     }
-    var msg = { zjs: 1, id: 'j' + (++_zjsN), code: String(code || ''), arg: arg || '' };
+    var id = 'j' + (++_zjsN);
+    if (done) _zjsPend[id] = settle(function (err) { delete _zjsPend[id]; (done || noop)(err); }, 'js');
+    var msg = { zjs: 1, id: id, code: String(code || ''), arg: arg || '' };
     if (_zjsReady && _zjsFrame && _zjsFrame.contentWindow) { _zjsFrame.contentWindow.postMessage(msg, '*'); return; }
     _zjsQ.push(msg);
     if (_zjsFrame) return;
@@ -375,56 +424,108 @@
     });
     (document.body || document.documentElement).appendChild(_zjsFrame);
   }
-  function runStep(type, v, arg) {
+  // Run one step. `done(err)` fires once, with `null` on success. `txn` (a transaction id, or
+  // null) selects the routing: outside a transaction each step takes the path it always took;
+  // inside one, every step that CAN be a bus verb goes through the host so it is class-checked
+  // and journaled, and every step that cannot is refused with the reason.
+  function runStep(type, v, arg, done, txn) {
+    var d = done || noop;
     v = v || '';
-    if (type === 'shell') {
-      var c = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
-      runShell(c);
+    function sub(s) { return s.indexOf('{q}') >= 0 ? s.replace(/\{q\}/g, arg || '') : s; }
+    // Steps that run a program or arbitrary code have no inverse to replay and are not bus verbs,
+    // so a transaction cannot promise to undo them. Refusing here mirrors the host's own contract:
+    // fail at the top of the chain rather than strand it half-compensated at abort time.
+    if (txn != null && (type === 'shell' || type === 'stryke' || type === 'applescript' || type === 'batch' || type === 'js' || type === 'scheme')) {
+      d(type + ': not revertible — cannot run inside a self-reverting chain');
       return;
     }
-    if (type === 'stryke') {
-      var sc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
-      runStryke(sc);
-      return;
-    }
-    if (type === 'applescript') {
-      var as = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
-      runOsa(as);
-      return;
-    }
-    if (type === 'batch') {
-      var bc = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
-      runBatch(bc);
-      return;
-    }
-    if (type === 'js') { zjsRun(v, arg); return; }
-    if (type === 'action') { runAction(v); return; }
-    if (type === 'scheme') { setScheme(v); return; }
+    if (type === 'shell') { runShell(sub(v), d); return; }
+    if (type === 'stryke') { runStryke(sub(v), d); return; }
+    if (type === 'applescript') { runOsa(sub(v), d); return; }
+    if (type === 'batch') { runBatch(sub(v), d); return; }
+    if (type === 'js') { zjsRun(v, arg, d); return; }
+    if (type === 'action') { runAction(v, d, txn); return; }
+    if (type === 'scheme') { setScheme(v); d(null); return; }
     if (type === 'host') {
-      var raw = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, arg || '') : v;
-      var obj; try { obj = JSON.parse(raw); } catch (err) { hostToast('host: invalid JSON', true); return; }
-      try {
-        chrome.runtime.sendMessage({ type: 'zb-host', req: obj }, function (res) {
-          void chrome.runtime.lastError;
-          if (!res || !res.ok) { hostToast('host: ' + ((res && res.err) || 'no response'), true); return; }
-          var r = res.reply; hostToast('host ◂ ' + (r && typeof r === 'object' ? JSON.stringify(r).slice(0, 140) : String(r)));
-        });
-      } catch (err) { hostToast('host: ' + err, true); }
+      var obj; try { obj = JSON.parse(sub(v)); } catch (err) { hostToast('host: invalid JSON', true); d('host: invalid JSON'); return; }
+      // Inside a transaction the raw command becomes a bus `call`, so zwire-host's REV table
+      // decides whether it may run at all. Sending the bare `{cmd:…}` instead would bypass that
+      // gate entirely and put an unjournaled write inside a chain that claims to be revertible.
+      if (txn != null) { busCall(obj && obj.cmd, hostArgs(obj), txn, d); return; }
+      var dh = settle(d, 'host');
+      hostReq(obj, function (err, r) {
+        if (err) { hostToast('host: ' + err, true); dh('host: ' + err); return; }
+        hostToast('host ◂ ' + (r && typeof r === 'object' ? JSON.stringify(r).slice(0, 140) : String(r)));
+        dh(null);
+      });
       return;
     }
     var url = v.indexOf('{q}') >= 0 ? v.replace(/\{q\}/g, encodeURIComponent(arg || '')) : v;   // url (default)
-    if (url) open(url);
+    if (!url) { d(null); return; }
+    if (txn != null) { busCall('browser.openTab', { url: url }, txn, d); return; }
+    open(url);
+    d(null);
   }
-  // A command is a CHAIN of typed steps run top-to-bottom (a small stagger keeps
-  // tab-opens and scheme swaps from stomping each other; {q} reaches every step).
+  // The `cmd` key names the verb; everything else on the object is its arguments.
+  function hostArgs(obj) {
+    var a = {}, k;
+    for (k in obj) if (k !== 'cmd' && Object.prototype.hasOwnProperty.call(obj, k)) a[k] = obj[k];
+    return a;
+  }
+  // A command is a CHAIN of typed steps run top-to-bottom ({q} reaches every step).
   // entrySteps() accepts the new steps[] array or a legacy single {type,value}.
   function entrySteps(e) {
     if (e && Array.isArray(e.steps)) return e.steps;
     if (e && e.type) return [{ type: e.type, value: e.value }];
     return [];
   }
-  function runCustom(e, arg) {
-    entrySteps(e).forEach(function (s, i) { setTimeout(function () { try { runStep(s.type, s.value, arg); } catch (x) {} }, i * 140); });
+  // Run a chain SEQUENTIALLY, stopping at the first failure and reporting it.
+  //
+  // This replaced a parallel `setTimeout(…, i * 140)` stagger that swallowed every exception. The
+  // stagger was never an ordering guarantee — it was a hope that 140ms exceeded each step's
+  // duration, so a chain whose first step was a slow shell command ran its steps out of order.
+  // More importantly, a fire-and-forget chain cannot revert: "revert on partial failure" needs a
+  // definition of partial, and that requires knowing a step failed BEFORE the next one starts.
+  //
+  // The cost is real and worth naming: step N+1 now waits for step N instead of starting 140ms
+  // later, so a chain containing a long-running shell step finishes later than it used to. Only
+  // MULTI-step chains are affected — a single-step command (every shipped default in
+  // cmd-defaults.js) runs exactly as it did.
+  function runCustom(e, arg, done, txn) {
+    var steps = entrySteps(e), fin = done || noop, i = 0;
+    (function next(err) {
+      if (err) { fin(err); return; }
+      if (i >= steps.length) { fin(null); return; }
+      var s = steps[i++];
+      try { runStep(s.type, s.value, arg, next, txn); }
+      catch (x) { next(String((x && x.message) || x)); }
+    })(null);
+  }
+  // Run a chain as ONE transaction: if any step fails, every journaled step is undone.
+  //
+  // The host owns the journal and the reversibility classes; this owns the bracket. `txn_begin`,
+  // every step, and `txn_commit`/`txn_abort` all travel the SAME persistent native port
+  // (background.js routes them there) because the host's journal is process-global — a chain whose
+  // steps landed in different host processes would abort against an empty journal and report a
+  // clean revert having restored nothing.
+  var _txnN = 0;
+  function runTxn(e, arg, done) {
+    var fin = done || noop;
+    var txn = Date.now() * 1000 + (_txnN = (_txnN + 1) % 1000);
+    hostReq({ cmd: 'txn_begin', txn: txn }, function (err) {
+      if (err) { fin('txn_begin: ' + err); return; }
+      runCustom(e, arg, function (chainErr) {
+        hostReq({ cmd: chainErr ? 'txn_abort' : 'txn_commit', txn: txn }, function (closeErr, r) {
+          if (chainErr) {
+            var undone = (r && r.steps) || 0;
+            hostToast('reverted: ' + chainErr + (undone ? ' · ' + undone + ' step(s) undone' : ''), true);
+            fin(chainErr);
+            return;
+          }
+          fin(closeErr ? 'txn_commit: ' + closeErr : null);
+        });
+      }, txn);
+    });
   }
   // Custom-command rows, the exact-keyword provider, and the web-search provider
   // all come from the SHARED palette-cmds.js (ZWIRE_PALETTE_CMDS), bound to this
@@ -603,7 +704,9 @@
 
   // Export the step executor so ztriggers.js runs a trigger's chain through the exact
   // same code path a ⌘K command uses — one implementation of shell/stryke/js/applescript/
-  // batch/action/scheme/host/url execution on a live page. runCustom(entry, arg) runs
-  // entry.steps top-to-bottom with {q} = arg (the matched text, for a trigger).
-  try { window.ZWIRE_CMD_EXEC = { runStep: runStep, runCustom: runCustom }; } catch (e) {}
+  // batch/action/scheme/host/url execution on a live page. runCustom(entry, arg, done) runs
+  // entry.steps top-to-bottom with {q} = arg (the matched text, for a trigger) and reports the
+  // first failure through done(err). runTxn(entry, arg, done) runs the same chain inside a host
+  // transaction, so a failure at step N reverts steps 1..N-1 instead of leaving them applied.
+  try { window.ZWIRE_CMD_EXEC = { runStep: runStep, runCustom: runCustom, runTxn: runTxn, BUS_ACTIONS: BUS_ACTIONS }; } catch (e) {}
 })();

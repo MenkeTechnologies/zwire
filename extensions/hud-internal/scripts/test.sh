@@ -161,6 +161,26 @@ fi
 command rm -f /tmp/zwire-hud-undo.$$
 echo
 
+cyber_section "STEP CHAIN (serialized executor: ordering / stop-on-failure / transaction routing)"
+if node tests/exec-chain.mjs 2>/tmp/zwire-hud-chain.$$; then
+  cyber_ok "step chain nominal"
+else
+  FAIL=1; cyber_fail "step chain compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-chain.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-chain.$$
+echo
+
+cyber_section "SELF-REVERTING TRIGGERS (txn routing + authoring-time reversibility check)"
+if node tests/trigger-revert.mjs 2>/tmp/zwire-hud-trg.$$; then
+  cyber_ok "self-reverting triggers nominal"
+else
+  FAIL=1; cyber_fail "self-reverting triggers compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-trg.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-trg.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then
