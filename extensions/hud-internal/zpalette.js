@@ -250,10 +250,46 @@
   // then invisible to the abort — a revert that reports success having restored nothing. This list
   // is the id↔verb correspondence only; whether each verb can be reverted is the HOST's REV table,
   // never mirrored here.
+  // The SEED is what a chain can use before the host has answered — the eleven this list was
+  // hand-maintained at. It is replaced wholesale by the host's own `browser.*` surface on first
+  // contact (loadBusActions), because hand-mirroring drifts and this copy had: the host declares
+  // 37 reversible browser verbs and this named 11, so a trigger chain was refused `goBack`,
+  // `zoomIn`, `moveTabLeft`, `closeRight`, `unpinTab` and 21 more that the host can undo perfectly
+  // — and it named `reopenTab`, which the host's REV table does NOT carry, so that one was routed
+  // to the host only to be refused there. Wrong in both directions.
   var BUS_ACTIONS = {
     newTab: 1, newWindow: 1, duplicateTab: 1, reopenTab: 1, closeTab: 1, closeOthers: 1,
     nextTab: 1, prevTab: 1, pinTab: 1, muteTab: 1, reload: 1
   };
+  // Ask the host what it actually offers. Every `browser.<verb>` on the surface becomes routable
+  // inside a transaction; whether each one can be REVERTED stays the host's call, enforced at
+  // call time against its REV table — this only decides which ids take the host path at all, so
+  // an irreversible verb still fails loudly there instead of silently running unjournalled.
+  //
+  // Lazy, and MUTATED IN PLACE: this is a content script that runs on every page, so it must not
+  // message the host on load; and `BUS_ACTIONS` is handed out by reference on window.ZWIRE_CMD_EXEC
+  // (ztriggers.js reads it), so reassigning the variable would leave that consumer holding the seed
+  // forever.
+  var _busActionsLoaded = false;
+  function loadBusActions(done) {
+    var d = done || noop;
+    if (_busActionsLoaded) { d(); return; }
+    _busActionsLoaded = true;
+    hostReq({ cmd: 'verbs' }, function (err, r) {
+      if (err || !r || !Array.isArray(r.verbs)) { d(); return; }   // keep the seed; host may be absent
+      var next = {};
+      r.verbs.forEach(function (v) {
+        var id = v && v.id;
+        if (typeof id === 'string' && id.indexOf('browser.') === 0) next[id.slice(8)] = 1;
+      });
+      // An empty or malformed surface must not disarm every chain — only a real list replaces.
+      if (Object.keys(next).length) {
+        Object.keys(BUS_ACTIONS).forEach(function (k) { delete BUS_ACTIONS[k]; });
+        Object.keys(next).forEach(function (k) { BUS_ACTIONS[k] = 1; });
+      }
+      d();
+    });
+  }
   function runAction(id, done, txn) {
     var d = done || noop;
     if (txn != null) {
@@ -514,6 +550,10 @@
     var txn = Date.now() * 1000 + (_txnN = (_txnN + 1) % 1000);
     hostReq({ cmd: 'txn_begin', txn: txn }, function (err) {
       if (err) { fin('txn_begin: ' + err); return; }
+      // Learn the host's real browser surface before the first chain runs a step, not after: a
+      // step refused as "not a bus verb" on the stale seed would have executed outside the
+      // journal. txn_begin stays the first frame — the transaction is open while we ask.
+      loadBusActions(function () {
       runCustom(e, arg, function (chainErr) {
         hostReq({ cmd: chainErr ? 'txn_abort' : 'txn_commit', txn: txn }, function (closeErr, r) {
           if (chainErr) {
@@ -525,6 +565,7 @@
           fin(closeErr ? 'txn_commit: ' + closeErr : null);
         });
       }, txn);
+      });
     });
   }
   // Custom-command rows, the exact-keyword provider, and the web-search provider
