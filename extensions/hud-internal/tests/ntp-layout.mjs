@@ -215,8 +215,33 @@ check('a stale drop report never drops dials', N.activePage(N.activeLayout(rcfg)
 
 /* ------------------------------------------------------------------- geometry */
 const geo = N.normalize({ layouts: [{ dial: { columns: 6, thumb: 1 } }] }).layouts[0];
-check('columns cap the dial count', N.dialColumns(geo, 20) === 6);
+check('an exact multiple of the cap uses the cap', N.dialColumns(geo, 12) === 6);
 check('fewer dials than the cap use their own count', N.dialColumns(geo, 3) === 3);
+check('the cap is never exceeded', [7, 13, 20, 100].every((n) => N.dialColumns(geo, n) <= 6));
+/* Balancing: the row count must not grow, and no row may be left a stub. */
+check('seven under a six cap balances 4+3', N.dialColumns(geo, 7) === 4);
+check('thirteen under a six cap balances to five', N.dialColumns(geo, 13) === 5);
+check('balancing never adds a row', [2, 5, 7, 11, 13, 19, 25, 37].every((n) =>
+  Math.ceil(n / N.dialColumns(geo, n)) === Math.ceil(n / 6)));
+/* The case that motivated balancing: counts that PACK into a stranded single tile
+ * (n % cap === 1) must not end on a row of one. */
+check('a packed layout would strand one tile', [7, 13, 19, 25].every((n) => n % 6 === 1));
+check('balancing never ends on a row of one', [7, 13, 19, 25].every((n) => {
+  const cols = N.dialColumns(geo, n);
+  return n - (Math.ceil(n / cols) - 1) * cols >= 2;
+}));
+/* dialFit: the same balancing, but against measured space. 160px tiles + 14px gaps. */
+const fit = (px, n, cap) => N.dialFit(px, 160, 14, n, cap);
+check('a wide window fits every dial on one row', fit(2000, 7, 0) === 7);
+check('a window one tile short balances instead of stranding one', fit(1180, 7, 0) === 4);
+check('the cap still wins when it is tighter than the window', fit(2000, 7, 3) === 3);
+check('the window still wins when it is tighter than the cap', fit(600, 7, 12) === 3);   // 4 tiles need 696px
+check('one more tile fits as soon as there is room for it', fit(700, 7, 12) === 4);
+check('a window narrower than one tile still shows one per row', fit(40, 5, 0) === 1);
+check('no measurement yet degrades to one per row, never zero', fit(0, 5, 0) === 1);
+check('dialFit never exceeds its cap', [300, 700, 1180, 4000].every((px) => fit(px, 9, 4) <= 4));
+check('dialFit never returns more than the dial count', [300, 1180, 4000].every((px) => fit(px, 3, 12) <= 3));
+
 const unlimited = N.normalize({ layouts: [{ dial: { columns: 0 } }] }).layouts[0];
 check('no-limit columns follow the dial count', N.dialColumns(unlimited, 20) === 20);
 check('zero dials still yields one column', N.dialColumns(unlimited, 0) === 1);

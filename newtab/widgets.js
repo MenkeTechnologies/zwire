@@ -149,14 +149,34 @@ var ZBWidgets = (function () {
   /* -------------------------------------------------------------- speeddial */
   /* Ports Vivaldi's Speed Dial: the group's dials laid out under the layout's
    * appearance settings — Maximum Columns, one of 5 thumbnail sizes, titles
-   * always/when-needed/never, and the add button. */
+   * always/when-needed/never, and the add button.
+   *
+   * WRAPPING FLEX, NOT A GRID. A grid's last row is left-aligned against its
+   * tracks, so six dials plus the add button left a lone "+" hanging under the
+   * first tile while the row above was centred — the layout read as broken. A
+   * centred wrapping flex row centres EVERY row including a partial one, which is
+   * also how Vivaldi's dials behave. "Maximum columns" stays a maximum: the row is
+   * capped at N tiles, and zntp-core balances the rows against both that cap and the
+   * width actually on screen so neither can strand a tile. */
+  var DIAL_GAP = 14;
+  /* Balance the row against BOTH the cap and the space actually on screen (a wide
+   * cap in a narrow window wraps just as badly as a tight cap). The measurement is
+   * this file's job; the arithmetic is zntp-core's. Re-run on resize via refit(). */
+  function fitDials(grid, host, layout, tiles) {
+    var size = N.dialSizePx(layout);
+    var room = host.clientWidth || (grid.parentNode && grid.parentNode.clientWidth) || 0;
+    var perRow = N.dialFit(room, size, DIAL_GAP, tiles, layout.dial.columns);
+    grid.style.maxWidth = (perRow * (size + DIAL_GAP)) + 'px';
+  }
   function renderSpeedDial(w, host, ctx) {
     var layout = ctx.layout, page = ctx.page;
     var dials = page.dials || [];
     var grid = el('div', 'ntp-dials');
     var size = N.dialSizePx(layout);
-    grid.style.gridTemplateColumns = 'repeat(' + N.dialColumns(layout, dials.length) + ', minmax(0, ' + size + 'px))';
     grid.dataset.pageId = page.id;
+    grid.dataset.tiles = String(dials.length + (layout.dial.showAdd ? 1 : 0));
+    grid.dataset.size = String(size);
+    grid.dataset.cap = String(layout.dial.columns);
 
     dials.forEach(function (d, i) {
       var a = el('a', 'ntp-dial');
@@ -164,9 +184,11 @@ var ZBWidgets = (function () {
       a.title = d.url;
       a.dataset.dialId = d.id;
       a.dataset.index = String(i);
+      a.style.width = size + 'px';
       var thumb = el('span', 'ntp-dial-thumb');
       thumb.style.height = Math.round(size * 0.62) + 'px';
       if (d.thumb) {
+        thumb.classList.add('has-img');
         var img = el('img', 'ntp-dial-img');
         img.src = d.thumb;
         img.alt = '';
@@ -190,16 +212,36 @@ var ZBWidgets = (function () {
       var add = el('button', 'ntp-dial ntp-dial-add', '');
       add.type = 'button';
       add.title = 'Add a Speed Dial';
+      add.style.width = size + 'px';
       var plus = el('span', 'ntp-dial-thumb');
       plus.style.height = Math.round(size * 0.62) + 'px';
       plus.appendChild(el('span', 'ntp-dial-glyph', '+'));
       add.appendChild(plus);
+      // Reserve the title line the dials have. Flex equalises heights within a row,
+      // but when the add button wraps onto a row of its own it has nothing to match
+      // and would sit a title-height shorter than every tile above it.
+      if (N.showTitle(layout, { thumb: '' })) add.appendChild(el('span', 'ntp-dial-label', ' '));
       add.addEventListener('click', function () {
         if (window.ZBEdit) window.ZBEdit.addDial(page.id);
       });
       grid.appendChild(add);
     }
     host.appendChild(grid);
+    fitDials(grid, host, layout, parseInt(grid.dataset.tiles, 10));
+  }
+
+  /* Re-balance the dial rows after a window resize, without re-rendering the grid
+   * (a full repaint would re-query top sites / history and flicker on every drag of
+   * the window edge). Reads the numbers the render stamped on the container. */
+  function refit() {
+    var grid = document.querySelector('.ntp-dials');
+    if (!grid) return;
+    var size = parseInt(grid.dataset.size, 10) || 160;
+    var cap = parseInt(grid.dataset.cap, 10) || 0;
+    var tiles = parseInt(grid.dataset.tiles, 10) || 1;
+    var host = grid.parentNode;
+    var perRow = N.dialFit(host ? host.clientWidth : 0, size, DIAL_GAP, tiles, cap);
+    grid.style.maxWidth = (perRow * (size + DIAL_GAP)) + 'px';
   }
 
   /* ------------------------------------------------------- own-permission API */
@@ -316,7 +358,7 @@ var ZBWidgets = (function () {
     if (fn) fn(w, host, ctx);
   }
 
-  return { render: render, reset: reset, hudData: hudData, RENDER: RENDER };
+  return { render: render, reset: reset, refit: refit, hudData: hudData, RENDER: RENDER };
 })();
 
 window.ZBWidgets = ZBWidgets;

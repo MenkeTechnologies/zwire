@@ -248,6 +248,14 @@ var ZBNTP = (function () {
       });
     } catch (e) { /* no-op */ }
     document.addEventListener('keydown', onKey);
+    // How many dials fit per row depends on the window, so a resize re-balances them.
+    // Only the dial rows are recomputed — a full re-render would re-query top sites
+    // and history on every pixel of a window drag.
+    var refitTimer = 0;
+    window.addEventListener('resize', function () {
+      clearTimeout(refitTimer);
+      refitTimer = setTimeout(function () { window.ZBWidgets.refit(); }, 120);
+    });
     requestAnimationFrame(reclaimFocus);
     setTimeout(reclaimFocus, 60);
     setTimeout(reclaimFocus, 200);

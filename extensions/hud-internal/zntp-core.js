@@ -469,12 +469,34 @@
   /* -------------------------------------------------------------- geometry */
   /* Vivaldi's "Maximum Columns": a number, or "No limit" (0 here) which fits as many
    * dials per row as the viewport allows. Resolving it needs the dial count so a
-   * 3-dial page on a 6-column setting doesn't stretch 3 dials across the page. */
+   * 3-dial page on a 6-column setting doesn't stretch 3 dials across the page.
+   *
+   * When the dials don't divide evenly the rows are BALANCED rather than packed:
+   * seven tiles under a six-column cap lay out 4+3, not 6+1. Packing left a single
+   * stranded tile — usually the add button — sitting alone under a full row, which
+   * is what made the page look broken. The cap is still a maximum: balancing only
+   * ever returns fewer columns, never more, and it never adds a row. */
   function dialColumns(layout, dialCount) {
     var max = (layout && layout.dial && layout.dial.columns) || 0;
     var n = Math.max(1, dialCount || 1);
-    if (!max) return n;
-    return Math.max(1, Math.min(max, n));
+    if (!max || max >= n) return n;
+    return Math.ceil(n / Math.ceil(n / max));
+  }
+
+  /* The cap is only half of what decides a row: the window decides the rest. Under
+   * "No limit" (or any cap wider than the viewport) the tiles wrap wherever they run
+   * out of room, which strands a tile again — the balancing above never sees it,
+   * because nothing in the model knows how wide the page is. dialFit() takes the
+   * measured space and balances against whatever actually fits, so the arrangement
+   * is even at every window size. Pure: the caller measures, this decides. */
+  function dialFit(availablePx, sizePx, gapPx, dialCount, cap) {
+    var size = Math.max(1, sizePx || 1);
+    var gap = Math.max(0, gapPx || 0);
+    var n = Math.max(1, dialCount || 1);
+    var fits = Math.max(1, Math.floor(((availablePx || 0) + gap) / (size + gap)));
+    if (cap) fits = Math.min(fits, cap);
+    if (fits >= n) return n;
+    return Math.ceil(n / Math.ceil(n / fits));
   }
   var THUMB_PX = [96, 128, 160, 200, 248];                    // the 5 Vivaldi thumbnail sizes
   function dialSizePx(layout) {
@@ -596,6 +618,7 @@
     orderWidgets: orderWidgets,
     orderPages: orderPages,
     dialColumns: dialColumns,
+    dialFit: dialFit,
     dialSizePx: dialSizePx,
     gridPlace: gridPlace,
     gridRows: gridRows,

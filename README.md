@@ -365,7 +365,7 @@ Ported from Vivaldi's Start Page, setting for setting:
 |---|---|
 | Start Page navigation (show on internal pages / start pages / hide) | nav rail with the same three modes, positionable on any edge |
 | Speed Dial groups (bookmark folders) | groups, each with its own dials **and** its own widget grid |
-| Maximum Columns (n / single / No limit) | `0` = no limit, else 1–12 |
+| Maximum Columns (n / single / No limit) | `0` = no limit, else 1–12 — treated as a maximum, with rows balanced so a wrap can't strand a single tile (seven dials under a six-column cap lay out 4+3, not 6+1) |
 | 5 thumbnail sizes | 5 sizes (96 → 248 px) |
 | Speed Dial titles: always / when needed / never | same three modes (when-needed hides behind a custom thumbnail) |
 | Show the Add button · reorder by drag and drop | same two toggles |
