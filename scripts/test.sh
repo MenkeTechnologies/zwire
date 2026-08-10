@@ -27,12 +27,28 @@ done < <(command find newtab theme -name '*.js' \
            -not -path '*/node_modules/*' -not -path '*/lib/zgui-core/*' 2>/dev/null)
 command rm -f /tmp/zwire-check.$$
 echo -e "  ${D}checked${N} ${W}${JS_TOTAL}${N}  ${D}bad${N} ${R}${JS_BAD}${N}  ${D}// $(( $(date +%s) - START ))s${N}"
-[[ "$JS_BAD" == "0" ]] && cyber_ok "JS nominal" || cyber_fail "JS compromised"
+# Checking nothing is not the same as checking clean: if newtab/ or theme/ moved, find would
+# print nothing, the loop would never run, and this section would report "checked 0, bad 0 —
+# JS nominal". Both directories carry sources today, so an empty sweep means a broken checkout.
+if [[ "$JS_TOTAL" == "0" ]]; then
+  FAIL=1
+  cyber_fail "checked 0 files — newtab/ and theme/ matched nothing, so this gate proved nothing"
+elif [[ "$JS_BAD" == "0" ]]; then
+  cyber_ok "JS nominal"
+else
+  cyber_fail "JS compromised"
+fi
 echo
 
 cyber_section "EXTENSION SUITES"
 for ext in extensions/hud-internal extensions/zpwrchrome; do
-  [[ -f "$ext/package.json" ]] || continue
+  # A bundled extension that has lost its package.json (or its test script) used to be skipped
+  # in silence / with a warning, so the run still ended NOMINAL over a suite that never ran.
+  # Both extensions ship a test script today; absence is a broken checkout, not an exemption.
+  if [[ ! -f "$ext/package.json" ]]; then
+    FAIL=1; cyber_fail "$ext // no package.json — bundled extension missing from the checkout"
+    continue
+  fi
   if node -e 'process.exit(require("./'"$ext"'/package.json").scripts?.test?0:1)' 2>/dev/null; then
     echo -e "  ${D}── $ext ──${N}"
     if (cd "$ext" && pnpm test) >/tmp/zwire-ext.$$ 2>&1; then
@@ -43,7 +59,7 @@ for ext in extensions/hud-internal extensions/zpwrchrome; do
     fi
     command rm -f /tmp/zwire-ext.$$
   else
-    cyber_warn "$ext // no test script"
+    FAIL=1; cyber_fail "$ext // no test script — nothing measured this extension"
   fi
 done
 echo
