@@ -207,12 +207,18 @@ body {
 .ntp-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; align-items: start; }
 .ntp-grid .span-1 { grid-column: span 1; } .ntp-grid .span-2 { grid-column: span 2; }
 .ntp-grid .span-3 { grid-column: span 3; } .ntp-grid .span-4 { grid-column: span 4; }
-.ntp-w { position: relative; min-width: 0; text-align: left; }
+/* The page has ONE axis: brand, nav rail, clock, omnibox, dials and the bottom bar
+   all centre on it. Widgets default to centred for that reason — a left-aligned
+   clock beside a centred dial block and a centred nav pill reads as three different
+   layouts stacked. Only the list widgets below opt out, because a column of links
+   has to start at a common left edge to be readable. */
+.ntp-w { position: relative; min-width: 0; text-align: center; }
 .ntp-w-body { min-width: 0; }
 /* Card chrome for the data widgets; the hero widgets (clock, search, dials) stay bare
    so the page still reads as the minimal HUD it was. */
 .ntp-w-topsites, .ntp-w-bookmarks, .ntp-w-history, .ntp-w-feeds,
 .ntp-w-notes, .ntp-w-readinglist, .ntp-w-sessions, .ntp-w-webpage {
+  text-align: left;
   background-color: var(--bg-card);
   background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 50%);
   border: 1px solid var(--border); border-radius: 2px; padding: 14px 16px;
