@@ -16,6 +16,68 @@
   if (!window.ZGui || !ZGui.palette || !ZGui.fzf) return;   // needs command-palette.js + fzf.js
   var styleEl, registered = false;
 
+  /* ---- the id contract -------------------------------------------------------
+   * Every row published below carries a STABLE SLUG id. The slug is derived from
+   * data that does not change with the display language — an action verb, a page
+   * filename, a chrome:// URL, an extension id, a tab id, a scheme key. NEVER from
+   * the row's label: a label is the translatable part, and an id keyed on one
+   * renames itself the moment the locale changes, breaking every saved chain and
+   * every hook that named it.
+   *
+   * zwire mounts no ZGui.appShell — this palette is a content script on arbitrary
+   * pages, not a shell — so the shell's own id audit never runs over this
+   * vocabulary. The same two checks run here instead, and report the way the shell
+   * reports: into window.ZGui.diagnostics and on a `zgui:diagnostic` document
+   * event. Never printed; the fleet ships no console chatter. The forward below
+   * carries each one into zwire's existing log sink. */
+  var diagSeen = {};
+  function diag(msg) {
+    if (diagSeen[msg]) return;
+    diagSeen[msg] = 1;
+    try {
+      var Zg = (window.ZGui = window.ZGui || {});
+      (Zg.diagnostics = Zg.diagnostics || []).push(msg);
+      if (typeof CustomEvent === 'function' && document.dispatchEvent)
+        document.dispatchEvent(new CustomEvent('zgui:diagnostic', { detail: { source: 'zpalette', message: msg } }));
+    } catch (e) { /* diagnostics are never load-bearing */ }
+  }
+  // The log sink zwire already has: background.js's zbFireHook relay, which forwards
+  // to the native host's hook_fire — the same seam reportErr() uses because it is the
+  // one worker channel that logs reliably. Nothing new is invented and nothing prints.
+  try {
+    document.addEventListener('zgui:diagnostic', function (e) {
+      var d = (e && e.detail) || {};
+      try {
+        chrome.runtime.sendMessage({ type: 'zbFireHook', event: 'zdiagnostic',
+          payload: { source: d.source || 'zpalette', message: String(d.message || '') } },
+        function () { void chrome.runtime.lastError; });
+      } catch (x) {}
+    });
+  } catch (e) {}
+  // Every row reaches ZGui.palette through here. Audit its id, then drop it when that
+  // id has already been published this open — first wins, so a row that two producers
+  // both claim renders once instead of twice. Reset per open (openPalette clears the
+  // palette first, so the surviving-id set has to clear with it).
+  var publishedIds = {};
+  function auditId(it) {
+    if (!it) return false;
+    if (!it.id) {
+      diag('zpalette: palette row "' + (it.label || it.name || '?') + '" carries no id — it is listed in ⌘K but cannot be named by a chain, a trigger or a hook; give it a stable slug id');
+      return true;
+    }
+    if (/\s/.test(String(it.id))) {
+      diag('zpalette: command id "' + it.id + '" contains whitespace — an id must be a stable slug, not a translatable label; it renames itself on a locale change and breaks saved chains');
+      return true;
+    }
+    if (publishedIds[it.id]) return false;
+    publishedIds[it.id] = 1;
+    return true;
+  }
+  function publish(list) {
+    var out = (Array.isArray(list) ? list : list ? [list] : []).filter(auditId);
+    if (out.length) ZGui.palette.register(out);
+  }
+
   // The .palette-* CSS (from zgui.css), inlined so it works on arbitrary pages.
   var PALETTE_CSS = [
     '.palette-overlay{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.6);display:flex;',
@@ -136,26 +198,37 @@
     ['Accessibility', 'chrome://settings/accessibility'],
     ['System', 'chrome://settings/system'],
     ['Reset settings', 'chrome://settings/reset']];
-  var WEB = [['◈', 'Chrome Web Store', 'https://chromewebstore.google.com/'],
-    ['⌂', 'zwire app store', 'https://menketechnologies.github.io/app-store/']];
+  // Destination rows are slugged from their URL, not from their label, and not from a
+  // hand-kept parallel table: the URL is the row's identity, it is already unique, and
+  // it cannot drift out of step with the row the way a second list would.
+  var WEB = [['◈', 'webstore', 'Chrome Web Store', 'https://chromewebstore.google.com/'],
+    ['⌂', 'appstore', 'zwire app store', 'https://menketechnologies.github.io/app-store/']];
+  function slug(s) { return String(s).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase(); }
+  function pageId(file) { return 'zw.page.' + slug(String(file).replace(/\.html.*$/, '')); }
+  function chromeId(url) { return 'zw.chrome.' + slug(String(url).replace(/^chrome:\/\//, '')); }
+  function settingsId(url) { return 'zw.settings.' + slug(String(url).split('/').pop()); }
 
   function items() {
     var out = [];
     cmdItems().forEach(function (c) { out.push(c); });
-    PAGES.forEach(function (p) { out.push({ icon: p[0], label: 'Go: ' + p[1], detail: p[2], run: function () { open(extUrl(p[2])); } }); });
-    CHROME.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { open(p[2]); } }); });
-    SETTINGS.forEach(function (p) { out.push({ icon: '⚙', label: 'Settings: ' + p[0], detail: p[1], run: function () { open(p[1]); } }); });
-    WEB.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { open(p[2]); } }); });
+    PAGES.forEach(function (p) { out.push({ id: pageId(p[2]), icon: p[0], label: 'Go: ' + p[1], detail: p[2], run: function () { open(extUrl(p[2])); } }); });
+    CHROME.forEach(function (p) { out.push({ id: chromeId(p[2]), icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { open(p[2]); } }); });
+    SETTINGS.forEach(function (p) { out.push({ id: settingsId(p[1]), icon: '⚙', label: 'Settings: ' + p[0], detail: p[1], run: function () { open(p[1]); } }); });
+    WEB.forEach(function (p) { out.push({ id: 'zw.web.' + p[1], icon: p[0], label: 'Open: ' + p[2], detail: p[3], run: function () { open(p[3]); } }); });
     // zpwrchrome's tool pages — registered like any other destination so they
     // ALWAYS appear (no cross-ext ping: a content script can't message another
     // extension, so gating on liveness silently hid them). open() routes the
     // absolute chrome-extension:// URL via the worker's openTab, same as newtab.
     if (window.ZWIRE_PALETTE_CMDS && window.ZWIRE_PALETTE_CMDS.makeZpwrItems) window.ZWIRE_PALETTE_CMDS.makeZpwrItems(open).forEach(function (it) { out.push(it); });
-    ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the whole browser', run: function () { setScheme(n); } }); });
+    // The scheme KEY is the id — `s.label` is display text and is what a localized
+    // build would rewrite, so a scheme row keyed on it would rename its own verb.
+    ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ id: 'zw.scheme.' + n, icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the whole browser', run: function () { setScheme(n); } }); });
     return out;
   }
+  // Frecent rows are identified by their URL — the title is page-supplied text that
+  // changes under the same URL (and is localized by the site itself).
   function frecentItems(frec) {
-    return (frec || []).map(function (f) { return { icon: '★', label: (f.title || f.url), detail: f.url, run: function () { open(f.url); } }; });
+    return (frec || []).map(function (f) { return { id: 'zw.frecent.' + slug(f.url), icon: '★', label: (f.title || f.url), detail: f.url, run: function () { open(f.url); } }; });
   }
 
   /* ---- command runner (pulled from zgo): browser verbs + web-search --------- */
@@ -167,61 +240,68 @@
       setScheme(next);
     }); } catch (e) {}
   }
+  // Each row's id is `zw.<action>` where <action> is the verb the row runs — the
+  // worker bus name (`cmd({a:…})`), the runAction() case, or the overlay it toggles.
+  // One namespace for "what the palette shows" and "what a chain can name", so the
+  // two can never disagree about what a command is called.
   function cmdItems() {
     return [
-      { icon: '＋', label: 'New tab', run: function () { cmd({ a: 'newTab' }); } },
-      { icon: '⊞', label: 'New window', run: function () { cmd({ a: 'newWindow' }); } },
-      { icon: '▦', label: 'Expose all windows & tabs', detail: 'overview · switch', run: function () { try { if (window.__zbExposeOpen) window.__zbExposeOpen(); } catch (e) {} } },
-      { icon: '◑', label: 'Page actions', detail: 'filters · grayscale/sepia/invert…', run: function () { try { if (window.__zbPageActionsOpen) window.__zbPageActionsOpen(); } catch (e) {} } },
-      { icon: '▤', label: 'Reader view', detail: 'distraction-free article', run: function () { try { if (window.__zbReaderOpen) window.__zbReaderOpen(); } catch (e) {} } },
-      { icon: '↻', label: 'Periodic reload', detail: 'auto-reload this tab', run: function () { try { if (window.__zbReloadOpen) window.__zbReloadOpen(); } catch (e) {} } },
-      { icon: '☕', label: 'Break mode', detail: 'pause every tab', run: function () { try { if (window.__zbBreakOn) window.__zbBreakOn(); } catch (e) {} } },
-      { icon: '◲', label: 'Capture full page', detail: 'scroll + stitch → PNG', run: function () { cmd({ a: 'capturePage' }); } },
-      { icon: '▭', label: 'Capture visible area', detail: 'screenshot → PNG', run: function () { cmd({ a: 'captureVisible' }); } },
-      { icon: '✋', label: 'Toggle mouse gestures', detail: 'right-drag navigation', run: function () { try { if (window.__zbGesturesToggle) window.__zbGesturesToggle(); } catch (e) {} } },
-      { icon: '▨', label: 'Web panels', detail: 'pinned sites in a side panel', run: function () { try { if (window.__zbPanelsOpen) window.__zbPanelsOpen(); } catch (e) {} } },
-      { icon: '⧉', label: 'Pop out video', detail: 'picture-in-picture', run: function () { try { if (window.__zbPipToggle) window.__zbPipToggle(); } catch (e) {} } },
-      { icon: '✎', label: 'Quick note from selection', detail: 'save selection → Notes', run: function () { try { if (window.__zbQuickNote) window.__zbQuickNote(); } catch (e) {} } },
-      { icon: '♺', label: 'Recently closed', detail: 'restore a closed tab', run: function () { try { if (window.__zbTrashOpen) window.__zbTrashOpen(); } catch (e) {} } },
-      { icon: '📑', label: 'Add to reading list', detail: 'this page', run: function () { cmd({ a: 'addReadingList' }); } },
-      { icon: '🌙', label: 'Hibernate other tabs', detail: 'discard background tabs', run: function () { cmd({ a: 'discardOthers' }); } },
-      { icon: '🌙', label: 'Hibernate this tab', detail: 'discard', run: function () { cmd({ a: 'discardTab' }); } },
-      { icon: '▦', label: 'Group tabs by domain', detail: 'tab stacks', run: function () { cmd({ a: 'groupByDomain' }); } },
-      { icon: '▤', label: 'Ungroup all tabs', detail: 'clear tab stacks', run: function () { cmd({ a: 'ungroupTabs' }); } },
-      { icon: '🍪', label: 'Toggle cookie-banner blocker', detail: 'hide consent popups', run: function () { try { if (window.__zbCookiesToggle) window.__zbCookiesToggle(); } catch (e) {} } },
+      { id: 'zw.newTab', icon: '＋', label: 'New tab', run: function () { cmd({ a: 'newTab' }); } },
+      { id: 'zw.newWindow', icon: '⊞', label: 'New window', run: function () { cmd({ a: 'newWindow' }); } },
+      { id: 'zw.expose', icon: '▦', label: 'Expose all windows & tabs', detail: 'overview · switch', run: function () { try { if (window.__zbExposeOpen) window.__zbExposeOpen(); } catch (e) {} } },
+      { id: 'zw.pageActions', icon: '◑', label: 'Page actions', detail: 'filters · grayscale/sepia/invert…', run: function () { try { if (window.__zbPageActionsOpen) window.__zbPageActionsOpen(); } catch (e) {} } },
+      { id: 'zw.reader', icon: '▤', label: 'Reader view', detail: 'distraction-free article', run: function () { try { if (window.__zbReaderOpen) window.__zbReaderOpen(); } catch (e) {} } },
+      { id: 'zw.periodicReload', icon: '↻', label: 'Periodic reload', detail: 'auto-reload this tab', run: function () { try { if (window.__zbReloadOpen) window.__zbReloadOpen(); } catch (e) {} } },
+      { id: 'zw.break', icon: '☕', label: 'Break mode', detail: 'pause every tab', run: function () { try { if (window.__zbBreakOn) window.__zbBreakOn(); } catch (e) {} } },
+      { id: 'zw.capturePage', icon: '◲', label: 'Capture full page', detail: 'scroll + stitch → PNG', run: function () { cmd({ a: 'capturePage' }); } },
+      { id: 'zw.captureVisible', icon: '▭', label: 'Capture visible area', detail: 'screenshot → PNG', run: function () { cmd({ a: 'captureVisible' }); } },
+      { id: 'zw.gestures', icon: '✋', label: 'Toggle mouse gestures', detail: 'right-drag navigation', run: function () { try { if (window.__zbGesturesToggle) window.__zbGesturesToggle(); } catch (e) {} } },
+      { id: 'zw.panels', icon: '▨', label: 'Web panels', detail: 'pinned sites in a side panel', run: function () { try { if (window.__zbPanelsOpen) window.__zbPanelsOpen(); } catch (e) {} } },
+      { id: 'zw.pip', icon: '⧉', label: 'Pop out video', detail: 'picture-in-picture', run: function () { try { if (window.__zbPipToggle) window.__zbPipToggle(); } catch (e) {} } },
+      { id: 'zw.quickNote', icon: '✎', label: 'Quick note from selection', detail: 'save selection → Notes', run: function () { try { if (window.__zbQuickNote) window.__zbQuickNote(); } catch (e) {} } },
+      { id: 'zw.trash', icon: '♺', label: 'Recently closed', detail: 'restore a closed tab', run: function () { try { if (window.__zbTrashOpen) window.__zbTrashOpen(); } catch (e) {} } },
+      { id: 'zw.addReadingList', icon: '📑', label: 'Add to reading list', detail: 'this page', run: function () { cmd({ a: 'addReadingList' }); } },
+      { id: 'zw.discardOthers', icon: '🌙', label: 'Hibernate other tabs', detail: 'discard background tabs', run: function () { cmd({ a: 'discardOthers' }); } },
+      { id: 'zw.discardTab', icon: '🌙', label: 'Hibernate this tab', detail: 'discard', run: function () { cmd({ a: 'discardTab' }); } },
+      { id: 'zw.groupByDomain', icon: '▦', label: 'Group tabs by domain', detail: 'tab stacks', run: function () { cmd({ a: 'groupByDomain' }); } },
+      { id: 'zw.ungroupTabs', icon: '▤', label: 'Ungroup all tabs', detail: 'clear tab stacks', run: function () { cmd({ a: 'ungroupTabs' }); } },
+      { id: 'zw.cookies', icon: '🍪', label: 'Toggle cookie-banner blocker', detail: 'hide consent popups', run: function () { try { if (window.__zbCookiesToggle) window.__zbCookiesToggle(); } catch (e) {} } },
       // Clearing browsing data: the wizard for a scoped delete (time range, data
       // types, origin filter), then the all-time one-shots for when you just want
       // it gone. Both land on chrome.browsingData — nothing here opens Chrome's
       // own dialog, which the HUD shadow makes unreachable.
-      { icon: '⌫', label: 'Clear browsing data…', detail: 'wizard · range · types · origins', run: function () { open(extUrl('settings.html?section=clearBrowserData')); } },
-      { icon: '⌫', label: 'Clear cache', detail: 'all time', run: function () { cmd({ a: 'clearCache' }); } },
-      { icon: '⌫', label: 'Clear cookies', detail: 'all time · signs you out', run: function () { cmd({ a: 'clearCookies' }); } },
-      { icon: '⌫', label: 'Clear cache and cookies', detail: 'all time', run: function () { cmd({ a: 'clearCacheAndCookies' }); } },
-      { icon: '⌫', label: 'Clear ALL browsing data', detail: 'all time · history, downloads, cookies, cache, storage', run: function () { cmd({ a: 'clearAllData' }); } },
-      { icon: '⤢', label: 'Toggle spatial navigation', detail: 'Shift+Arrow link jump', run: function () { try { if (window.__zbSpatialToggle) window.__zbSpatialToggle(); } catch (e) {} } },
-      { icon: '🔊', label: 'Read aloud', detail: 'text-to-speech · Esc stops', run: function () { try { if (window.__zbSpeakToggle) window.__zbSpeakToggle(); } catch (e) {} } },
-      { icon: '◳', label: 'Zap page elements', detail: 'click to hide · persists', run: function () { try { if (window.__zbZapStart) window.__zbZapStart(); } catch (e) {} } },
-      { icon: '↺', label: 'Clear zapped elements', detail: 'this site', run: function () { try { if (window.__zbZapClear) window.__zbZapClear(); } catch (e) {} } },
-      { icon: '🌙', label: 'Toggle auto-hibernate (30m)', detail: 'sleeping tabs', run: function () { try { chrome.storage.local.get('zb_autohibernate', function (o) { var on = (o && typeof o.zb_autohibernate === 'number') ? o.zb_autohibernate : 30; chrome.storage.local.set({ zb_autohibernate: on ? 0 : 30 }); }); } catch (e) {} } },
-      { icon: '⧉', label: 'Duplicate tab', run: function () { cmd({ a: 'duplicateTab' }); } },
-      { icon: '↺', label: 'Reopen closed tab', run: function () { cmd({ a: 'reopenTab' }); } },
-      { icon: '✕', label: 'Close tab', run: function () { cmd({ a: 'closeTab' }); } },
-      { icon: '⊗', label: 'Close other tabs', run: function () { cmd({ a: 'closeOthers' }); } },
-      { icon: '→', label: 'Next tab', run: function () { cmd({ a: 'nextTab' }); } },
-      { icon: '←', label: 'Previous tab', run: function () { cmd({ a: 'prevTab' }); } },
-      { icon: '📌', label: 'Pin / unpin tab', run: function () { cmd({ a: 'pinTab' }); } },
-      { icon: '🔇', label: 'Mute / unmute tab', run: function () { cmd({ a: 'muteTab' }); } },
-      { icon: '⟳', label: 'Reload page', run: function () { try { location.reload(); } catch (e) {} } },
-      { icon: '⧉', label: 'Copy URL', detail: 'this page', run: function () { clip(location.href); } },
-      { icon: '⤓', label: 'Copy as Markdown', detail: 'this page', run: function () { clip('[' + document.title + '](' + location.href + ')'); } },
-      { icon: '⌥', label: 'Toggle terminal', detail: 'Ctrl+`', run: function () { try { if (window.toggleTerminalPopup) window.toggleTerminalPopup(); } catch (e) {} } },
-      { icon: '◐', label: 'Cycle color scheme', run: cycleScheme },
-      { icon: '◐', label: 'Toggle light mode', detail: 'setting', run: function () { toggleUi('light'); } },
-      { icon: '⌂', label: 'Toggle CRT scanlines', detail: 'setting', run: function () { toggleUi('scanlines'); } },
-      { icon: '▣', label: 'Toggle bezel vignette', detail: 'setting', run: function () { toggleUi('vignette'); } },
-      { icon: '✦', label: 'Toggle neon glow', detail: 'setting', run: function () { toggleUi('glow'); } },
-      { icon: '⚡', label: 'Toggle animations', detail: 'setting', run: function () { toggleUi('anim'); } },
-      { icon: '▤', label: 'Toggle status bar (tmux/session powerline)', detail: 'setting', run: function () { try { chrome.storage.local.get('zb_status', function (o) { chrome.storage.local.set({ zb_status: (o && o.zb_status === false) }); }); } catch (e) {} } }
+      { id: 'zw.clearDataWizard', icon: '⌫', label: 'Clear browsing data…', detail: 'wizard · range · types · origins', run: function () { open(extUrl('settings.html?section=clearBrowserData')); } },
+      { id: 'zw.clearCache', icon: '⌫', label: 'Clear cache', detail: 'all time', run: function () { cmd({ a: 'clearCache' }); } },
+      { id: 'zw.clearCookies', icon: '⌫', label: 'Clear cookies', detail: 'all time · signs you out', run: function () { cmd({ a: 'clearCookies' }); } },
+      { id: 'zw.clearCacheAndCookies', icon: '⌫', label: 'Clear cache and cookies', detail: 'all time', run: function () { cmd({ a: 'clearCacheAndCookies' }); } },
+      { id: 'zw.clearAllData', icon: '⌫', label: 'Clear ALL browsing data', detail: 'all time · history, downloads, cookies, cache, storage', run: function () { cmd({ a: 'clearAllData' }); } },
+      { id: 'zw.spatial', icon: '⤢', label: 'Toggle spatial navigation', detail: 'Shift+Arrow link jump', run: function () { try { if (window.__zbSpatialToggle) window.__zbSpatialToggle(); } catch (e) {} } },
+      { id: 'zw.speak', icon: '🔊', label: 'Read aloud', detail: 'text-to-speech · Esc stops', run: function () { try { if (window.__zbSpeakToggle) window.__zbSpeakToggle(); } catch (e) {} } },
+      { id: 'zw.zap', icon: '◳', label: 'Zap page elements', detail: 'click to hide · persists', run: function () { try { if (window.__zbZapStart) window.__zbZapStart(); } catch (e) {} } },
+      { id: 'zw.zapClear', icon: '↺', label: 'Clear zapped elements', detail: 'this site', run: function () { try { if (window.__zbZapClear) window.__zbZapClear(); } catch (e) {} } },
+      { id: 'zw.autoHibernate', icon: '🌙', label: 'Toggle auto-hibernate (30m)', detail: 'sleeping tabs', run: function () { try { chrome.storage.local.get('zb_autohibernate', function (o) { var on = (o && typeof o.zb_autohibernate === 'number') ? o.zb_autohibernate : 30; chrome.storage.local.set({ zb_autohibernate: on ? 0 : 30 }); }); } catch (e) {} } },
+      { id: 'zw.duplicateTab', icon: '⧉', label: 'Duplicate tab', run: function () { cmd({ a: 'duplicateTab' }); } },
+      { id: 'zw.reopenTab', icon: '↺', label: 'Reopen closed tab', run: function () { cmd({ a: 'reopenTab' }); } },
+      { id: 'zw.closeTab', icon: '✕', label: 'Close tab', run: function () { cmd({ a: 'closeTab' }); } },
+      { id: 'zw.closeOthers', icon: '⊗', label: 'Close other tabs', run: function () { cmd({ a: 'closeOthers' }); } },
+      { id: 'zw.nextTab', icon: '→', label: 'Next tab', run: function () { cmd({ a: 'nextTab' }); } },
+      { id: 'zw.prevTab', icon: '←', label: 'Previous tab', run: function () { cmd({ a: 'prevTab' }); } },
+      { id: 'zw.pinTab', icon: '📌', label: 'Pin / unpin tab', run: function () { cmd({ a: 'pinTab' }); } },
+      { id: 'zw.muteTab', icon: '🔇', label: 'Mute / unmute tab', run: function () { cmd({ a: 'muteTab' }); } },
+      // rl / cu / cs used to be three shipped `def-` custom commands whose only
+      // contribution over these rows was the keyword — so the palette listed both and
+      // rendered the same command twice. The keyword lives on the built-in now.
+      { id: 'zw.reload', icon: '⟳', label: 'Reload page', keyword: 'rl', run: function () { try { location.reload(); } catch (e) {} } },
+      { id: 'zw.copyUrl', icon: '⧉', label: 'Copy URL', detail: 'this page', keyword: 'cu', run: function () { clip(location.href); } },
+      { id: 'zw.copyMarkdown', icon: '⤓', label: 'Copy as Markdown', detail: 'this page', run: function () { clip('[' + document.title + '](' + location.href + ')'); } },
+      { id: 'zw.toggleTerminal', icon: '⌥', label: 'Toggle terminal', detail: 'Ctrl+`', run: function () { try { if (window.toggleTerminalPopup) window.toggleTerminalPopup(); } catch (e) {} } },
+      { id: 'zw.cycleScheme', icon: '◐', label: 'Cycle color scheme', keyword: 'cs', run: cycleScheme },
+      { id: 'zw.ui.light', icon: '◐', label: 'Toggle light mode', detail: 'setting', run: function () { toggleUi('light'); } },
+      { id: 'zw.ui.scanlines', icon: '⌂', label: 'Toggle CRT scanlines', detail: 'setting', run: function () { toggleUi('scanlines'); } },
+      { id: 'zw.ui.vignette', icon: '▣', label: 'Toggle bezel vignette', detail: 'setting', run: function () { toggleUi('vignette'); } },
+      { id: 'zw.ui.glow', icon: '✦', label: 'Toggle neon glow', detail: 'setting', run: function () { toggleUi('glow'); } },
+      { id: 'zw.ui.anim', icon: '⚡', label: 'Toggle animations', detail: 'setting', run: function () { toggleUi('anim'); } },
+      { id: 'zw.toggleStatusbar', icon: '▤', label: 'Toggle status bar (tmux/session powerline)', detail: 'setting', run: function () { try { chrome.storage.local.get('zb_status', function (o) { chrome.storage.local.set({ zb_status: (o && o.zb_status === false) }); }); } catch (e) {} } }
     ];
   }
   // Settings live in chrome.storage 'zb_ui' (mirrored from the HUD settings) so a
@@ -626,15 +706,19 @@
   function getRates(cb) { try { chrome.runtime.sendMessage({ type: 'zbGetRates' }, function (r) { void chrome.runtime.lastError; cb(r); }); } catch (e) { cb(null); } }
   function refreshPalette() { try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {} }
 
+  // Chrome's own tab id is the identity — the title is page-supplied and changes
+  // under the same tab. Ids stay unique across a window's worth of same-titled tabs.
   function tabItems(tabs) {
     return (tabs || []).map(function (t) {
-      return { icon: '▣', label: 'Tab: ' + (t.title || t.url || '(tab)'), detail: t.url,
+      return { id: 'zw.tab.' + t.id, icon: '▣', label: 'Tab: ' + (t.title || t.url || '(tab)'), detail: t.url,
         run: function () { cmd({ a: 'activate', tabId: t.id }); } };
     });
   }
+  // Keyed on the extension id + the command name Chrome reports, never on `s.desc`
+  // (that string is the OTHER extension's localized description).
   function shortcutItems(list) {
     return (list || []).map(function (s) {
-      return { icon: '⌨', label: 'Shortcut: ' + s.ext + ' — ' + s.desc, detail: s.keybinding || 'unset · click to set', secondary: true, run: function () { open(extUrl('extensions.html') + '#shortcuts'); } };
+      return { id: 'zw.shortcut.' + slug(s.extId || s.ext) + '.' + slug(s.name || s.desc), icon: '⌨', label: 'Shortcut: ' + s.ext + ' — ' + s.desc, detail: s.keybinding || 'unset · click to set', secondary: true, run: function () { open(extUrl('extensions.html') + '#shortcuts'); } };
     });
   }
   // Extension shortcuts are search-only (there are dozens) — a provider so they
@@ -679,11 +763,12 @@
     });
     return out.slice(0, 12);
   }
+  // The extension id is the identity; `e.name` is that extension's localized name.
   function extItems(exts) {
     var out = [];
     (exts || []).forEach(function (e) {
-      if (e.optionsUrl) out.push({ icon: '⚙', label: 'Tweak: ' + e.name, detail: 'options', run: function () { open(e.optionsUrl); } });
-      out.push({ icon: '⬡', label: 'Manage: ' + e.name, detail: e.id, run: function () { open('chrome://extensions/?id=' + e.id); } });
+      if (e.optionsUrl) out.push({ id: 'zw.ext.' + e.id + '.options', icon: '⚙', label: 'Tweak: ' + e.name, detail: 'options', run: function () { open(e.optionsUrl); } });
+      out.push({ id: 'zw.ext.' + e.id, icon: '⬡', label: 'Manage: ' + e.name, detail: e.id, run: function () { open('chrome://extensions/?id=' + e.id); } });
     });
     return out;
   }
@@ -697,7 +782,11 @@
     schemeVars(injectStyle);
     // Open SYNCHRONOUSLY with the static commands so it never depends on an
     // async read — nav always works. Tabs (storage bus) are appended after.
-    try { ZGui.palette.clear(); ZGui.palette.register(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); ZGui.palette.registerProvider(urlSurgeryProvider); } ZGui.palette.open(); } catch (ex) {}
+    // clear() empties the registered rows, so the surviving-id set empties with it —
+    // otherwise the second open would dedupe every row against the first open's ids
+    // and publish nothing at all.
+    publishedIds = {};
+    try { ZGui.palette.clear(); publish(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); ZGui.palette.registerProvider(urlSurgeryProvider); } ZGui.palette.open(); } catch (ex) {}
     try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
     try {
       chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {
@@ -709,15 +798,19 @@
           // shipped defaults register as ordinary "stdlib" rows.
           var userCmds = [], defCmds = [];
           customCache.forEach(function (e) { (isDefaultCmd(e) ? defCmds : userCmds).push(e); });
-          if (ZGui.palette.setUserItems) ZGui.palette.setUserItems(customItems(userCmds));
-          else ZGui.palette.register(customItems(userCmds));   // older zgui-core: fall back to plain rows
-          ZGui.palette.register(customItems(defCmds));
+          // setUserItems owns its own tier and its own splice, so it is not routed
+          // through publish() — but its rows are audited on the same terms.
+          var userRows = customItems(userCmds);
+          userRows.forEach(auditId);
+          if (ZGui.palette.setUserItems) ZGui.palette.setUserItems(userRows);
+          else publish(userRows);   // older zgui-core: fall back to plain rows
+          publish(customItems(defCmds));
         } catch (e) {}
-        try { ZGui.palette.register(frecentItems(o && o.zb_frecent)); } catch (e) {}
+        try { publish(frecentItems(o && o.zb_frecent)); } catch (e) {}
         try { shortcutsCache = (o && o.zb_shortcuts) || []; } catch (e) {}
-        try { ZGui.palette.register(extItems(o && o.zb_exts)); } catch (e) {}
+        try { publish(extItems(o && o.zb_exts)); } catch (e) {}
         try { hudTabs = (o && o.zb_tabs) || []; } catch (e) {}
-        try { ZGui.palette.register(tabItems(o && o.zb_tabs)); } catch (e) {}
+        try { publish(tabItems(o && o.zb_tabs)); } catch (e) {}
         try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {}
       });
     } catch (e) {}

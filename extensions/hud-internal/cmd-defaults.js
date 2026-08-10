@@ -6,7 +6,6 @@
 (function (root) {
   'use strict';
   function u(id, icon, label, kw, url) { return { id: 'def-' + id, icon: icon, label: label, detail: '', keyword: kw, type: 'url', value: url }; }
-  function a(id, icon, label, kw, act) { return { id: 'def-' + id, icon: icon, label: label, detail: '', keyword: kw, type: 'action', value: act }; }
   root.ZWIRE_CMD_DEFAULTS = [
     u('chatgpt', '🤖', 'ChatGPT', 'cg', 'https://chatgpt.com/?q={q}&hints=search'),
     u('claude', '✳️', 'Claude', 'cl', 'https://claude.ai/new?q={q}'),
@@ -69,11 +68,18 @@
     u('arxiv', '📄', 'arXiv', 'arx', 'https://arxiv.org/abs/{q}'),
     u('scholar', '🎓', 'Google Scholar', 'sch', 'https://scholar.google.com/scholar?q={q}'),
     u('weather', '🌤️', 'Weather', 'wx', 'https://www.google.com/search?q=weather+{q}'),
-    u('npmtrends', '📈', 'npm trends', 'npt', 'https://npmtrends.com/{q}'),
-    a('reload', '↻', 'Reload page', 'rl', 'reload'),
-    a('copyurl', '⧉', 'Copy page URL', 'cu', 'copyUrl'),
-    a('scheme', '◐', 'Cycle color scheme', 'cs', 'cycleScheme')
+    u('npmtrends', '📈', 'npm trends', 'npt', 'https://npmtrends.com/{q}')
   ];
+  // No `action` defaults live here. Three used to — def-reload / def-copyurl /
+  // def-scheme — and each one shadowed a built-in palette row that already ran the
+  // same verb, so ⌘K listed the command twice: once as the built-in and once as its
+  // shipped duplicate. Their only contribution over the built-in was the keyword, and
+  // the keyword now sits on the built-in row itself (zw.reload `rl`, zw.copyUrl `cu`,
+  // zw.cycleScheme `cs` in zpalette.js). A default belongs here only when it adds a
+  // destination the palette does not already have. Profiles seeded before this keep
+  // their three copies — a seeded entry is the user's to edit or delete, never ours
+  // to remove behind their back — and deleting them on the Commands page sticks
+  // (zb_cmds_removed), so they do not come back.
   // Merge in any default whose id isn't already present AND wasn't deleted by
   // the user (zb_cmds_removed). Runs on every load, so EXPANDING the defaults
   // above makes the new rules appear automatically, without re-adding ones the

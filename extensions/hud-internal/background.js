@@ -422,9 +422,13 @@ function updateShortcuts() {
     chrome.developerPrivate.getExtensionsInfo({ includeDisabled: false, includeTerminated: false }, function (list) {
       void chrome.runtime.lastError;
       var out = [];
+      // `ext` and `desc` are the other extension's DISPLAY strings — both localized,
+      // both free to change without the shortcut changing. `extId` + `name` (the
+      // manifest command key) are the stable pair, and are what the palette slugs its
+      // row id from; without them a row's id would rename itself per browser locale.
       (list || []).forEach(function (e) {
         (e.commands || []).forEach(function (c) {
-          out.push({ ext: e.name, desc: c.description || c.name, keybinding: c.keybinding || '', scope: c.scope || 'CHROME' });
+          out.push({ extId: e.id, name: c.name || '', ext: e.name, desc: c.description || c.name, keybinding: c.keybinding || '', scope: c.scope || 'CHROME' });
         });
       });
       chrome.storage.local.set({ zb_shortcuts: out });
@@ -1190,8 +1194,11 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     fireHook(String(msg.event), msg.payload || {});
     // Mirror command-ish HUD events into the generic `action` catch-all so one
     // hook bound to `action` can react to every command (filter by $_.command).
-    if (msg.event === 'palette-command' && msg.payload && msg.payload.command && self.__zbAct) {
-      try { self.__zbAct('palette:' + msg.payload.command); } catch (e) {}
+    // The mirror string prefers the row's stable slug id and only falls back to the
+    // label for rows that carry none — a label-keyed mirror renames every action a
+    // hook matches on the moment the browser locale changes.
+    if (msg.event === 'palette-command' && msg.payload && (msg.payload.id || msg.payload.command) && self.__zbAct) {
+      try { self.__zbAct('palette:' + (msg.payload.id || msg.payload.command)); } catch (e) {}
     }
     return;
   }

@@ -163,10 +163,11 @@ the one `zb_tmux_sessions` array, so an edit in either shows up in the other.
 
 **Hooks (`pages/hooks.html`).** Bind
 [stryke](https://github.com/MenkeTechnologies/strykelang) scripts to browser
-lifecycle events. The service worker fires 54 catalogued events — tab
+lifecycle events. The service worker fires 55 catalogued events — tab
 open/close/activate/update/move, window open/close/focus, navigation, downloads,
 bookmarks, history, the HUD terminal, scheme changes, the audio engine, ⌘K
-palette commands, plus an `action` catch-all for every command — and `zwire-host`
+palette commands, `zdiagnostic` (a UI layer reporting a wiring problem it will
+not print), plus an `action` catch-all for every command — and `zwire-host`
 runs each **enabled** hook whose event matches, feeding it the event JSON on
 stdin. The script prints an `{actions:[…]}` object the host dispatches (`notify` /
 `open` / `exec` / `pub`). The page has a searchable event picker, a Monaco editor
@@ -455,10 +456,27 @@ but is four.
   item set + ranking (search, custom commands, inline compute, the `tabs:`
   boolean tab-query provider, the brace-expansion batch launcher, the `url:`
   URL-surgery rewrite engine, and the zpwrchrome page list via `makeZpwrItems`).
-  Backend-agnostic; **vendored
-  verbatim** into `hud-internal/` (canonical — edit this), `newtab/`, and
-  `zpwrchrome/lib/`. Each surface must actually load it or its zpwrchrome rows
+  Backend-agnostic; **vendored verbatim** into `hud-internal/` (canonical — edit
+  this) and `newtab/`. Each surface must actually load it or its zpwrchrome rows
   silently vanish (HUD pages load it via `<script src="../palette-cmds.js">`).
+  `zpwrchrome/lib/palette-cmds.js` is a **separate, older copy** in its own
+  submodule — it stops before the tab-query engine and does not track this file.
+  Treat surface 4 as its own vocabulary until that copy is re-vendored.
+- **The id contract:** every row the web-page palette publishes carries a stable
+  slug `id` — `zw.newTab`, `zw.page.settings`, `zw.chrome.gpu`, `zw.tab.<tabId>`,
+  `zw.ext.<extId>`, `zw.cmd.<commandId>`. The slug comes from the row's identity
+  (the action verb it runs, its page file, its chrome:// URL, an extension or tab
+  id) and **never** from its label: a label is the translatable half of a row, so
+  an id keyed on one renames itself per locale and breaks every saved chain, hook
+  and trigger that referenced it. Built-in rows use `zw.<action>` for the action
+  they run, so the palette and the chain/trigger vocabularies cannot disagree
+  about what a command is called, and the `palette-command` hook fires with that
+  `id` alongside the display `command`. Rows are deduped by id on publish (first
+  wins), so one command cannot render twice. A row published with no id, or with
+  whitespace in its id, is recorded in `window.ZGui.diagnostics`, raised on a
+  `zgui:diagnostic` document event and forwarded to the native host as a
+  `zdiagnostic` hook — never printed. `tests/palette-ids.mjs` pins all of this
+  over the real shipped vocabulary.
 - **⌘K ownership:** hud-internal owns ⌘K browser-wide as a `chrome.commands`
   shortcut (a page keydown can't intercept it) and its service worker routes to
   the palette matching the active tab (web page → 1, HUD page → 2, new tab → 3,

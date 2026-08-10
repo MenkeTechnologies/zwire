@@ -107,10 +107,13 @@
     ['ℹ', 'About', 'dl-about.html']
   ];
   // makeZpwrItems(open) -> palette rows; `open(url)` is the consumer's nav adapter.
+  // The row id is slugged from the page FILE, not from its label: the file is the
+  // row's identity and survives any relabelling or translation of the display text.
+  function pageSlug(file) { return String(file).replace(/\.html.*$/, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase(); }
   function makeZpwrItems(open) {
     return ZPWR_PAGES.map(function (p) {
       var url = ZPWR_BASE + p[2];
-      return { icon: p[0], label: 'zpwrchrome: ' + p[1], detail: p[2], run: function () { open(url); } };
+      return { id: 'zw.zpwr.' + pageSlug(p[2]), icon: p[0], label: 'zpwrchrome: ' + p[1], detail: p[2], run: function () { open(url); } };
     });
   }
 
@@ -132,10 +135,12 @@
   function ctxIsDefault(ctx) { return (ctx && ctx.isDefaultCmd) || isDefaultCmd; }
 
   // makeCustomItems(list, ctx) -> rows carrying `keyword` (scored) + `user` tier.
+  // A stored command already HAS a stable id (`def-…` shipped, `c…` personal) — that
+  // is the row's id. The label is user text and is the one thing that must not key it.
   function makeCustomItems(list, ctx) {
     var tl = ctxTypeLabel(ctx), isDef = ctxIsDefault(ctx), run = ctx.runCustom;
     return (list || []).map(function (e) {
-      return { icon: e.icon || '✦', label: e.label, detail: e.detail || (e.keyword ? e.keyword + ' …' : stepsSummary(e, tl)),
+      return { id: e.id ? 'zw.cmd.' + e.id : '', icon: e.icon || '✦', label: e.label, detail: e.detail || (e.keyword ? e.keyword + ' …' : stepsSummary(e, tl)),
         keyword: e.keyword || '', user: !isDef(e), run: function () { run(e, ''); } };
     });
   }

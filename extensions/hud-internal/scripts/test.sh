@@ -171,6 +171,16 @@ fi
 command rm -f /tmp/zwire-hud-chain.$$
 echo
 
+cyber_section "PALETTE ID CONTRACT (stable slugs / no label-keyed ids / diagnostics sink)"
+if node tests/palette-ids.mjs 2>/tmp/zwire-hud-pids.$$; then
+  cyber_ok "palette id contract nominal"
+else
+  FAIL=1; cyber_fail "palette id contract compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-pids.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-pids.$$
+echo
+
 cyber_section "SELF-REVERTING TRIGGERS (txn routing + authoring-time reversibility check)"
 if node tests/trigger-revert.mjs 2>/tmp/zwire-hud-trg.$$; then
   cyber_ok "self-reverting triggers nominal"
