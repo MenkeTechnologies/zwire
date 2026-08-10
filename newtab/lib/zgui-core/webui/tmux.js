@@ -31,6 +31,13 @@
 //   loading the JS alone — no manifest CSS / all.css step required.
 //   ZGui.tmux.open() / .toggle() / .isOpen() / .status()
 //
+// The tiling-shape helpers are public, so a host with its own session manager
+// (zwire's HUD Sessions page) drives identical geometry instead of reimplementing it:
+//   ZGui.tmux.layout.rects(panes, tree, w, h)  // -> the pane rectangles for a shape
+//   ZGui.tmux.layout.dirs(win)                 // -> each split's direction
+//   ZGui.tmux.layout.split(win, i, dir)        // split pane i ('→' or '↓') -> bool
+//   ZGui.tmux.layout.close(win, i)             // close pane i, collapsing its split
+//
 // zgui-core only: the tiling is an ABSOLUTE-POSITION model — every pane is a
 // permanent direct child of the body, tiled by setting its left/top/width/height in
 // % from the layout tree, with its own draggable dividers. A split just adds a pane

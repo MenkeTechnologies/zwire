@@ -3,6 +3,17 @@
 // weights, `<mark class="fzf-hl">` highlight). Shared so the 14 apps stop drifting their own
 // copies. Self-contained: host-util couplings (escapeHtml/prefs/toast/renderFzfSettings) are
 // shimmed below; a host may pre-define window.prefs / window.renderFzfSettings to override.
+//
+//   ZGui.fzf.searchMatch(query, fields, mode?) -> boolean     // does any field match?
+//   ZGui.fzf.searchScore(query, fields, mode?) -> number      // 0 = no match; higher ranks first
+//   ZGui.fzf.fzfMatch(query, text) -> number                  // single-field fuzzy score
+//   ZGui.fzf.highlightMatch(query, text, mode?) -> html       // wraps hits in <mark class="fzf-hl">
+//   ZGui.fzf.getMatchIndices(query, text, mode?) -> number[]  // matched character positions
+//   ZGui.fzf.parseFzfQuery(query) -> tokens                   // extended syntax, parsed
+//
+// `fields` is an array of strings; a row matches when any of them does. `mode` is
+// 'fuzzy' (default) or 'regex'. The extended query syntax is fzf's: 'exact,
+// ^prefix, suffix$, !negate, a | b.
 (function () {
   'use strict';
   // ---- host-util shims (no-ops / fallbacks unless the host provided richer versions) ----

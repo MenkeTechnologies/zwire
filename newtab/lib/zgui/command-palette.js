@@ -59,8 +59,14 @@
         // zgo-style dynamic providers: query-reactive rows (web-search keywords,
         // "open url", calc…) computed fresh each keystroke.
         let extra = [];
-        if (providersRef && providersRef.length && q) {
-          providersRef.forEach(function (fn) { try { const r = fn(q); if (r && r.length) extra = extra.concat(r); } catch (e) {} });
+        // Regular providers are query-reactive (only fire once the user types); `__user`-tagged
+        // providers (ZGui.scripts / userCommands — the personal palette) fire even on an empty query
+        // so saved scripts + user commands are visible in ⌘K without typing.
+        if (providersRef && providersRef.length) {
+          providersRef.forEach(function (fn) {
+            if (!q && !fn.__user) return;
+            try { const r = fn(q); if (r && r.length) extra = extra.concat(r); } catch (e) {}
+          });
         }
         const userProv = [], strong = [], secondary = [], fallback = [];
         extra.forEach(function (it) {
@@ -155,7 +161,19 @@
         const c = rows[sel];
         if (c && c.scrollIntoView) c.scrollIntoView({ block: "nearest" });
       }
-      function run(it) { close(); if (it && it.run) it.run(); }
+      function run(it) {
+        close();
+        if (it && it.run) {
+          // zwire: fire the palette-command lifecycle hook (guarded — no-op
+          // outside an extension context, e.g. zgo/standalone web use of ZGui).
+          try {
+            if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({ type: "zbFireHook", event: "palette-command", payload: { command: it.label || it.name || "" } }, function () { void chrome.runtime.lastError; });
+            }
+          } catch (_) {}
+          it.run();
+        }
+      }
 
       input.addEventListener("input", render);
       input.addEventListener("keydown", function (e) {
@@ -198,6 +216,42 @@
     for (let i = items.length - 1; i >= 0; i--) if (!items[i] || !items[i].user) items.splice(i, 1);
     for (let i = providers.length - 1; i >= 0; i--) if (!providers[i] || !providers[i].__user) providers.splice(i, 1);
   }
+  // ── the app COMMAND vocabulary (⌘K rows + user-commands dropdown + action routing) ──
+  // setCommands(list, {onCommand}) is the ONE place an app publishes its actions: each {id,label,...}
+  // becomes a palette row AND a routable action id. A fired `zgui:user-command` runs the ONE matching
+  // command by id (chaining lives in ZGui.userCommands — a custom command is a chain of steps, and an
+  // "action" step dispatches a single id here). onCommand(id) is the default runner for items without
+  // their own run(). Used by ZGui.appShell AND by non-shell apps (zgo) alike, so the "callable from
+  // anywhere" surface is identical everywhere. The router is armed once and reads the live map, so
+  // refreshing the vocabulary (e.g. after a locale change) never double-binds.
+  let commandsById = {};
+  let commandRouterArmed = false;
+  function armCommandRouter() {
+    if (commandRouterArmed) return;
+    commandRouterArmed = true;
+    document.addEventListener("zgui:user-command", function (e) {
+      var v = e && e.detail && e.detail.value; if (!v) return;
+      var c = commandsById[String(v).trim()];
+      if (c && typeof c.run === "function") { try { c.run(); } catch (_) {} }
+    });
+  }
+  function setCommands(list, opts) {
+    opts = opts || {};
+    var cmds = (Array.isArray(list) ? list : []).filter(function (c) { return c && c.id && c.label; });
+    cmds.forEach(function (c) {
+      if (typeof c.run !== "function" && typeof opts.onCommand === "function") {
+        c.run = (function (id) { return function () { return opts.onCommand(id); }; })(c.id);
+      }
+    });
+    clear();                       // preserves user commands
+    register(cmds);                // palette rows
+    var uc = window.ZGui && window.ZGui.userCommands;
+    if (uc && uc.setActions) uc.setActions(cmds.map(function (c) { return { id: c.id, label: c.label }; }));
+    commandsById = {};
+    cmds.forEach(function (c) { commandsById[c.id] = c; });
+    armCommandRouter();
+  }
+
   // ⌘/Ctrl+K toggles the singleton. HOST-ONLY (an embedded core must NOT call this — see the design doc).
   function bindHotkey() {
     // On macOS use ⌘K only, so Ctrl-K stays free for a focused terminal / readline (Ctrl-K = up,
@@ -221,6 +275,7 @@
   window.ZGui = window.ZGui || {};
   window.ZGui.palette = {
     register: register, registerProvider: registerProvider, setUserItems: setUserItems, clear: clear,
+    setCommands: setCommands,
     open: singleton.open, close: singleton.close,
     isOpen: singleton.isOpen, bindHotkey: bindHotkey, create: create, items: items,
   };

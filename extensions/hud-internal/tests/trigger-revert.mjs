@@ -169,5 +169,26 @@ check('a verb absent from the table is treated as irreversible', () => {
   assert.equal(bad[0].verb, 'browser.muteTab');
 });
 
+// The set of action ids that ARE bus verbs comes from the host's surface, not from a list in the
+// wizard. zpalette.js's runner already derives it that way; when the wizard did not, the two
+// disagreed in the opposite direction — the wizard refused to SAVE chains the runner would have
+// executed and the host would have reverted. goBack/zoomIn/moveTabLeft were never in the wizard's
+// hand-written eleven.
+check('a host-served verb outside the hand-written seed is accepted', () => {
+  const hostREV = { 'browser.goBack': 'inverse', 'browser.zoomIn': 'inverse', 'browser.moveTabLeft': 'inverse' };
+  const bad = W.revProblems([{ type: 'action', value: 'goBack' },
+    { type: 'action', value: 'zoomIn' },
+    { type: 'action', value: 'moveTabLeft' }], hostREV);
+  assert.deepEqual(bad, [], `the wizard refused verbs the host serves and can undo: ${JSON.stringify(bad)}`);
+});
+
+check('an action the host does not serve is not a bus verb', () => {
+  // copyUrl is extension-local (zpalette runAction handles it in-page); it has no browser.* verb,
+  // so a self-reverting chain cannot contain it.
+  const bad = W.revProblems([{ type: 'action', value: 'copyUrl' }], { 'browser.goBack': 'inverse' });
+  assert.equal(bad.length, 1);
+  assert.equal(bad[0].verb, null, 'copyUrl was classed as a bus verb');
+});
+
 if (failures) process.stderr.write(`\n${failures} check(s) failed\n`); else process.stdout.write('\nall checks passed\n');
 process.exit(failures ? 1 : 0);

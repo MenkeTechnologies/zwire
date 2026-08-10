@@ -199,9 +199,17 @@ where a half-applied chain sits unnoticed until you happen to look. Only steps t
 host can undo are allowed — a browser action or a URL becomes a journaled bus verb,
 while `shell` / `stryke` / `js` / `applescript` / `batch` / `scheme` have no inverse
 and are refused. The refusal happens while you are still editing: the Triggers page
-reads the reversibility class of every verb from the host itself (`{"cmd":"verbs"}`)
-rather than keeping a copy that could drift, and declines to save a chain it could
+reads the host's own surface (`{"cmd":"verbs"}`) and declines to save a chain it could
 not revert.
+
+Both halves ask the host the same question. `{"cmd":"verbs"}` answers with every verb
+*and* its reversibility class, so **which** action ids are bus verbs and **whether**
+each can be undone both come from the host — the page keeps no table of its own beyond
+a small seed used for the moment before the host has answered (and for a host that is
+absent, where nothing is accepted anyway). That matters because the two halves used to
+disagree: the executor mirrored eleven ids and refused the rest at run time, and once
+it started asking the host, the authoring check was left mirroring the same eleven and
+refused at *save* time 27 of the 37 browser verbs the host can revert.
 
 **Pane pipelines (`pages/pipes.html`).** Where a trigger's sink is a step chain,
 a pipeline's sink is *another pane*. A pipeline is a persisted, reactive dataflow
@@ -374,8 +382,14 @@ patch 0022 and asserts per-effect invariants.
 **`zgui-core` — the shared GUI toolkit (`lib/zgui-core`, submodule).** The HUD is
 not hand-rolled per page; it is assembled from **`ZGui`**, a cyberpunk web-component
 library (260 modules under `webui/`) shared across the MenkeTechnologies app
-suite and loaded **directly from the submodule path** (never copied — copies go
-stale). The tiling WM (`ZGui.tmux`), the ⌘K palette (`ZGui.palette`), fuzzy find
+suite and loaded **directly from the submodule path** — the HUD extension never
+copies a `ZGui` module, because copies go stale. The New Tab extension is the one
+exception, and not by choice: Chrome loads each unpacked extension from its own
+directory and an extension cannot read a sibling's files, so `newtab/lib/` holds
+the handful of modules that page needs (`command-palette`, `fzf`, `util`, and the
+tmux overlay set). They are copies of the submodule's files at the same revision
+and are re-copied when the submodule moves. The tiling WM (`ZGui.tmux`), the ⌘K
+palette (`ZGui.palette`), fuzzy find
 (`ZGui.fzf`), the scheme engine (`ZGui.colorscheme`), the powerline
 (`ZGui.powerline`), the store's product cards (`ZGui.productCard`), and the whole
 Audio meter chain (`ZGui.spectrumAnalyzer`, `goniometer`, `correlationMeter`,
@@ -406,7 +420,7 @@ without a host and silently hand them back to the browser's built-in downloader.
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
 | **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 23 HUD pages (incl. the Sessions manager, the Pipelines editor, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
-| **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (260 `webui/*` modules), a submodule loaded straight from path (never copied). Every HUD page composes `ZGui` components; zwire supplies only the glue |
+| **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (260 `webui/*` modules), a submodule loaded straight from path. Every HUD page composes `ZGui` components; zwire supplies only the glue. The New Tab extension cannot read another extension's directory, so `newtab/lib/` carries same-revision copies of the few modules it loads |
 | **Native host** | `extensions/hud-internal/native/zwire-host` — a single Rust binary (native-messaging host + Unix-socket daemon: sysmon, fs, exec, PTY, KV, hooks, OS ops), a submodule. Backs the Host console + powerline stats + the audio EQ/meters file bridge |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension (in-repo, not a submodule): the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |

@@ -267,9 +267,12 @@
   // an irreversible verb still fails loudly there instead of silently running unjournalled.
   //
   // Lazy, and MUTATED IN PLACE: this is a content script that runs on every page, so it must not
-  // message the host on load; and `BUS_ACTIONS` is handed out by reference on window.ZWIRE_CMD_EXEC
-  // (ztriggers.js reads it), so reassigning the variable would leave that consumer holding the seed
-  // forever.
+  // message the host on load; and `BUS_ACTIONS` is handed out by reference on window.ZWIRE_CMD_EXEC,
+  // so reassigning the variable would leave any holder of that reference on the seed forever.
+  //
+  // The AUTHORING side asks the same question of the same surface — pages/step-wizard.js stepVerb()
+  // takes the host's map and decides membership from it, with its own copy of these eleven as the
+  // pre-answer seed. Two derivations of one answer, never two hand-written lists.
   var _busActionsLoaded = false;
   function loadBusActions(done) {
     var d = done || noop;

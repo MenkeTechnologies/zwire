@@ -387,6 +387,20 @@
    * refuses it later, unattended, at 3am. Checking here means an un-undoable trigger is rejected
    * while the author is still looking at it.
    *
+   * That applies to WHICH IDS ARE VERBS as much as to their class. `revMap` carries the host's whole
+   * surface, so membership in it — not a list here — decides whether an `action` step has a verb at
+   * all. The list below is a SEED for the window before the host answers (and for a host that is
+   * absent): the eleven ids it was hand-maintained at. It drifted exactly as predicted — the host
+   * serves 37 `browser.*` verbs and this named 11, so the wizard refused to save `goBack`, `zoomIn`,
+   * `moveTabLeft`, `closeRight`, `unpinTab` and 20 more that zpalette.js's runner executes and the
+   * host undoes perfectly; and it names `reopenTab`, which the host classes irreversible. Wrong in
+   * both directions, and in the opposite direction to the runner — authoring and execution have to
+   * derive the set from the same answer or one of them is lying to the author.
+   *
+   * The seed can only ever NAME a verb for a rejection message, never win an acceptance: acceptance
+   * needs `revMap[verb]` to read "inverse" or "pure", and a verb the host does not serve is absent
+   * from `revMap` and therefore irreversible.
+   *
    * The step types with no verb at all (shell / stryke / applescript / batch / js / scheme) are
    * not a mirror of REV — they run a program or arbitrary code, so there is no verb for the host
    * to class. That is a property of the executor, and zpalette.js's runStep refuses the same set. */
@@ -395,11 +409,16 @@
     nextTab: 1, prevTab: 1, pinTab: 1, muteTab: 1, reload: 1
   };
   var NO_VERB = { shell: 1, stryke: 1, applescript: 1, batch: 1, js: 1, scheme: 1 };
-  // The bus verb a step becomes inside a transaction, or null when it has none.
-  function stepVerb(s) {
+  // The bus verb a step becomes inside a transaction, or null when it has none. `revMap` is the
+  // host's surface as loadRevMap reduces it ({ verb: revClass }); pass it and the host decides.
+  function stepVerb(s, revMap) {
     var t = (s && s.type) || 'url';
     if (NO_VERB[t]) return null;
-    if (t === 'action') return BUS_ACTIONS[s.value] ? 'browser.' + s.value : null;
+    if (t === 'action') {
+      var verb = 'browser.' + s.value;
+      if (revMap && revMap[verb]) return verb;             // the host serves it — authoritative
+      return BUS_ACTIONS[s.value] ? verb : null;           // seed: no answer yet, or not a verb
+    }
     if (t === 'host') {
       var o; try { o = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return null; }
       return (o && o.cmd) || null;
@@ -411,7 +430,7 @@
   function revProblems(steps, revMap) {
     var out = [];
     (steps || []).forEach(function (s, i) {
-      var verb = stepVerb(s);
+      var verb = stepVerb(s, revMap);
       if (!verb) {
         out.push({ index: i, type: s.type, verb: null, rev: 'irreversible',
           reason: 'a ' + ((TYPE_LABEL[s.type] || s.type)) + ' step is not a bus verb, so the host cannot undo it' });
