@@ -59,6 +59,7 @@
         zt('feeds.html',        'Feeds',         'RSS/Atom feed reader — add feeds, read items inline.', '📡'),
         zt('readinglist.html',  'Reading List',  'Saved pages to read later — mark read, open, remove.', '📑'),
         zt('sessions.html',     'Sessions',      'Named tiling-workspace sessions — CRUD + SVG previews.', '▤'),
+        zt('newtab.html',       'New Tab',       'Custom new-tab layouts — Speed Dial groups, widgets, backgrounds.', '▣'),
         zt('commands.html',     'Commands',      'Custom ⌘K palette commands (url / shell / js / scheme).', '⌘'),
         zt('triggers.html',     'Triggers',      'Regex-on-page-output triggers — run a step chain (shell / stryke / js / …) when page text matches.', '◎'),
         zt('pipes.html',        'Pipelines',     'Pane pipelines — reactive dataflow edges between tiled webviews (source → filter → sink).', '⇥'),

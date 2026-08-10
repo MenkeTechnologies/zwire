@@ -75,11 +75,23 @@ workspace layered on top:
   transaction opens rather than stranding one half-done, and the whole N-step
   unwind arrives as a single `browser.undo` frame — one native-messaging round
   trip, not N;
+- **custom new-tab layouts** — a port of Vivaldi's Start Page onto the zwire new
+  tab, and then some: named layouts you switch between (not one start page you
+  reconfigure), each with its own **Speed Dial groups**, **widget grid**,
+  navigation rail (any edge, or hidden) and background. Vivaldi's Speed Dial
+  appearance block is ported setting for setting — maximum columns (or no limit),
+  five thumbnail sizes, titles always / when-needed / never, the add button,
+  drag-to-reorder, per-dial custom thumbnails — alongside its widget model
+  (Date, Speed Dial, Search, Top Sites, Bookmarks, History, Feeds, Notes, Reading
+  List, Sessions, Webpage; add-once vs. repeatable, Regular/Tall sizes). Editing
+  happens **on the page** the way Vivaldi does it, and a **HUD layout manager**
+  (`pages/newtab.html`) adds the library view Vivaldi has no equivalent for:
+  previews of each layout's real grid, duplicate, and JSON import/export;
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 
 The HUD layer (`extensions/hud-internal`) is ~14,600 lines of extension code
-across 11 subsystems and 23 pages, assembled on the **`zgui-core`** shared GUI
+across 11 subsystems and 24 pages, assembled on the **`zgui-core`** shared GUI
 toolkit (260 `ZGui.*` components, a git submodule loaded straight from
 `lib/zgui-core/webui/`) and bridged to the **`zwire-host`** native agent (a
 single Rust binary, its own submodule). Under it, a **27-patch C++ fork**
@@ -342,6 +354,43 @@ Keyboard, Commands, Sessions, a **Hooks** page, CI, a **Host** console, a
 open from the **Dashboard** tile grid (kept off the crowded page nav bar). Every
 shortcut, and the tmux prefix itself, is remappable on the Keyboard page.
 
+**New Tab layouts (`newtab/` + `pages/newtab.html`).** The new tab is a *layout*,
+not a fixed page. A layout owns a nav rail of **Speed Dial groups**, a
+**background**, the **Speed Dial appearance** block, and a **widget grid** per
+group; you keep as many named layouts as you like and switch with one ⌘K command.
+
+Ported from Vivaldi's Start Page, setting for setting:
+
+| Vivaldi | zwire |
+|---|---|
+| Start Page navigation (show on internal pages / start pages / hide) | nav rail with the same three modes, positionable on any edge |
+| Speed Dial groups (bookmark folders) | groups, each with its own dials **and** its own widget grid |
+| Maximum Columns (n / single / No limit) | `0` = no limit, else 1–12 |
+| 5 thumbnail sizes | 5 sizes (96 → 248 px) |
+| Speed Dial titles: always / when needed / never | same three modes (when-needed hides behind a custom thumbnail) |
+| Show the Add button · reorder by drag and drop | same two toggles |
+| Select Custom Thumbnail | per-dial upload, downscaled before it is stored |
+| Widgets: Date, Bookmarks, Feeds, Notes, Top Sites, Webpage | same, plus History, Reading List and tmux Sessions |
+| add-once widgets vs. repeatable ones | enforced by the model, not the UI |
+| Widget Size → Regular / Tall | same, on the list widgets only |
+| Background: color / image | color, CSS gradient, or an uploaded image |
+
+Editing is inline the way Vivaldi does it — a **Widgets** picker, a **Customize**
+dialog that applies live, and an edit mode with drag-to-reorder for widgets and
+dials. What Vivaldi has no equivalent for is the **library**: `pages/newtab.html`
+lists every layout with an SVG preview of its real widget placement (computed by
+the same routine the page's CSS grid follows, so the preview cannot lie), and adds
+duplicate, per-layout export, and JSON import.
+
+The layouts live in the New Tab extension's own storage (`zb_ntp`), so open new
+tabs repaint the moment one changes; the HUD manager reaches them over the
+external-message bridge, and every write it makes is re-normalized by the same
+engine the page renders with. Widgets whose data belongs to the HUD extension
+(feeds, notes, reading list, sessions) are served over that bridge too, parsed by
+the HUD pages' own parsers rather than a second copy. Pre-layout installs are
+migrated once from the old `zb.tiles` list, by copy — the legacy key is left
+untouched.
+
 **Host console (`pages/host.html`).** A HUD tab that talks to the `zwire-host`
 native-messaging host directly — inspect and drive the native bridge from inside
 the browser.
@@ -389,9 +438,14 @@ suite and loaded **directly from the submodule path** — the HUD extension neve
 copies a `ZGui` module, because copies go stale. The New Tab extension is the one
 exception, and not by choice: Chrome loads each unpacked extension from its own
 directory and an extension cannot read a sibling's files, so `newtab/lib/` holds
-the handful of modules that page needs (`command-palette`, `fzf`, `util`, and the
-tmux overlay set). They are copies of the submodule's files at the same revision
-and are re-copied when the submodule moves. The tiling WM (`ZGui.tmux`), the ⌘K
+the handful of modules that page needs (`command-palette`, `fzf`, `util`, the
+`modal`/`toast`/`drag` set the layout editor runs on, and the tmux overlay set).
+They are copies of the submodule's files at the same revision and are re-copied
+when the submodule moves. The same constraint applies to zwire's own shared
+sources — `schemes.js`, `palette-cmds.js`, `cmd-defaults.js` and `zntp-core.js`
+exist as byte-identical copies in `newtab/` and `extensions/hud-internal/`; edit
+the `hud-internal` copy and re-copy, and `scripts/test.sh` fails the run if the
+two ever drift. The tiling WM (`ZGui.tmux`), the ⌘K
 palette (`ZGui.palette`), fuzzy find
 (`ZGui.fzf`), the scheme engine (`ZGui.colorscheme`), the powerline
 (`ZGui.powerline`), the store's product cards (`ZGui.productCard`), and the whole
@@ -422,10 +476,10 @@ without a host and silently hand them back to the browser's built-in downloader.
 | Layer | What it is |
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
-| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 23 HUD pages (incl. the Sessions manager, the Pipelines editor, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
+| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 24 HUD pages (incl. the Sessions manager, the Pipelines editor, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
 | **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (260 `webui/*` modules), a submodule loaded straight from path. Every HUD page composes `ZGui` components; zwire supplies only the glue. The New Tab extension cannot read another extension's directory, so `newtab/lib/` carries same-revision copies of the few modules it loads |
 | **Native host** | `extensions/hud-internal/native/zwire-host` — a single Rust binary (native-messaging host + Unix-socket daemon: sysmon, fs, exec, PTY, KV, hooks, OS ops), a submodule. Backs the Host console + powerline stats + the audio EQ/meters file bridge |
-| **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension (in-repo, not a submodule): the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally |
+| **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension (in-repo, not a submodule): the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally, plus the custom **layout** engine (`zntp-core.js`), its widgets (`widgets.js`) and its inline editor (`layout-edit.js`) |
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |
 | **Theme** | `theme/` — a colors-only Chrome theme. Present but **not** launcher-loaded — the fork's native color mixer (patch 0002) and the HUD skin own the palette, and a static theme applies last and would override them |
 | **Launcher** | `bin/zwire` — starts the base against `$ZWIRE_STATE/profile` with `newtab` + `zpwrchrome` + `hud-internal` loaded and `--extensions-on-chrome-urls` set (any dir missing a `manifest.json` is skipped, so a missing submodule degrades gracefully) |

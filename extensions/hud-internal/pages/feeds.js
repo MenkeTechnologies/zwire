@@ -35,7 +35,12 @@
     return { title: stripTags(feedTitle), items: items };
   }
   var ZBFeeds = { parseFeed: parseFeed, stripTags: stripTags, decode: decode };
+  // Exposed on whichever global loads this file: the HUD page (window), the headless
+  // test (an injected window), and the background worker (self) — the new-tab feeds
+  // widget asks the worker for parsed items, and the worker importScripts THIS parser
+  // instead of growing a second copy that would drift from the page's.
   if (typeof window !== 'undefined') window.ZBFeeds = ZBFeeds;
+  else if (typeof self !== 'undefined') self.ZBFeeds = ZBFeeds;
 
   if (typeof window === 'undefined' || !window.ZBHUD || typeof chrome === 'undefined' || !chrome.storage) return;   // headless
 

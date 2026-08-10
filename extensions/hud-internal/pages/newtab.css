@@ -1,0 +1,68 @@
+/* zwire HUD New Tab layouts — library cards with a grid preview, then the editor
+   for the selected layout. Themed off the active scheme like every HUD page. */
+
+.znt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.znt-bar-note { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+
+.znt-btn { background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px;
+           padding: 5px 10px; font: 12px "Share Tech Mono", Monaco, monospace; cursor: pointer; }
+.znt-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+.znt-btn.is-primary { color: var(--cyan); border-color: var(--cyan); }
+.znt-btn.is-on { color: var(--bg-primary); background: var(--cyan); border-color: var(--cyan); }
+.znt-btn.is-ghost { background: transparent; }
+.znt-btn.is-danger:hover { color: var(--accent); border-color: var(--accent); }
+.znt-btn.is-mini { padding: 3px 7px; }
+
+/* ------------------------------------------------------------------ library */
+.znt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.znt-card { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary);
+            padding: 12px; display: flex; flex-direction: column; gap: 9px; }
+.znt-card.is-active { border-color: var(--cyan); }
+.znt-card.is-sel { box-shadow: 0 0 0 1px var(--accent) inset; }
+.znt-card-top { display: flex; align-items: center; gap: 8px; }
+.znt-card-name { font: 600 14px "Orbitron", sans-serif; letter-spacing: 1px; color: var(--text); margin: 0; }
+.znt-badge { margin-left: auto; font-size: 10px; letter-spacing: 1.5px; color: var(--bg-primary);
+             background: var(--cyan); border-radius: 3px; padding: 2px 6px; }
+.znt-card-sub { font-size: 11px; color: var(--text-muted); }
+.znt-card-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.znt-svgwrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; padding: 6px; }
+.znt-svg { display: block; width: 100%; height: auto; }
+.znt-svg-w { fill: var(--cyan-dim); stroke: var(--cyan); stroke-width: 1; }
+.znt-svg-empty { fill: none; stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 3; }
+.znt-svg-g { fill: var(--cyan); font-size: 11px; }
+
+/* ------------------------------------------------------------------- editor */
+.znt-detail { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+.znt-detail-title { font: 600 13px "Orbitron", sans-serif; letter-spacing: 2px; color: var(--cyan);
+                    text-transform: uppercase; margin: 0 0 12px; }
+.znt-prefs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 18px; margin-bottom: 16px; }
+.znt-pref { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-dim); }
+.znt-pref-label { flex: 0 0 46%; }
+.znt-input { flex: 1; min-width: 0; background: var(--bg-card); color: var(--text); border: 1px solid var(--border);
+             border-radius: 4px; padding: 4px 7px; font: 12px "Share Tech Mono", monospace; outline: none; }
+.znt-input:focus { border-color: var(--cyan); }
+.znt-range { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.znt-range-out { flex: 0 0 22px; text-align: right; color: var(--cyan); font-size: 11px; }
+.znt-note { font-size: 11px; color: var(--text-muted); }
+
+.znt-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.znt-groupbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.znt-group-name { font: 600 12px "Orbitron", sans-serif; letter-spacing: 1.5px; color: var(--text); }
+
+.znt-sec { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary);
+           padding: 10px 12px; margin-bottom: 12px; }
+.znt-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.znt-sec-title { font: 600 11px "Orbitron", sans-serif; letter-spacing: 2px; text-transform: uppercase;
+                 color: var(--text-dim); margin: 0; }
+.znt-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); }
+.znt-row:first-of-type { border-top: none; }
+.znt-row-glyph { color: var(--cyan); flex: 0 0 16px; text-align: center; }
+.znt-row-name { flex: 0 0 110px; font-size: 12px; color: var(--text); }
+.znt-row-tools { margin-left: auto; display: flex; gap: 5px; align-items: center; }
+.znt-empty { padding: 14px; color: var(--text-muted); font-size: 12px; text-align: center; }
+
+@media (max-width: 720px) {
+  .znt-row { flex-wrap: wrap; }
+  .znt-row-name { flex: 1 0 auto; }
+}

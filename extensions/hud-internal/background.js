@@ -95,10 +95,98 @@ try {
     if (msg.type === 'zbAction' && msg.action) { execZbCmd(msg.action); sendResponse({ ok: true }); return; }
     // Live FX rates for the new-tab palette's inline currency conversion (see zbGetRates).
     if (msg.type === 'zwireGetRates') { getExchangeRates(sendResponse); return true; }
+    // Rows for the new tab's HUD-backed layout widgets (feeds / notes / reading list /
+    // sessions). That data lives in THIS extension — its storage, its readingList
+    // permission, its <all_urls> fetch — and an extension cannot read a sibling's.
+    if (msg.type === 'zbNtpData') { ntpData(msg.kind, msg.limit, msg.opts, sendResponse); return true; }
     // (theme toggles used to come through here from newtab; newtab now writes the
     // host directly, so those handlers are gone.)
   });
 } catch (e) {}
+
+/* ---- new-tab widget data (answers zbNtpData) --------------------------------
+ * The parsers here are the PAGES' own: pages/feeds.js hangs parseFeed on `self`
+ * when a worker imports it and pages/notes.js does the same with noteTitle, so a
+ * feed item or a note is titled identically whether you read it on the HUD page
+ * or in a new-tab widget. Every source answers the same row shape the widget
+ * renders: { title, url, sub }. */
+try { importScripts('pages/feeds.js', 'pages/notes.js'); } catch (e) { /* widgets degrade to an error row */ }
+
+function ntpPageUrl(file) { try { return chrome.runtime.getURL('pages/' + file); } catch (e) { return ''; } }
+function ntpWhen(ts) {
+  if (!ts) return '';
+  try { var d = new Date(ts); return isNaN(d) ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' }); } catch (e) { return ''; }
+}
+function ntpStored(key, cb) {
+  try { chrome.storage.local.get(key, function (o) { void chrome.runtime.lastError; cb((o && o[key]) || []); }); }
+  catch (e) { cb([]); }
+}
+
+function ntpData(kind, limit, opts, respond) {
+  var n = Math.max(1, Math.min(50, parseInt(limit, 10) || 8));
+  var o = opts || {};
+  if (kind === 'notes') {
+    ntpStored('zb_notes', function (notes) {
+      var title = (self.ZBNotes && self.ZBNotes.noteTitle) || function (x) { return (x && x.title) || 'Untitled'; };
+      var rows = notes.filter(function (x) { return x && x.type !== 'folder'; })
+        .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); })
+        .slice(0, n)
+        .map(function (x) { return { title: title(x), url: x.url || ntpPageUrl('notes.html'), sub: ntpWhen(x.ts) }; });
+      respond({ ok: true, rows: rows });
+    });
+    return;
+  }
+  if (kind === 'sessions') {
+    ntpStored('zb_tmux_sessions', function (sessions) {
+      var rows = sessions.slice(0, n).map(function (s) {
+        var panes = (s.windows || []).reduce(function (t, w) { return t + ((w.panes || []).length || 0); }, 0);
+        return { title: s.name || 'session', url: ntpPageUrl('sessions.html'), sub: panes + (panes === 1 ? ' pane' : ' panes') };
+      });
+      respond({ ok: true, rows: rows });
+    });
+    return;
+  }
+  if (kind === 'readinglist') {
+    try {
+      chrome.readingList.query({}, function (entries) {
+        if (chrome.runtime.lastError) { respond({ ok: false, err: 'reading list unavailable' }); return; }
+        var rows = (entries || [])
+          .sort(function (a, b) {
+            if (!!a.hasBeenRead !== !!b.hasBeenRead) return a.hasBeenRead ? 1 : -1;
+            return (b.creationTime || 0) - (a.creationTime || 0);
+          })
+          .slice(0, n)
+          .map(function (e) { return { title: e.title || e.url, url: e.url, sub: e.hasBeenRead ? '' : 'new' }; });
+        respond({ ok: true, rows: rows });
+      });
+    } catch (e) { respond({ ok: false, err: 'reading list unavailable' }); }
+    return;
+  }
+  if (kind === 'feeds') {
+    ntpStored('zb_feeds', function (feeds) {
+      var urls = o.feedUrl ? [o.feedUrl] : feeds;
+      if (!urls.length) { respond({ ok: true, rows: [] }); return; }
+      var parse = (self.ZBFeeds && self.ZBFeeds.parseFeed) || null;
+      if (!parse) { respond({ ok: false, err: 'feed parser unavailable' }); return; }
+      Promise.all(urls.slice(0, 12).map(function (u) {
+        return fetch(u).then(function (r) { return r.ok ? r.text() : ''; })
+          .then(function (xml) { return { url: u, feed: parse(xml) }; })
+          .catch(function () { return { url: u, feed: { title: '', items: [] } }; });
+      })).then(function (all) {
+        var rows = [];
+        all.forEach(function (f) {
+          (f.feed.items || []).forEach(function (it) {
+            rows.push({ title: it.title, url: it.link, sub: f.feed.title || '', _t: Date.parse(it.date || '') || 0 });
+          });
+        });
+        rows.sort(function (a, b) { return b._t - a._t; });
+        respond({ ok: true, rows: rows.slice(0, n).map(function (r) { return { title: r.title, url: r.url, sub: r.sub }; }) });
+      });
+    });
+    return;
+  }
+  respond({ ok: false, err: 'unknown widget source' });
+}
 
 // (Seeding storage from the native file on startup is no longer needed: the
 // theme subscription below receives a snapshot of the current scheme + ui the

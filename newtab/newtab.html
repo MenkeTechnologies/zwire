@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="newtab.css">
 </head>
 <body>
-  <div class="app">
+  <div class="app" id="app">
     <div class="crt-scanline"></div>
     <div class="crt-scanline-v"></div>
 
@@ -18,23 +18,21 @@
         <span class="brand-tag">// CHROMIUM · SUPERSET</span>
       </header>
 
-      <section class="clock">
-        <div id="time" class="time">--:--:--</div>
-        <div id="date" class="date">----</div>
-      </section>
+      <!-- Speed Dial groups; position + visibility come from the active layout -->
+      <nav id="ntp-nav" class="ntp-nav" aria-label="speed dial groups"></nav>
 
-      <form id="search" class="omni" autocomplete="off">
-        <span class="omni-prompt">&gt;_</span>
-        <input id="q" class="omni-input" type="text" placeholder="search or enter url" autofocus>
-        <button class="omni-go" type="submit">GO</button>
-      </form>
+      <!-- the active group's widget grid: clock, search, dials, lists, webpages -->
+      <section id="ntp-grid" class="ntp-grid" aria-label="widgets"></section>
 
-      <section id="tiles" class="tiles" aria-label="quick launch"></section>
-
-      <footer id="status" class="status">[ SYSTEM READY ]</footer>
+      <!-- layout switcher · groups · widget picker · customize · edit -->
+      <footer id="ntp-bar" class="ntp-bar"></footer>
     </main>
   </div>
 
+  <!-- layout model (shared verbatim with the HUD extension) -->
+  <script src="zntp-core.js"></script>
+  <!-- widget bodies, then the renderer that drives them -->
+  <script src="widgets.js"></script>
   <script src="newtab.js"></script>
   <script src="schemes.js"></script>
   <script src="scheme-sync.js"></script>
@@ -44,6 +42,11 @@
   <script src="lib/zgui/util.js"></script>
   <script src="lib/zgui/fzf.js"></script>
   <script src="lib/zgui/command-palette.js"></script>
+  <!-- dialogs + drag for the inline layout editor (zgui-core copies) -->
+  <script src="lib/zgui-core/webui/modal.js"></script>
+  <script src="lib/zgui-core/webui/toast.js"></script>
+  <script src="lib/zgui-core/webui/drag.js"></script>
+  <script src="layout-edit.js"></script>
   <script src="cmd-defaults.js"></script>
   <script src="palette-cmds.js"></script>
   <script src="palette.js"></script>

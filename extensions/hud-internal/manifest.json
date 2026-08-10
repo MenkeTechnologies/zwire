@@ -89,6 +89,14 @@
       "matches": [
         "<all_urls>"
       ]
+    },
+    {
+      "resources": [
+        "pages/*"
+      ],
+      "extension_ids": [
+        "gpoepnekoiplhkegjpocnpeijiefgieb"
+      ]
     }
   ],
   "content_scripts": [

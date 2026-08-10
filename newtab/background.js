@@ -14,12 +14,44 @@ chrome.action.onClicked.addListener(function () {
 // chrome.tabs.create that always works. tmux.html hosts the overlay and self-attaches the
 // session from its URL hash. Only hud-internal (our declared externally_connectable peer).
 var HUD_ID = 'omcgnnjfmbmpdlofklbpddkhnfibfhgg';   // zwire HUD Internal
+
+// The new-tab LAYOUTS live in this extension's storage (the page that renders them
+// must read them synchronously fast, and they are useless without it). The HUD's
+// layout manager is in the other extension, so it reads and writes them through
+// here. Every write is normalized by the same engine the page renders with, so the
+// manager cannot store a layout this page would refuse to draw.
+try { importScripts('zntp-core.js'); } catch (e) { /* the manager falls back to read-only */ }
+
 chrome.runtime.onMessageExternal.addListener(function (msg, sender, sendResponse) {
-  if (!sender || sender.id !== HUD_ID || !msg || msg.type !== 'zbOpenTmuxCarrier' || !msg.session) return;
-  try {
-    var url = chrome.runtime.getURL('tmux.html') + '#zbtmux=' + encodeURIComponent(JSON.stringify(msg.session));
-    chrome.tabs.create({ url: url }, function () { void chrome.runtime.lastError; });
-  } catch (e) { /* no-op */ }
-  try { sendResponse({ ok: true }); } catch (e) { /* no-op */ }
-  return true;
+  if (!sender || sender.id !== HUD_ID || !msg) return;
+  if (msg.type === 'zbOpenTmuxCarrier' && msg.session) {
+    try {
+      var url = chrome.runtime.getURL('tmux.html') + '#zbtmux=' + encodeURIComponent(JSON.stringify(msg.session));
+      chrome.tabs.create({ url: url }, function () { void chrome.runtime.lastError; });
+    } catch (e) { /* no-op */ }
+    try { sendResponse({ ok: true }); } catch (e) { /* no-op */ }
+    return true;
+  }
+  if (msg.type === 'zbNtpGet') {
+    try {
+      chrome.storage.local.get('zb_ntp', function (o) {
+        void chrome.runtime.lastError;
+        var N = self.ZWIRE_NTP;
+        var stored = o && o.zb_ntp;
+        sendResponse({ ok: true, config: N ? N.normalize(stored || {}) : stored });
+      });
+    } catch (e) { sendResponse({ ok: false, err: 'storage unavailable' }); }
+    return true;
+  }
+  if (msg.type === 'zbNtpSet' && msg.config) {
+    var N2 = self.ZWIRE_NTP;
+    if (!N2) { sendResponse({ ok: false, err: 'layout engine unavailable' }); return true; }
+    try {
+      chrome.storage.local.set({ zb_ntp: N2.normalize(msg.config) }, function () {
+        void chrome.runtime.lastError;
+        sendResponse({ ok: true });
+      });
+    } catch (e) { sendResponse({ ok: false, err: 'storage unavailable' }); }
+    return true;
+  }
 });

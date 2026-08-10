@@ -18,7 +18,8 @@
     ['APP STORE', 'store.html'],
     ['HISTORY', 'history.html'], ['DOWNLOADS', 'chrome://downloads'], ['BOOKMARKS', 'bookmarks.html'],
     ['CI', 'ci.html'], ['SHORTCUTS', 'keys.html'], ['EXT KEYS', 'extshortcuts.html'],
-    ['COMMANDS', 'commands.html'], ['TRIGGERS', 'triggers.html'], ['PIPELINES', 'pipes.html'], ['SESSIONS', 'sessions.html'], ['HOST', 'host.html'],
+    ['COMMANDS', 'commands.html'], ['TRIGGERS', 'triggers.html'], ['PIPELINES', 'pipes.html'], ['SESSIONS', 'sessions.html'],
+    ['LAYOUTS', 'newtab.html'], ['HOST', 'host.html'],
     ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
   var NATIVE_PAGES = [['FLAGS', 'chrome://flags']];
   // Extra palette-only destinations (not shown as nav buttons): more chrome://

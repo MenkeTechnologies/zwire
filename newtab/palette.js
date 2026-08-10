@@ -131,7 +131,36 @@
     PAGES.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { goCurrent(p[2]); } }); });
     SETTINGS.forEach(function (p) { out.push({ icon: '⚙', label: 'Settings: ' + p[0], detail: p[1], run: function () { goCurrent(p[1]); } }); });
     ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the browser', run: function () { setScheme(n); } }); });
+    layoutItems(out);
     return out;
+  }
+
+  /* New-tab LAYOUT commands. They only exist on this surface — the layout library
+   * and the inline editor both live on this page — so they are built here rather
+   * than in the shared palette-cmds providers, which must stay backend-agnostic.
+   * Built fresh on every open, so a layout added a moment ago is already listed. */
+  function layoutItems(out) {
+    var N = window.ZWIRE_NTP, NTP = window.ZBNTP, ED = window.ZBEdit;
+    var cfg = NTP && NTP.config ? NTP.config() : null;
+    if (!N || !cfg) return;                                    // palette opened on the tmux carrier, not the NTP
+    cfg.layouts.forEach(function (l) {
+      out.push({ icon: '▦', label: 'Layout: ' + l.name,
+        detail: l.id === cfg.activeId ? 'active layout' : 'switch the new tab to this layout',
+        run: function () { NTP.commit(N.setActiveLayout(NTP.config(), l.id)); } });
+    });
+    var active = N.activeLayout(cfg);
+    if (active.pages.length > 1) {
+      active.pages.forEach(function (p) {
+        out.push({ icon: '▤', label: 'Group: ' + p.name, detail: 'show this Speed Dial group',
+          run: function () { NTP.commit(N.setActivePage(NTP.config(), active.id, p.id)); } });
+      });
+    }
+    if (!ED) return;
+    out.push({ icon: '＋', label: 'New tab: add a widget', detail: 'widget picker', run: ED.widgetPicker });
+    out.push({ icon: '⚙', label: 'New tab: customize start page', detail: 'navigation, background, Speed Dial', run: ED.quickSettings });
+    out.push({ icon: '✎', label: 'New tab: ' + (ED.isEditing() ? 'leave edit mode' : 'edit layout'), detail: 'drag widgets and dials', run: function () { ED.setEditing(!ED.isEditing()); } });
+    out.push({ icon: '▣', label: 'New tab: new layout', detail: 'start a fresh layout', run: ED.newLayout });
+    out.push({ icon: '⧉', label: 'New tab: manage layouts', detail: 'the HUD layout library', run: ED.openManager });
   }
   function frecentItems(cb) {
     if (!chrome.history) { cb([]); return; }

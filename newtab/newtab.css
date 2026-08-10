@@ -114,7 +114,23 @@ body {
   border-radius: 4px; box-shadow: 0 0 8px var(--cyan-glow), inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
-.hud { position: relative; z-index: 1; width: min(760px, 92vw); text-align: center; }
+/* The layout is a grid so the nav rail can sit on any edge (Vivaldi's Start Page
+   navigation position) without the markup changing. margin:auto centers it without
+   the flex-centering overflow clip a tall layout would hit. */
+.hud { position: relative; z-index: 1; width: min(1180px, 94vw); margin: auto; text-align: center;
+       display: grid; gap: 22px; grid-template-areas: "brand" "nav" "grid" "bar"; }
+.ntp-nav { grid-area: nav; } .ntp-grid { grid-area: grid; } .ntp-bar { grid-area: bar; }
+.brand { grid-area: brand; }
+.app.nav-bottom .hud { grid-template-areas: "brand" "grid" "nav" "bar"; }
+.app.nav-left .hud  { grid-template-columns: max-content minmax(0, 1fr);
+                      grid-template-areas: "brand brand" "nav grid" "bar bar"; }
+.app.nav-right .hud { grid-template-columns: minmax(0, 1fr) max-content;
+                      grid-template-areas: "brand brand" "grid nav" "bar bar"; }
+.app.nav-left .ntp-nav, .app.nav-right .ntp-nav { flex-direction: column; align-items: stretch; }
+.app.nav-hidden .ntp-nav { display: none; }
+/* A wallpaper replaces the grid backdrop, so the CRT gradients don't fight it. */
+.app.ntp-has-bg { background-size: cover; background-position: center; background-repeat: no-repeat; }
+.app.ntp-has-bg .hud { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
 
 /* --- brand (Orbitron shimmer, mirrors .docs-title-block h1) --- */
 .brand { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 40px; }
@@ -134,15 +150,14 @@ body {
 @keyframes logo-shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
 .brand-tag { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); }
 
-/* --- clock --- */
-.clock { margin-bottom: 34px; }
-.time {
-  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 76px; line-height: 1;
+/* --- clock widget --- */
+.ntp-time {
+  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(34px, 6vw, 76px); line-height: 1;
   letter-spacing: 4px; color: var(--text); font-variant-numeric: tabular-nums;
   text-shadow: 0 0 24px var(--cyan-glow), 0 0 4px var(--cyan-glow);
 }
-.date { margin-top: 12px; font-size: 14px; letter-spacing: 5px; color: var(--accent);
-        text-transform: uppercase; }
+.ntp-date { margin-top: 12px; font-size: 14px; letter-spacing: 5px; color: var(--accent);
+            text-transform: uppercase; }
 
 /* --- omnibox (doc-card border + cyan glow, sharp 2px radius) --- */
 .omni {
@@ -174,24 +189,143 @@ body {
 .omni-go:hover { background: rgba(5, 217, 232, 0.08); box-shadow: 0 0 15px var(--cyan-glow); transform: translateY(-1px); }
 .omni-go:active { transform: translateY(1px) scale(0.98); }
 
-/* --- quick-launch tiles (doc-card style) --- */
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px; margin-top: 34px; }
-.tile {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 18px 8px; text-decoration: none;
+/* ===================== layout: nav rail, widget grid, dials ==================== */
+
+/* --- Speed Dial group rail (Vivaldi's Start Page navigation) --- */
+.ntp-nav { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.ntp-navbtn {
+  font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 1.5px;
+  text-transform: uppercase; cursor: pointer; padding: 7px 14px; border-radius: 2px;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text-dim);
+  transition: color .18s, border-color .18s, box-shadow .18s;
+}
+.ntp-navbtn:hover { color: var(--text); border-color: var(--cyan); }
+.ntp-navbtn.is-active { color: var(--bg-primary); background: var(--cyan); border-color: var(--cyan);
+                        box-shadow: 0 0 16px var(--cyan-glow); }
+
+/* --- widget grid: 4 columns, a widget spans 1..4 and doubles height when "Tall" --- */
+.ntp-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.ntp-grid .span-1 { grid-column: span 1; } .ntp-grid .span-2 { grid-column: span 2; }
+.ntp-grid .span-3 { grid-column: span 3; } .ntp-grid .span-4 { grid-column: span 4; }
+.ntp-w { position: relative; min-width: 0; text-align: left; }
+.ntp-w-body { min-width: 0; }
+/* Card chrome for the data widgets; the hero widgets (clock, search, dials) stay bare
+   so the page still reads as the minimal HUD it was. */
+.ntp-w-topsites, .ntp-w-bookmarks, .ntp-w-history, .ntp-w-feeds,
+.ntp-w-notes, .ntp-w-readinglist, .ntp-w-sessions, .ntp-w-webpage {
+  background-color: var(--bg-card);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 50%);
+  border: 1px solid var(--border); border-radius: 2px; padding: 14px 16px;
+}
+.ntp-w.is-tall .ntp-list { max-height: 520px; }
+.ntp-w-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+              border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.ntp-w-glyph { color: var(--cyan); }
+.ntp-w-title { font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 11px;
+               letter-spacing: 2px; text-transform: uppercase; color: var(--text); }
+.ntp-w-sub { font-size: 11px; color: var(--text-muted); margin-left: auto;
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.ntp-w-open { margin-left: 8px; color: var(--cyan); text-decoration: none; }
+.ntp-w-err { color: var(--red); font-size: 12px; }
+.ntp-empty { grid-column: 1 / -1; color: var(--text-muted); font-size: 13px; letter-spacing: 1px; padding: 40px 0; }
+
+/* --- list rows (top sites / bookmarks / history / feeds / notes / …) --- */
+.ntp-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+.ntp-list-empty { color: var(--text-muted); font-size: 12px; padding: 6px 2px; }
+.ntp-row { display: flex; align-items: center; gap: 9px; padding: 5px 6px; border-radius: 2px;
+           color: var(--text-dim); font-size: 13px; text-decoration: none; min-width: 0; }
+.ntp-row:hover { background: var(--bg-hover); color: var(--text); }
+.ntp-row-ic { width: 16px; height: 16px; display: grid; place-items: center; flex: 0 0 16px; color: var(--cyan); }
+.ntp-fav { width: 16px; height: 16px; }
+.ntp-row-t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ntp-row-s { color: var(--text-muted); font-size: 11px; flex: 0 0 auto; }
+
+/* --- speed dials --- */
+.ntp-dials { display: grid; gap: 14px; justify-content: center; }
+.ntp-dial {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 8px;
+  text-decoration: none; cursor: pointer;
   background-color: var(--bg-card);
   background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 50%);
   border: 1px solid var(--border); border-radius: 2px; color: var(--text-dim);
-  font-size: 12px; letter-spacing: 0.5px; transition: all 0.2s;
+  font-size: 12px; letter-spacing: 0.5px; transition: border-color .2s, color .2s, box-shadow .2s, transform .2s;
 }
-.tile:hover { border-color: var(--cyan); color: var(--text); box-shadow: 0 0 18px var(--cyan-dim); transform: translateY(-2px); }
-.tile-glyph {
-  width: 42px; height: 42px; display: grid; place-items: center; border-radius: 2px;
-  background: var(--bg-secondary); border: 1px solid var(--border-glow);
-  font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 15px; color: var(--cyan);
-}
+.ntp-dial:hover { border-color: var(--cyan); color: var(--text); box-shadow: 0 0 18px var(--cyan-dim); transform: translateY(-2px); }
+.ntp-dial-thumb { width: 100%; display: grid; place-items: center; overflow: hidden;
+                  background: var(--bg-secondary); border: 1px solid var(--border-glow); border-radius: 2px; }
+.ntp-dial-img { width: 100%; height: 100%; object-fit: cover; }
+.ntp-dial-fav { width: 40%; max-width: 56px; }
+.ntp-dial-glyph { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 18px; color: var(--cyan); }
+.ntp-dial-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ntp-dial-add { border-style: dashed; }
 
-.status {
-  margin-top: 36px; font-family: 'Share Tech Mono', monospace;
-  font-size: 12px; letter-spacing: 4px; color: var(--text-muted);
+/* --- webpage widget --- */
+.ntp-frame { width: 100%; height: 260px; border: 1px solid var(--border); border-radius: 2px; background: #fff; }
+.ntp-w.is-tall .ntp-frame { height: 560px; }
+
+/* --- bottom bar: layout switcher, groups, widgets, customize, edit --- */
+.ntp-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+           padding-top: 6px; }
+.ntp-bar-btn {
+  font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1.2px;
+  text-transform: uppercase; cursor: pointer; padding: 7px 13px; border-radius: 2px;
+  border: 1px solid var(--border); background: transparent; color: var(--text-dim); transition: all .2s;
+}
+.ntp-bar-btn:hover { color: var(--text); border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-dim); }
+.ntp-bar-btn.is-layout { color: var(--cyan); border-color: var(--border-glow); }
+.ntp-bar-btn.is-on { color: var(--bg-primary); background: var(--accent); border-color: var(--accent); }
+.ntp-bar-name { text-transform: none; letter-spacing: 1px; }
+
+/* --- edit mode --- */
+.app.is-editing .ntp-w { outline: 1px dashed var(--border-glow); outline-offset: 4px; }
+.ntp-w-edit { position: absolute; top: -10px; right: -6px; display: flex; gap: 4px; z-index: 2; }
+.ntp-w-grip, .ntp-w-menu {
+  width: 22px; height: 22px; display: grid; place-items: center; cursor: grab;
+  border: 1px solid var(--cyan); border-radius: 2px; background: var(--bg-card);
+  color: var(--cyan); font-size: 12px; line-height: 1;
+}
+.ntp-w-menu { cursor: pointer; }
+.app.is-editing .ntp-dial { cursor: grab; }
+
+/* --- editor dialogs (inside ZGui.modal) --- */
+.ntp-form { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.ntp-form-row { display: flex; align-items: center; gap: 12px; }
+.ntp-form-label { flex: 0 0 40%; font-size: 12px; letter-spacing: 1px; color: var(--text-dim); }
+.ntp-form-input, .ntp-form-range, .ntp-form-file { flex: 1; min-width: 0; }
+.ntp-form-input {
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 2px;
+  color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 13px; padding: 7px 9px;
+}
+.ntp-form-out { flex: 0 0 34px; text-align: right; color: var(--cyan); font-size: 12px; }
+.ntp-form-hint { font-size: 11px; color: var(--text-muted); margin-top: -6px; }
+.ntp-menu, .ntp-picker { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.ntp-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.ntp-menu-item, .ntp-pick {
+  display: flex; align-items: center; gap: 10px; cursor: pointer; text-align: left;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 2px;
+  background: var(--bg-card); color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 13px;
+}
+.ntp-menu-item:hover, .ntp-pick:not(:disabled):hover { border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan-dim); }
+.ntp-menu-item.is-active { border-color: var(--cyan); color: var(--cyan); }
+.ntp-menu-item.is-danger { color: var(--accent); }
+.ntp-menu-sub { margin-left: auto; color: var(--text-muted); font-size: 11px;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+.ntp-pick { flex-direction: column; align-items: flex-start; gap: 4px; }
+.ntp-pick.is-taken { opacity: 0.45; cursor: not-allowed; }
+.ntp-pick-glyph { color: var(--cyan); font-size: 16px; }
+.ntp-pick-label { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 1.5px; }
+.ntp-pick-sub { font-size: 11px; color: var(--text-muted); }
+
+/* Narrow windows (a tiled pane, a small display) collapse the grid rather than
+   letting a 4-across row squeeze every widget into an unreadable column. */
+@media (max-width: 900px) {
+  .ntp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ntp-grid .span-3, .ntp-grid .span-4 { grid-column: span 2; }
+}
+@media (max-width: 560px) {
+  .ntp-grid { grid-template-columns: minmax(0, 1fr); }
+  .ntp-grid .span-2, .ntp-grid .span-3, .ntp-grid .span-4 { grid-column: span 1; }
+  .app.nav-left .hud, .app.nav-right .hud {
+    grid-template-columns: minmax(0, 1fr); grid-template-areas: "brand" "nav" "grid" "bar";
+  }
 }

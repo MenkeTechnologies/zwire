@@ -31,7 +31,10 @@
   function folders(notes) { return (notes || []).filter(function (n) { return n.type === 'folder'; }); }
 
   var ZBNotes = { childrenOf: childrenOf, byId: byId, descendantIds: descendantIds, removeNode: removeNode, firstLine: firstLine, noteTitle: noteTitle, matchNote: matchNote, folders: folders };
+  // window on the HUD page and in the headless test; self in the background worker,
+  // which reuses noteTitle() to label rows for the new tab's Notes widget.
   if (typeof window !== 'undefined') window.ZBNotes = ZBNotes;
+  else if (typeof self !== 'undefined') self.ZBNotes = ZBNotes;
 
   if (typeof window === 'undefined' || !window.ZBHUD || typeof chrome === 'undefined' || !chrome.storage) return;   // headless: helpers only
 
