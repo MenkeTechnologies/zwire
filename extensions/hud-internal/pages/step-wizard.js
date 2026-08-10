@@ -391,11 +391,12 @@
    * surface, so membership in it — not a list here — decides whether an `action` step has a verb at
    * all. The list below is a SEED for the window before the host answers (and for a host that is
    * absent): the eleven ids it was hand-maintained at. It drifted exactly as predicted — the host
-   * serves 37 `browser.*` verbs and this named 11, so the wizard refused to save `goBack`, `zoomIn`,
-   * `moveTabLeft`, `closeRight`, `unpinTab` and 20 more that zpalette.js's runner executes and the
-   * host undoes perfectly; and it names `reopenTab`, which the host classes irreversible. Wrong in
-   * both directions, and in the opposite direction to the runner — authoring and execution have to
-   * derive the set from the same answer or one of them is lying to the author.
+   * serves several times as many `browser.*` verbs as this named, so the wizard refused to save
+   * `goBack`, `zoomIn`, `moveTabLeft`, `closeRight`, `unpinTab` and every other verb that
+   * zpalette.js's runner executes and the host undoes perfectly; and it names `reopenTab`, which the
+   * host classes irreversible. Wrong in both directions, and in the opposite direction to the
+   * runner — authoring and execution have to derive the set from the same answer or one of them is
+   * lying to the author. (No count is written down here: it moves whenever a verb is classified.)
    *
    * The seed can only ever NAME a verb for a rejection message, never win an acceptance: acceptance
    * needs `revMap[verb]` to read "inverse" or "pure", and a verb the host does not serve is absent

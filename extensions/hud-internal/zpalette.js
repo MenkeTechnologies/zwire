@@ -333,10 +333,11 @@
   // The SEED is what a chain can use before the host has answered — the eleven this list was
   // hand-maintained at. It is replaced wholesale by the host's own `browser.*` surface on first
   // contact (loadBusActions), because hand-mirroring drifts and this copy had: the host declares
-  // 37 reversible browser verbs and this named 11, so a trigger chain was refused `goBack`,
-  // `zoomIn`, `moveTabLeft`, `closeRight`, `unpinTab` and 21 more that the host can undo perfectly
-  // — and it named `reopenTab`, which the host's REV table does NOT carry, so that one was routed
-  // to the host only to be refused there. Wrong in both directions.
+  // several times as many reversible browser verbs as this named, so a trigger chain was refused
+  // `goBack`, `zoomIn`, `moveTabLeft`, `closeRight`, `unpinTab` and every other verb the host can
+  // undo perfectly — and it named `reopenTab`, which the host's REV table does NOT carry, so that
+  // one was routed to the host only to be refused there. Wrong in both directions. (The size of
+  // the host's set is not written down here on purpose: it moves whenever a verb is classified.)
   var BUS_ACTIONS = {
     newTab: 1, newWindow: 1, duplicateTab: 1, reopenTab: 1, closeTab: 1, closeOthers: 1,
     nextTab: 1, prevTab: 1, pinTab: 1, muteTab: 1, reload: 1

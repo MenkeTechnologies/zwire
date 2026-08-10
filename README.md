@@ -210,7 +210,9 @@ a small seed used for the moment before the host has answered (and for a host th
 absent, where nothing is accepted anyway). That matters because the two halves used to
 disagree: the executor mirrored eleven ids and refused the rest at run time, and once
 it started asking the host, the authoring check was left mirroring the same eleven and
-refused at *save* time 27 of the 37 browser verbs the host can revert.
+refused at *save* time nearly every browser verb the host can revert. Neither half
+records how many those are — the host's table grows as verbs are classified, and a
+number written down here would be wrong by the next release.
 
 **Pane pipelines (`pages/pipes.html`).** Where a trigger's sink is a step chain,
 a pipeline's sink is *another pane*. A pipeline is a persisted, reactive dataflow
