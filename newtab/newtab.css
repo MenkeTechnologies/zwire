@@ -117,7 +117,10 @@ body {
 /* The layout is a grid so the nav rail can sit on any edge (Vivaldi's Start Page
    navigation position) without the markup changing. margin:auto centers it without
    the flex-centering overflow clip a tall layout would hit. */
-.hud { position: relative; z-index: 1; width: min(1180px, 94vw); margin: auto; text-align: center;
+/* 100%, not 94vw: .app pads 24px a side, and a vw-sized child ignores that padding,
+   so a narrow window pushed the page into a horizontal scroll. 100% resolves against
+   .app's content box, which already has the padding taken out. */
+.hud { position: relative; z-index: 1; width: min(1180px, 100%); margin: auto; text-align: center;
        display: grid; gap: 22px; grid-template-areas: "brand" "nav" "grid" "bar"; }
 .ntp-nav { grid-area: nav; } .ntp-grid { grid-area: grid; } .ntp-bar { grid-area: bar; }
 .brand { grid-area: brand; }
@@ -150,14 +153,18 @@ body {
 @keyframes logo-shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
 .brand-tag { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); }
 
-/* --- clock widget --- */
+/* --- clock widget ---
+   HH:MM:SS is 8 glyphs plus letter-spacing, so it needs roughly a fifth of its own
+   width per glyph-em to fit. Sized in cqi (percent of the widget, not the window):
+   full span it hits the 76px ceiling, one column of four it shrinks to fit instead
+   of running across the widget next door. Same for the date line. */
 .ntp-time {
-  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(34px, 6vw, 76px); line-height: 1;
-  letter-spacing: 4px; color: var(--text); font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 24px var(--cyan-glow), 0 0 4px var(--cyan-glow);
+  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(24px, 17cqi, 76px); line-height: 1;
+  letter-spacing: clamp(1px, 0.9cqi, 4px); color: var(--text); font-variant-numeric: tabular-nums;
+  white-space: nowrap; text-shadow: 0 0 24px var(--cyan-glow), 0 0 4px var(--cyan-glow);
 }
-.ntp-date { margin-top: 12px; font-size: 14px; letter-spacing: 5px; color: var(--accent);
-            text-transform: uppercase; }
+.ntp-date { margin-top: 12px; font-size: clamp(9px, 3.2cqi, 14px); letter-spacing: clamp(1px, 1.1cqi, 5px);
+            color: var(--accent); text-transform: uppercase; white-space: nowrap; }
 
 /* --- omnibox (doc-card border + cyan glow, sharp 2px radius) --- */
 .omni {
@@ -173,13 +180,18 @@ body {
   0%,100% { box-shadow: 0 0 20px var(--cyan-glow), 0 0 4px var(--cyan-glow); border-color: var(--cyan); }
   50%     { box-shadow: 0 0 40px var(--cyan-glow), 0 0 12px var(--magenta-glow); border-color: var(--accent); }
 }
-.omni-prompt { color: var(--green); font-weight: 700; font-size: 18px; }
+.omni-prompt { flex: 0 0 auto; color: var(--green); font-weight: 700; font-size: 18px; }
+/* min-width:0 is load-bearing: a flex item defaults to min-width:auto, which is its
+   INTRINSIC width, so the input refused to shrink below its placeholder and shoved
+   the GO button out through the right border whenever the widget was narrower than a
+   full row. With it, the input gives up width first and the button stays inside. */
 .omni-input {
-  flex: 1; background: transparent; border: none; outline: none; color: var(--text);
-  font-family: 'Share Tech Mono', monospace; font-size: 17px; letter-spacing: 0.5px;
+  flex: 1 1 0; min-width: 0; background: transparent; border: none; outline: none; color: var(--text);
+  font-family: 'Share Tech Mono', monospace; font-size: clamp(12px, 2.4cqi, 17px); letter-spacing: 0.5px;
 }
 .omni-input::placeholder { color: var(--text-muted); }
 .omni-go {
+  flex: 0 0 auto; white-space: nowrap;
   font-family: 'Share Tech Mono', monospace; font-size: 11px; font-weight: 600;
   letter-spacing: 1.2px; text-transform: uppercase; cursor: pointer;
   padding: 8px 16px; border-radius: 2px; border: 1px solid var(--cyan);
@@ -212,7 +224,12 @@ body {
    clock beside a centred dial block and a centred nav pill reads as three different
    layouts stacked. Only the list widgets below opt out, because a column of links
    has to start at a common left edge to be readable. */
-.ntp-w { position: relative; min-width: 0; text-align: center; }
+/* Each widget is a CONTAINER QUERY context, so its contents size against the cell
+   they were given rather than the window. A widget dropped into one column of four
+   is a quarter as wide as the same widget at full span, and anything sized off the
+   viewport (a clock at 6vw, an omnibox that refuses to shrink) overflowed straight
+   across its neighbour. cqi below = 1% of THIS widget's width. */
+.ntp-w { position: relative; min-width: 0; text-align: center; container-type: inline-size; }
 .ntp-w-body { min-width: 0; }
 /* Card chrome for the data widgets; the hero widgets (clock, search, dials) stay bare
    so the page still reads as the minimal HUD it was. */
@@ -252,7 +269,9 @@ body {
 .ntp-row:hover { background: var(--bg-hover); color: var(--text); }
 .ntp-row-ic { width: 16px; height: 16px; display: grid; place-items: center; flex: 0 0 16px; color: var(--cyan); }
 .ntp-fav { width: 16px; height: 16px; }
-.ntp-row-t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Same min-width:auto trap as the omnibox input: without min-width:0 a long title
+   sets the row's floor and the whole list pushes past the card instead of eliding. */
+.ntp-row-t { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ntp-row-s { color: var(--text-muted); font-size: 11px; flex: 0 0 auto; }
 
 /* --- speed dials ---
