@@ -20,11 +20,11 @@
     ['CI', 'ci.html'], ['SHORTCUTS', 'keys.html'], ['EXT KEYS', 'extshortcuts.html'],
     ['COMMANDS', 'commands.html'], ['TRIGGERS', 'triggers.html'], ['PIPELINES', 'pipes.html'], ['SESSIONS', 'sessions.html'],
     ['LAYOUTS', 'newtab.html'], ['HOST', 'host.html'],
-    ['SYSTEM', 'version.html'], ['NEW TAB', 'chrome://newtab']];
-  var NATIVE_PAGES = [['FLAGS', 'chrome://flags']];
+    ['SYSTEM', 'version.html']];
   // Extra palette-only destinations (not shown as nav buttons): more chrome://
   // internals + the web stores. External (http) targets open in a new tab.
-  var MORE = [['Passwords', 'chrome://password-manager'],
+  var MORE = [['New tab', 'chrome://newtab'], ['Flags', 'chrome://flags'],
+    ['Passwords', 'chrome://password-manager'],
     ['Inspect devices', 'chrome://inspect'], ['Net export', 'chrome://net-export'], ['Policy', 'chrome://policy'],
     ['Components', 'chrome://components'], ['All chrome:// pages', 'chrome://about'],
     ['Site settings', 'chrome://settings/content'], ['Chrome Web Store', 'https://chromewebstore.google.com/'],
@@ -232,7 +232,7 @@
   }
   function paletteNav() {
     // palette opens the page in a NEW tab (the nav bar still navigates in place).
-    return PAGES.concat(NATIVE_PAGES).concat(MORE).map(function (p) {
+    return PAGES.concat(MORE).map(function (p) {
       return { label: 'Go: ' + p[0], hint: p[1], run: function () { goNewTab(p[1]); } };
     });
   }
@@ -393,10 +393,9 @@
       '.zb-logo .ti{color:var(--accent);letter-spacing:3px;font-size:18px;text-shadow:0 0 10px var(--accent-glow);}',
       '.zb-filter{margin-left:auto;min-width:min(320px,45vw);}',
       '.zb-filter .zg-searchbox{width:100%;}',
-      '.zb-navrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:12px 0 10px;}',
+      '.zb-navrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0 8px;}',
       '.zb-navrow .zs-btn-mini.zg-nav-native{opacity:.6;}',
       '.zb-navrow .zs-btn-mini.zg-nav-native:hover{opacity:1;}',
-      '.zb-navsep{width:1px;height:18px;background:var(--border);margin:0 4px;}',
       '.zb-main{padding:16px 22px 48px;}'
     ].join('');
     document.head.appendChild(s);
@@ -483,8 +482,6 @@
     // cross-page nav row
     var navrow = el('nav', 'zb-navrow');
     navActions(opts.current).forEach(function (b) { navrow.appendChild(b); });
-    navrow.appendChild(el('span', 'zb-navsep'));
-    NATIVE_PAGES.forEach(function (p) { navrow.appendChild(navButton(p[0], p[1], opts.current)); });
     header.appendChild(navrow);
     app.appendChild(header);
     // scrollable main content the page owns
@@ -648,6 +645,6 @@
     } catch (e) {}
   }
 
-  window.ZBHUD = { PAGES: PAGES, NATIVE_PAGES: NATIVE_PAGES, mount: mount, go: go,
+  window.ZBHUD = { PAGES: PAGES, mount: mount, go: go,
     navButton: navButton, HOST: HOST, publishUi: publishUi, matcher: matcher, runZbAction: runZbAction };
 })();
