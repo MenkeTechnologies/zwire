@@ -191,6 +191,16 @@ fi
 command rm -f /tmp/zwire-hud-trg.$$
 echo
 
+cyber_section "NEW-TAB LAYOUTS (store invariants + url gate + Vivaldi geometry)"
+if node tests/ntp-layout.mjs 2>/tmp/zwire-hud-ntp.$$; then
+  cyber_ok "new-tab layouts nominal"
+else
+  FAIL=1; cyber_fail "new-tab layouts compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-ntp.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-ntp.$$
+echo
+
 cyber_section "NATIVE HOST (rust build)"
 if command -v cargo >/dev/null 2>&1; then
   if ( cd native/zwire-host && cargo build --quiet ) 2>/tmp/zwire-hud-rs.$$; then

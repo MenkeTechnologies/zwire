@@ -40,6 +40,29 @@ else
 fi
 echo
 
+cyber_section "SHARED-FILE PARITY (newtab/ vs extensions/hud-internal/)"
+# Chrome loads each unpacked extension from its own directory and an extension cannot
+# read a sibling's files, so a handful of shared sources exist as byte-identical copies
+# in both trees (README §architecture). Nothing enforced that: editing one copy and
+# forgetting the other silently forks the two surfaces — the HUD palette and the new-tab
+# palette disagreeing about a command, or the layout engine validating differently on
+# each side. Compare them here so the drift is a test failure, not a bug report.
+DUPES=(schemes.js palette-cmds.js cmd-defaults.js zntp-core.js)
+DUP_BAD=0
+for f in "${DUPES[@]}"; do
+  if [[ ! -f "newtab/$f" || ! -f "extensions/hud-internal/$f" ]]; then
+    DUP_BAD=$((DUP_BAD + 1)); FAIL=1
+    echo -e "  ${R}✗${N} $f — missing on one side"
+  elif ! command diff -q "newtab/$f" "extensions/hud-internal/$f" >/dev/null; then
+    DUP_BAD=$((DUP_BAD + 1)); FAIL=1
+    echo -e "  ${R}✗${N} $f — copies have drifted"
+    command diff "extensions/hud-internal/$f" "newtab/$f" | head -6 | command sed 's/^/      /'
+  fi
+done
+echo -e "  ${D}compared${N} ${W}${#DUPES[@]}${N}  ${D}drifted${N} ${R}${DUP_BAD}${N}"
+[[ "$DUP_BAD" == "0" ]] && cyber_ok "shared copies in sync" || cyber_fail "shared copies drifted"
+echo
+
 cyber_section "EXTENSION SUITES"
 for ext in extensions/hud-internal extensions/zpwrchrome; do
   # A bundled extension that has lost its package.json (or its test script) used to be skipped
