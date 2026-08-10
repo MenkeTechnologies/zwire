@@ -15,11 +15,11 @@
 
   var PRODUCTS = [
     // ---- Desktop Apps -------------------------------------------------------
-    { id: 'zmusic',      glyph: 'MU', name: 'zmusic',      category: 'Desktop Apps', badge: 'WIP',
+    { id: 'zmusic',      glyph: 'MU', name: 'zmusic',      category: 'Desktop Apps',
       tag: 'Play-along instrument trainer graded against your own files; a Melodics superset.', pills: ['Tauri v2', 'JUCE sidecar'] },
-    { id: 'ztorrent',    glyph: 'BT', name: 'ztorrent',    category: 'Desktop Apps', badge: 'WIP',
+    { id: 'ztorrent',    glyph: 'BT', name: 'ztorrent',    category: 'Desktop Apps',
       tag: 'BitTorrent client — queue, seeding limits, RPC; replaces Transmission.', pills: ['Tauri v2', 'Transmission RPC'] },
-    { id: 'zlatex',      glyph: 'LX', name: 'zlatex',      category: 'Desktop Apps', badge: 'WIP',
+    { id: 'zlatex',      glyph: 'LX', name: 'zlatex',      category: 'Desktop Apps',
       tag: 'LaTeX equation editor — TeX box-and-glue in Rust, no TeX install.', pills: ['Tauri v2', 'No TeX install'] },
     { id: 'zpdf',        glyph: 'P',  name: 'zpdf',        category: 'Desktop Apps', badge: 'NEW',
       tag: 'PDF editor — edit, annotate, sign; replaces Acrobat & Preview.', pills: ['Tauri v2', 'Rust'] },
@@ -72,6 +72,7 @@
   // Any id not listed here (e.g. zpwr-daw, which has no shot yet) falls back to
   // its glyph.
   var HAS_SHOT = [
+    'zmusic', 'ztorrent', 'zlatex',
     'zpdf', 'zphoto', 'zoffice', 'zemail', 'zstation', 'audio-haxor',
     'traderview', 'ztranslator', 'zcite', 'zreq', 'ztunnel', 'zthrottle', 'zgo', 'zftp',
     'zcontainer', 'zterminal', 'zpwr-synth', 'zpwr-fx', 'zpwr-midi-fx'
