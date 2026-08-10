@@ -166,9 +166,13 @@
         if (it && it.run) {
           // zwire: fire the palette-command lifecycle hook (guarded — no-op
           // outside an extension context, e.g. zgo/standalone web use of ZGui).
+          // `id` is the stable slug and is what a hook should match on; `command`
+          // stays for display and for rows that predate the id contract. Matching on
+          // the label alone made every bound hook locale-dependent — the label is the
+          // translatable half of a row, the id is the half that never moves.
           try {
             if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
-              chrome.runtime.sendMessage({ type: "zbFireHook", event: "palette-command", payload: { command: it.label || it.name || "" } }, function () { void chrome.runtime.lastError; });
+              chrome.runtime.sendMessage({ type: "zbFireHook", event: "palette-command", payload: { id: it.id || "", command: it.label || it.name || "" } }, function () { void chrome.runtime.lastError; });
             }
           } catch (_) {}
           it.run();
