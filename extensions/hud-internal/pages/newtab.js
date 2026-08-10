@@ -82,6 +82,10 @@
   /* The same placement the page's CSS grid performs (zntp-core.gridPlace), drawn as
    * blocks — so what the preview shows is what the new tab lays out, not a guess. */
   function previewSvg(layout) {
+    // The card previews the group the layout OPENS on, not whichever group has the
+    // most in it — switching to this layout is what the picture promises. That group
+    // can legitimately be empty, so the preview names it either way rather than
+    // leaving a blank box next to a card that counts widgets across every group.
     var page = N.activePage(layout);
     var cells = N.gridPlace(page.widgets, N.MAX_SPAN);
     var rows = Math.max(1, N.gridRows(cells));
@@ -90,6 +94,7 @@
     var out = ['<svg class="znt-svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">'];
     if (!cells.length) {
       out.push('<rect x="1" y="1" width="' + (W - 2) + '" height="' + (H - 2) + '" rx="2" class="znt-svg-empty"/>');
+      out.push('<text x="' + (W / 2) + '" y="' + (H / 2) + '" text-anchor="middle" dominant-baseline="central" class="znt-svg-none">empty group</text>');
     }
     cells.forEach(function (c) {
       var spec = N.WIDGET_BY_TYPE[c.type] || { glyph: '▫' };
@@ -101,6 +106,7 @@
     out.push('</svg>');
     var wrap = el('div', 'znt-svgwrap');
     wrap.innerHTML = out.join('');                              // built here from enum-checked model data only
+    wrap.appendChild(el('div', 'znt-svg-cap', 'group: ' + page.name));   // textContent — the name is user input
     return wrap;
   }
 

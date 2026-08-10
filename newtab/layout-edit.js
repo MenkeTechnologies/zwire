@@ -191,10 +191,10 @@ var ZBEdit = (function () {
       .then(function (ok) { if (ok) { commit(N.removeLayout(cfg(), l.id)); toast('layout deleted'); } });
   }
   function openManager() {
-    // The HUD layout manager lives in the OTHER extension. Its pages/* are declared
-    // web-accessible TO THIS extension id (hud-internal manifest), which is what
-    // makes a cross-extension navigation legal — the same route palette.js takes to
-    // the HUD's CI page.
+    // The HUD layout manager lives in the OTHER extension. Its `pages/*` are declared
+    // web-accessible (hud-internal manifest), which is what lets this top-level
+    // navigation across extensions resolve — verified against this build, and the
+    // same route palette.js already takes to the HUD's CI page.
     window.location.href = 'chrome-extension://omcgnnjfmbmpdlofklbpddkhnfibfhgg/pages/newtab.html';
   }
 

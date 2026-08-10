@@ -31,6 +31,9 @@
 .znt-svg-w { fill: var(--cyan-dim); stroke: var(--cyan); stroke-width: 1; }
 .znt-svg-empty { fill: none; stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 3; }
 .znt-svg-g { fill: var(--cyan); font-size: 11px; }
+.znt-svg-none { fill: var(--text-muted); font-size: 10px; }
+.znt-svg-cap { margin-top: 5px; font-size: 10px; color: var(--text-muted); text-align: center;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ------------------------------------------------------------------- editor */
 .znt-detail { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
@@ -59,6 +62,10 @@
 .znt-row:first-of-type { border-top: none; }
 .znt-row-glyph { color: var(--cyan); flex: 0 0 16px; text-align: center; }
 .znt-row-name { flex: 0 0 110px; font-size: 12px; color: var(--text); }
+/* Widget rows are a column layout, not a form: cap the per-row selects so size /
+   width / rows line up down the section instead of each stretching to the margin.
+   The dial rows keep flexing — a title and a URL want the width. */
+.znt-sec .znt-row select.znt-input { flex: 0 1 190px; }
 .znt-row-tools { margin-left: auto; display: flex; gap: 5px; align-items: center; }
 .znt-empty { padding: 14px; color: var(--text-muted); font-size: 12px; text-align: center; }
 
