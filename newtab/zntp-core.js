@@ -502,6 +502,19 @@
   function dialSizePx(layout) {
     return THUMB_PX[clamp(layout && layout.dial && layout.dial.thumb, 1, MAX_THUMB, 3) - 1];
   }
+  /* How wide the favicon paints inside a dial. Owned here rather than in CSS because
+   * the favicon request has to ask Chrome for exactly this many device pixels — a
+   * percentage in the stylesheet would leave the JS guessing at the paint size and the
+   * icon would come back at the wrong resolution.
+   *
+   * The cap is the size of the data, not a style choice: Chrome's favicon store only
+   * ever holds 16px and 32px bitmaps (verified against a real profile's Favicons DB —
+   * 736 rows, no other width, SVG sources included), so anything wider than FAV_MAX_PX
+   * is Chrome upscaling a 32px image. A small sharp icon beats a big soft one. */
+  var FAV_MAX_PX = 32;
+  function dialFavPx(sizePx) {
+    return Math.min(Math.round((sizePx || 0) * 0.52), FAV_MAX_PX);
+  }
   /* Titles: 'always' shows, 'never' hides, 'auto' is Vivaldi's "when needed" — the
    * title is redundant next to a custom thumbnail, so it only shows without one. */
   function showTitle(layout, dial) {
@@ -620,6 +633,8 @@
     dialColumns: dialColumns,
     dialFit: dialFit,
     dialSizePx: dialSizePx,
+    dialFavPx: dialFavPx,
+    FAV_MAX_PX: FAV_MAX_PX,
     gridPlace: gridPlace,
     gridRows: gridRows,
     showTitle: showTitle,

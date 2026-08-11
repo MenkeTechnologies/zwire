@@ -65,7 +65,7 @@ var ZBWidgets = (function () {
       var ic = el('span', 'ntp-row-ic');
       if (url) {
         var img = el('img', 'ntp-fav');
-        img.src = ctx.favicon(url, 32);
+        img.src = ctx.favicon(url, 16);                        // .ntp-fav paints 16 CSS px
         img.alt = '';
         img.addEventListener('error', function () { img.remove(); ic.textContent = '▸'; });
         ic.appendChild(img);
@@ -195,7 +195,9 @@ var ZBWidgets = (function () {
         thumb.appendChild(img);
       } else {
         var fav = el('img', 'ntp-dial-fav');
-        fav.src = ctx.favicon(d.url, 64);
+        var favPx = N.dialFavPx(size);
+        fav.style.width = favPx + 'px';
+        fav.src = ctx.favicon(d.url, favPx);
         fav.alt = '';
         fav.addEventListener('error', function () {
           fav.remove();

@@ -296,7 +296,9 @@ body {
 .ntp-dial-thumb { width: 100%; display: grid; place-items: center; overflow: hidden; border-radius: 2px; }
 .ntp-dial-thumb.has-img { background: var(--bg-secondary); border: 1px solid var(--border-glow); }
 .ntp-dial-img { width: 100%; height: 100%; object-fit: cover; }
-.ntp-dial-fav { width: 52%; max-width: 72px; }
+/* Width comes from widgets.js (N.dialFavPx) — the favicon is requested at that many
+   device pixels, so the paint size can't live in a percentage here. */
+.ntp-dial-fav { max-width: 100%; }
 .ntp-dial-glyph { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 20px; color: var(--cyan); }
 .ntp-dial-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ntp-dial-add { border-style: dashed; color: var(--text-muted); }

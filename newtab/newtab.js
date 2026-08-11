@@ -99,10 +99,30 @@ var ZBNTP = (function () {
     if (safe) window.location.href = safe;
   }
   /* Chrome's own favicon store, via the `favicon` permission — no network fetch, so
-   * dials paint offline and a dial URL never phones home to render its own icon. */
-  function faviconUrl(url, size) {
+   * dials paint offline and a dial URL never phones home to render its own icon.
+   *
+   * `cssPx` is the width the <img> actually paints at. Chrome hands back a bitmap of
+   * size × scaleFactor device pixels (components/favicon_base/favicon_url_parser.cc:
+   * ParseFavicon2Format, then FaviconSource's `ceil(size_in_dip * device_scale_factor)`),
+   * and scaleFactor defaults to 1 — so asking for the CSS width on a 2x display returned
+   * a quarter of the pixels the layout paints and every dial icon was visibly upscaled.
+   * Ask in device pixels instead. `size` stays on 16/32/64 because FaviconSource only
+   * ships its fallback globe at those DIP sizes (a dial for a site with no stored icon
+   * would otherwise fall back to the 16px asset); the rest goes in scaleFactor, which
+   * takes any positive float. 2048px is FaviconSource's hard ceiling.
+   *
+   * Asking correctly is not the same as getting detail: the store holds nothing above
+   * 32px, so callers keep their paint size near it (N.dialFavPx) rather than asking
+   * Chrome to blow a 32px bitmap up to a tile. */
+  function faviconUrl(url, cssPx) {
     try {
-      return chrome.runtime.getURL('/_favicon/?pageUrl=' + encodeURIComponent(url) + '&size=' + (size || 32));
+      var css = cssPx > 0 ? cssPx : 32;
+      var dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+      var want = Math.min(Math.ceil(css * dpr), 2048);
+      var dip = want <= 16 ? 16 : want <= 32 ? 32 : 64;
+      return chrome.runtime.getURL('/_favicon/?pageUrl=' + encodeURIComponent(url)
+        + '&size=' + dip
+        + '&scaleFactor=' + (Math.round((want / dip) * 1000) / 1000) + 'x');
     } catch (e) {
       return '';
     }
@@ -233,6 +253,17 @@ var ZBNTP = (function () {
     try { q.focus({ preventScroll: true }); } catch (e) { try { q.focus(); } catch (e2) {} }
   }
 
+  /* Every favicon on the page was requested for one pixel density, so dragging the
+   * window to a display with another one (or zooming) leaves them all at the wrong
+   * resolution until a reload. Re-render once when the ratio actually changes, then
+   * re-arm on the new one. */
+  function watchPixelRatio() {
+    try {
+      var mq = window.matchMedia('(resolution: ' + window.devicePixelRatio + 'dppx)');
+      mq.addEventListener('change', function () { render(); watchPixelRatio(); }, { once: true });
+    } catch (e) { /* no matchMedia — icons stay at the density they were painted for */ }
+  }
+
   /* ------------------------------------------------------------------ boot */
   function start() {
     load(function () { render(); reclaimFocus(); });
@@ -256,6 +287,7 @@ var ZBNTP = (function () {
       clearTimeout(refitTimer);
       refitTimer = setTimeout(function () { window.ZBWidgets.refit(); }, 120);
     });
+    watchPixelRatio();
     requestAnimationFrame(reclaimFocus);
     setTimeout(reclaimFocus, 60);
     setTimeout(reclaimFocus, 200);

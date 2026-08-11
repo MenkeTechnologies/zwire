@@ -348,5 +348,58 @@ if (fs.existsSync(widgetsPath)) {
   eq('no renderer outlives its catalog entry', rendered.filter((t) => catalog.indexOf(t) < 0), []);
 }
 
+/* ------------------------------------------------------- favicon resolution */
+/* Chrome serves size × scaleFactor DEVICE pixels, and scaleFactor defaults to 1 — so a
+ * request sized in CSS pixels comes back at a quarter of the pixels a 2x display paints
+ * and every dial icon looks upscaled. The URL is built in newtab.js; load it headless
+ * (its only load-time side effects are a DOMContentLoaded listener and the window
+ * export) and assert the request covers the paint size at each density. */
+const ntbPath = new URL('../../../newtab/newtab.js', import.meta.url);
+check('newtab/newtab.js is present', fs.existsSync(ntbPath), String(ntbPath));
+if (fs.existsSync(ntbPath)) {
+  const ntbSrc = fs.readFileSync(ntbPath, 'utf8');
+  const favParams = (cssPx, dpr) => {
+    const win = { ZWIRE_NTP: N, devicePixelRatio: dpr, matchMedia: () => ({ addEventListener() {} }) };
+    const chromeStub = { runtime: { getURL: (p) => 'chrome-extension://zwire' + p }, storage: { local: {} } };
+    new Function('window', 'document', 'chrome', 'localStorage', ntbSrc)(
+      win, { addEventListener() {} }, chromeStub, { getItem: () => null, setItem() {} });
+    const url = new URL(win.ZBNTP.favicon('https://example.com/', cssPx));
+    return {
+      dip: Number(url.searchParams.get('size')),
+      scale: Number(String(url.searchParams.get('scaleFactor')).replace(/x$/, '')),
+      page: url.searchParams.get('pageUrl')
+    };
+  };
+  const px = (cssPx, dpr) => { const p = favParams(cssPx, dpr); return Math.ceil(p.dip * p.scale); };
+
+  check('the page URL is carried through', favParams(72, 1).page === 'https://example.com/');
+  check('a 1x row icon asks for 16 device px', px(16, 1) === 16);
+  check('a 2x row icon asks for 32 device px', px(16, 2) === 32);
+  check('a 2x dial favicon asks for 144 device px, not 72', px(72, 2) === 144);
+  check('a 3x dial favicon asks for 216 device px', px(72, 3) === 216);
+  // Chrome only ships its fallback globe at 16/32/64 DIP, so the DIP size stays on that
+  // ladder and the shortfall rides in scaleFactor — otherwise an icon-less dial falls
+  // back to the 16px asset blown up to the tile.
+  check('the DIP size stays on Chrome\'s fallback ladder',
+    [[16, 1], [16, 2], [40, 1], [72, 1], [72, 2], [72, 3]].every(([c, d]) => [16, 32, 64].indexOf(favParams(c, d).dip) >= 0));
+  check('every request covers the painted size',
+    [[16, 1], [16, 2], [16, 1.5], [40, 2], [72, 1], [72, 1.25], [72, 2], [72, 3]].every(([c, d]) => px(c, d) >= c * d));
+  check('the request is capped at FaviconSource\'s 2048px ceiling', px(2000, 3) === 2048);
+  check('a missing paint size still yields a usable request', px(0, 2) >= 32);
+
+  // The dial favicon is requested at exactly the width widgets.js paints it — a stale
+  // CSS percentage on one side and a device-pixel request on the other is the bug.
+  // Chrome's favicon store holds nothing above 32px, so a dial that paints wider than
+  // that is showing an upscaled 32px bitmap — the cap is the data's size, not a style.
+  check('the favicon cap matches the store\'s largest bitmap', N.FAV_MAX_PX === 32);
+  check('dial favicon width never exceeds the cap', N.THUMB_PX.every((s) => N.dialFavPx(s) <= N.FAV_MAX_PX));
+  check('the smallest dial still scales its favicon with the tile', N.dialFavPx(48) === 25);
+  check('every shipped thumbnail size pins the favicon at the cap',
+    N.THUMB_PX.every((s) => N.dialFavPx(s) === N.FAV_MAX_PX));
+  check('a 1x dial paints the stored bitmap 1:1', px(N.dialFavPx(N.THUMB_PX[4]), 1) === 32);
+  check('a 2x dial never asks for more than double the stored bitmap',
+    px(N.dialFavPx(N.THUMB_PX[4]), 2) === 64);
+}
+
 console.log(`ntp-layout: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
