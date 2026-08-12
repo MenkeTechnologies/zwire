@@ -33,7 +33,11 @@
   var HOP_BUDGET = 8;
 
   var SOURCE_KINDS = ['selector', 'regex', 'selection', 'url'];
-  var SINK_KINDS = ['navigate', 'fill', 'replace', 'append', 'batch'];
+  // 'app' is the one sink that does not end in a pane: it delivers into ANOTHER running
+  // MenkeTechnologies app by calling a typed verb on its bus socket (zwire-host suite.rs).
+  // A pipeline therefore reaches past the browser entirely — page text becomes an argument to
+  // zcite/zreq/zpdf/… with the peer's own reply coming back as the dispatch result.
+  var SINK_KINDS = ['navigate', 'fill', 'replace', 'append', 'batch', 'app'];
   var FILTER_KINDS = ['none', 'ops', 'js'];
 
   // Cap lines a source emits per flush (mirrors ztriggers MAX_SCAN_LINES intent) and
@@ -96,7 +100,13 @@
       kind: kind,
       urls: str(k.urls),                 // sink-pane URL filter (regex, '' = any)
       selector: str(k.selector),         // for fill / replace / append
-      sep: k.sep != null ? str(k.sep) : '\n'
+      sep: k.sep != null ? str(k.sep) : '\n',
+      app: str(k.app),                   // for kind 'app': the peer's bus name (zcite, zreq, …)
+      verb: str(k.verb),                 // for kind 'app': the verb to call on it
+      // The JSON argument object, with {q} substituted by the delivered text. Empty means
+      // "just the text", which is sent as { q: <text> } — the same placeholder every other
+      // zwire chain step uses for its argument, so one habit covers all of them.
+      args: str(k.args)
     };
   }
   function normalizeEdge(raw) {
@@ -128,6 +138,19 @@
     if (e.sink.urls) { try { new RegExp(e.sink.urls, 'i'); } catch (x) { return { ok: false, error: 'Invalid sink URL filter: ' + x.message }; } }
     if ((e.sink.kind === 'fill' || e.sink.kind === 'replace' || e.sink.kind === 'append') && !trim(e.sink.selector)) {
       return { ok: false, error: e.sink.kind + ' sink needs a target selector' };
+    }
+    if (e.sink.kind === 'app') {
+      if (!trim(e.sink.app)) return { ok: false, error: 'App sink needs a bus name (the app to call)' };
+      if (!trim(e.sink.verb)) return { ok: false, error: 'App sink needs a verb' };
+      // A bus name becomes a socket filename in the host; reject the separators here too so the
+      // author sees it while editing rather than as a host error at 3am.
+      if (/[\\/]|\.\./.test(e.sink.app)) return { ok: false, error: 'App sink: invalid bus name ' + e.sink.app };
+      // Validated with {q} removed, exactly as the runtime substitutes it — a template that only
+      // parses once the text is spliced in would save clean and fail on every emission.
+      if (trim(e.sink.args)) {
+        try { JSON.parse(str(e.sink.args).replace(/\{q\}/g, '')); }
+        catch (x) { return { ok: false, error: 'App sink: args must be valid JSON (' + x.message + ')' }; }
+      }
     }
     if (e.filter.kind === 'ops') { var pe = parseOps(e.filter.value); if (pe.error) return { ok: false, error: 'Filter: ' + pe.error }; }
     return { ok: true };
@@ -273,6 +296,20 @@
     var joined = arr.join(k.sep);
     if (k.kind === 'navigate') return { act: 'navigate', url: arr[0] };
     if (k.kind === 'batch') return { act: 'batch', urls: arr };
+    if (k.kind === 'app') {
+      var args;
+      if (!trim(k.args)) { args = { q: joined }; }
+      else {
+        // {q} is spliced in JSON-ESCAPED, not raw. Page text routinely contains a quote, a
+        // backslash or a newline, and a raw splice turns `{"doi":"{q}"}` into a parse error —
+        // silently, on some pages and not others. Escaping the VALUE (stringify, minus its own
+        // quotes) keeps the template's surrounding quotes and stays valid for any text.
+        var esc = JSON.stringify(joined); esc = esc.substring(1, esc.length - 1);
+        try { args = JSON.parse(str(k.args).replace(/\{q\}/g, esc)); }
+        catch (e) { return null; }        // an unparseable template delivers nothing, never a guess
+      }
+      return { act: 'app', app: k.app, verb: k.verb, args: args, text: joined };
+    }
     // fill / replace / append all address a selector and carry text
     return { act: k.kind, selector: k.selector, text: joined };
   }
@@ -304,12 +341,22 @@
   // page rejects an edge that would close a cycle BEFORE it is saved.
   function nodeId(pattern) { return trim(pattern) || '*'; }
 
+  // The graph node an edge DELIVERS to. A pane sink is its URL pattern; an `app` sink is not a
+  // pane at all, so it gets its own terminal node (`app:<name>.<verb>`) that no source pattern can
+  // ever name. Without this, an app-sink edge with an empty URL filter would collapse onto the
+  // "any pane" node `*` and be rejected as a self-loop — refusing an edge that cannot loop,
+  // because nothing it writes lands in a pane a source could read back.
+  function sinkNode(sink) {
+    var k = normSink(sink);
+    return k.kind === 'app' ? 'app:' + k.app + '.' + k.verb : nodeId(k.urls);
+  }
+
   function adjacency(edges) {
     var adj = {};
     (edges || []).forEach(function (raw) {
       var e = normalizeEdge(raw);
       if (!e.enabled) return;
-      var a = nodeId(e.source.urls), b = nodeId(e.sink.urls);
+      var a = nodeId(e.source.urls), b = sinkNode(e.sink);
       (adj[a] = adj[a] || {})[b] = true;
     });
     return adj;
@@ -387,6 +434,7 @@
     applyFilter: applyFilter,
     buildSinkMessage: buildSinkMessage,
     gate: gate,
+    sinkNode: sinkNode,
     wouldCycle: wouldCycle,
     graphCycle: graphCycle,
     runEdge: runEdge

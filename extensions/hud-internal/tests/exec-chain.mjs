@@ -250,5 +250,77 @@ await new Promise((resolve) => {
   });
 });
 
+/* ---- 8. a `suite` step calls another app on the bus, and its refusal stops the chain ------- */
+// The cross-app step goes to zwire-host as `suite_call` (suite.rs dials the peer's socket). Two
+// things matter beyond "it sent something": the {q} argument must arrive JSON-ESCAPED — a match off
+// a live page routinely contains a quote — and a peer that refuses must fail the STEP, because a
+// chain that continues past a delivery which never happened is the failure nobody notices.
+await new Promise((resolve) => {
+  const { X, calls } = load({ hostReply: () => ({ ok: true, reply: { ok: true, result: { added: 1 } } }) });
+  X.runCustom(
+    { steps: [{ type: 'suite', value: '{"app":"zcite","verb":"item.add","args":{"title":"{q}"}}' }] },
+    'a "quoted" title\\with a backslash',
+    (err) => {
+      check('a suite step reaches the host as suite_call with app/verb/args', () => {
+        assert.equal(err, null, `suite step failed: ${err}`);
+        const req = calls.filter((c) => c.kind === 'host').map((c) => c.req).find((r) => r.cmd === 'suite_call');
+        assert.ok(req, 'no suite_call was issued');
+        assert.equal(req.app, 'zcite');
+        assert.equal(req.verb, 'item.add');
+        // Raw splicing would have produced invalid JSON and thrown before any request was sent;
+        // arriving here with the exact text proves the escape happened.
+        assert.equal(req.args.title, 'a "quoted" title\\with a backslash');
+      });
+      resolve();
+    },
+  );
+});
+
+await new Promise((resolve) => {
+  const { X, calls } = load({
+    hostReply: (req) => (req.cmd === 'suite_call'
+      ? { ok: true, reply: { ok: false, err: 'zcite: not running on the bus' } }
+      : { ok: true, reply: { ok: true } }),
+  });
+  X.runCustom({
+    steps: [
+      { type: 'suite', value: '{"app":"zcite","verb":"item.add","args":{}}' },
+      { type: 'shell', value: 'never' },
+    ],
+  }, '', (err) => {
+    check('a peer that is not running fails the step and stops the chain', () => {
+      assert.ok(err, 'an unreachable app must be reported as a step failure');
+      assert.match(err, /not running on the bus/);
+      const execs = calls.filter((c) => c.kind === 'host' && c.req.cmd === 'exec');
+      assert.equal(execs.length, 0, 'the chain continued past a delivery that never happened');
+    });
+    resolve();
+  });
+});
+
+/* ---- 9. a suite step inside a self-reverting chain is class-checked by the host ------------ */
+// zwire's journal holds zwire's writes; it cannot compensate one that landed in another process.
+// The step must therefore travel as a bus `call` (so the host's REV table refuses it) rather than
+// take the direct path and run unjournaled inside a chain that claims it can revert.
+await new Promise((resolve) => {
+  const { X, calls } = load({
+    hostReply: (req) => (req.cmd === 'call'
+      ? { ok: true, reply: { ok: false, err: 'verb not reversible: suite_call' } }
+      : { ok: true, reply: { ok: true, txn: 1, steps: 0 } }),
+  });
+  X.runTxn({ steps: [{ type: 'suite', value: '{"app":"zcite","verb":"item.add","args":{}}' }] }, '', (err) => {
+    check('a transacted suite step is routed through the host gate and refused', () => {
+      assert.ok(err, 'an irreversible cross-app step must fail inside a transaction');
+      const reqs = calls.filter((c) => c.kind === 'host').map((c) => c.req);
+      const direct = reqs.filter((r) => r.cmd === 'suite_call');
+      assert.equal(direct.length, 0, 'the suite step bypassed the transaction gate');
+      const gated = reqs.find((r) => r.cmd === 'call' && r.verb === 'suite_call');
+      assert.ok(gated, 'the suite step did not become a class-checked bus call');
+      assert.equal(reqs[reqs.length - 1].cmd, 'txn_abort', 'a refused chain must abort');
+    });
+    resolve();
+  });
+});
+
 if (failures) process.stderr.write(`\n${failures} check(s) failed\n`); else process.stdout.write('\nall checks passed\n');
 process.exit(failures ? 1 : 0);

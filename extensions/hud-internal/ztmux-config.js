@@ -138,6 +138,24 @@
     routeSink(n.sink, msg);
   }
   function routeSink(sink, msg) {
+    // The one sink that leaves the browser: call a verb on ANOTHER running app's bus socket via
+    // zwire-host (suite.rs). No pane is addressed, so the pane loop below is skipped entirely.
+    if (msg.act === 'app') {
+      try {
+        chrome.runtime.sendMessage({ type: 'zb-host', req: { cmd: 'suite_call', app: msg.app, verb: msg.verb, args: msg.args } }, function (res) {
+          void chrome.runtime.lastError;
+          // A peer that is closed, or that refused the verb, is reported — a pipeline that
+          // silently stops delivering into another app is indistinguishable from one that never
+          // matched, and the two need different fixes.
+          var r = res && res.reply;
+          if (!res || !res.ok || (r && r.ok === false)) {
+            var why = (res && res.err) || (r && r.err) || 'unreachable';
+            try { window.ZGui.toast.show('pipe → ' + msg.app + '.' + msg.verb + ': ' + why, 3200, 'error'); } catch (e) {}
+          }
+        });
+      } catch (e) {}
+      return;
+    }
     if (msg.act === 'batch') {
       msg.urls.forEach(function (u) { try { chrome.runtime.sendMessage({ type: 'zbNewTab', url: normalizeUrl(u) }, function () { void chrome.runtime.lastError; }); } catch (e) {} });
       return;

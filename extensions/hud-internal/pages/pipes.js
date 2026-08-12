@@ -72,11 +72,15 @@
     { value: 'fill', label: 'Fill a field (selector)' },
     { value: 'replace', label: 'Replace node text (selector)' },
     { value: 'append', label: 'Append into node (selector)' },
-    { value: 'batch', label: 'Batch-open all lines' }
+    { value: 'batch', label: 'Batch-open all lines' },
+    { value: 'app', label: 'Call a verb in another app (bus)' }
   ], onChange: syncSinkFields });
   var sinkUrlsF = Z.textfield({ placeholder: 'sink pane URL filter (regex — blank = any pane)' });
   var sinkSelectorF = Z.textfield({ placeholder: '#editor textarea' });
   var sinkSepF = Z.textfield({ placeholder: '\\n' });
+  var sinkAppF = Z.textfield({ placeholder: 'zcite' });
+  var sinkVerbF = Z.textfield({ placeholder: 'item.add' });
+  var sinkArgsF = Z.textfield({ placeholder: '{"doi":"{q}"}   — blank sends {"q": text}' });
 
   var saveBtn = Z.button({ label: 'ADD PIPELINE', variant: 'primary', onClick: submit });
   var cancelBtn = Z.button({ label: 'CANCEL', variant: 'mini', onClick: resetForm });
@@ -99,12 +103,19 @@
     if (filterValueWrap) filterValueWrap.style.display = k === 'none' ? 'none' : '';
     filterValueF.el.placeholder = k === 'js' ? 'lines.map(x => x.trim())' : 'trim |> uniq |> first';
   }
-  var sinkSelectorWrap, sinkSepWrap;
+  var sinkSelectorWrap, sinkSepWrap, sinkUrlsWrap, sinkAppWrap, sinkVerbWrap, sinkArgsWrap;
   function syncSinkFields() {
     var k = sinkKindSel.get();
     var needsSel = k === 'fill' || k === 'replace' || k === 'append';
+    var isApp = k === 'app';
     if (sinkSelectorWrap) sinkSelectorWrap.style.display = needsSel ? '' : 'none';
     if (sinkSepWrap) sinkSepWrap.style.display = k === 'navigate' ? 'none' : '';
+    // An `app` sink addresses a bus name, not a pane — the pane URL filter is meaningless there
+    // and showing it invites an author to "scope" a delivery that has no pane to scope to.
+    if (sinkUrlsWrap) sinkUrlsWrap.style.display = isApp ? 'none' : '';
+    if (sinkAppWrap) sinkAppWrap.style.display = isApp ? '' : 'none';
+    if (sinkVerbWrap) sinkVerbWrap.style.display = isApp ? '' : 'none';
+    if (sinkArgsWrap) sinkArgsWrap.style.display = isApp ? '' : 'none';
   }
 
   function buildForm() {
@@ -135,14 +146,19 @@
     grid.appendChild(el('div', 'zb-cmd-hint', 'Op chain: verbs joined by |> — trim, upper, lower, uniq, sort, reverse, nonempty, first, last, count, collapse, nth N, take N, drop N, join SEP, grep /re/, reject /re/, replace /re/repl/flags, prepend S, append S. JS: an expression with lines (array) and text (joined) in scope.'));
 
     // --- SINK ---
-    grid.appendChild(el('div', 'zb-pip-sect', '// SINK — deliver to any pane matching this URL filter'));
+    grid.appendChild(el('div', 'zb-pip-sect', '// SINK — deliver to a matching pane, or to another app on the bus'));
     var sinkKindWrap = field('Kind', sinkKindSel.el); sinkKindWrap.className += ' zb-pip-kind';
-    var sinkUrlsWrap = field('Sink pane URL filter', sinkUrlsF.el); sinkUrlsWrap.className += ' zb-cmd-grow';
+    sinkUrlsWrap = field('Sink pane URL filter', sinkUrlsF.el); sinkUrlsWrap.className += ' zb-cmd-grow';
     grid.appendChild(row([sinkKindWrap, sinkUrlsWrap]));
     sinkSelectorWrap = field('Target selector', sinkSelectorF.el); sinkSelectorWrap.className += ' zb-cmd-grow';
     sinkSepWrap = field('Join separator', sinkSepF.el); sinkSepWrap.className += ' zb-pip-flags';
     grid.appendChild(row([sinkSelectorWrap, sinkSepWrap]));
-    grid.appendChild(el('div', 'zb-cmd-hint', 'The result is posted to the sink pane\'s forwarder — never a direct cross-origin DOM write. An edge that would close a cycle in the graph (A→B→A) is refused on save.'));
+    sinkAppWrap = field('App (bus name)', sinkAppF.el); sinkAppWrap.className += ' zb-pip-flags';
+    sinkVerbWrap = field('Verb', sinkVerbF.el); sinkVerbWrap.className += ' zb-cmd-grow';
+    grid.appendChild(row([sinkAppWrap, sinkVerbWrap]));
+    sinkArgsWrap = field('Args (JSON, {q} = the text)', sinkArgsF.el); sinkArgsWrap.className += ' zb-cmd-grow';
+    grid.appendChild(row([sinkArgsWrap]));
+    grid.appendChild(el('div', 'zb-cmd-hint', 'A pane sink is posted to that pane\'s forwarder — never a direct cross-origin DOM write. An app sink calls a typed verb on another RUNNING MenkeTechnologies app over its bus socket (zwire-host), so page text can land in zcite / zreq / zpdf / … directly; {q} is spliced into the args JSON escaped, so quotes and newlines in page text stay valid. An edge that would close a cycle in the graph (A→B→A) is refused on save; an app sink cannot close one, because nothing it writes lands in a pane.'));
 
     var bar = el('div', 'zb-cmd-actions');
     bar.appendChild(saveBtn); bar.appendChild(cancelBtn);
@@ -174,7 +190,10 @@
         kind: sinkKindSel.get(),
         urls: (sinkUrlsF.get() || '').trim(),
         selector: (sinkSelectorF.get() || '').trim(),
-        sep: (sinkSepF.get() || '') || '\n'
+        sep: (sinkSepF.get() || '') || '\n',
+        app: (sinkAppF.get() || '').trim(),
+        verb: (sinkVerbF.get() || '').trim(),
+        args: (sinkArgsF.get() || '').trim()
       }
     };
   }
@@ -193,7 +212,9 @@
     // that would close a loop among the OTHER enabled edges (self-loop included).
     if (entry.enabled) {
       var others = pipes.filter(function (x) { return x.id !== editingId; });
-      if (P.wouldCycle(others, entry.source.urls, entry.sink.urls)) {
+      // The sink's graph node, not its URL pattern: an `app` sink delivers outside the pane
+      // graph entirely, so it carries a terminal node no source can name (see sinkNode).
+      if (P.wouldCycle(others, entry.source.urls, P.sinkNode(entry.sink))) {
         toast('That edge would close a cycle in the pipeline graph (source pane ← sink pane). Refused.', 'error');
         return;
       }
@@ -213,6 +234,7 @@
     srcPatternF.set(e.source.pattern); srcFlagsF.set(e.source.flags);
     filterKindSel.set(e.filter.kind); filterValueF.set(e.filter.value);
     sinkKindSel.set(e.sink.kind); sinkUrlsF.set(e.sink.urls); sinkSelectorF.set(e.sink.selector); sinkSepF.set(e.sink.sep);
+    sinkAppF.set(e.sink.app); sinkVerbF.set(e.sink.verb); sinkArgsF.set(e.sink.args);
     syncSrcFields(); syncFilterFields(); syncSinkFields();
     saveBtn.textContent = 'UPDATE'; cancelBtn.style.display = '';
     try { window.scrollTo(0, 0); } catch (e2) {}
@@ -223,6 +245,7 @@
     srcKindSel.set('selector'); srcUrlsF.set(''); srcSelectorF.set(''); srcPatternF.set(''); srcFlagsF.set('i');
     filterKindSel.set('none'); filterValueF.set('');
     sinkKindSel.set('navigate'); sinkUrlsF.set(''); sinkSelectorF.set(''); sinkSepF.set('');
+    sinkAppF.set(''); sinkVerbF.set(''); sinkArgsF.set('');
     syncSrcFields(); syncFilterFields(); syncSinkFields();
     saveBtn.textContent = 'ADD PIPELINE'; cancelBtn.style.display = 'none';
   }
@@ -247,9 +270,16 @@
   function sinkLabel(e) {
     var k = P.normalizeEdge(e).sink;
     if (k.kind === 'fill' || k.kind === 'replace' || k.kind === 'append') return k.kind + ' ' + (k.selector || '?');
+    if (k.kind === 'app') return 'call';
     return k.kind;
   }
   function paneLabel(pat) { return pat ? pat : 'any'; }
+  // What the sink DELIVERS to, for the table's target column: a pane pattern, or — for an app
+  // sink — the bus address, so a row never reads "any pane" for an edge that touches no pane.
+  function sinkTargetLabel(e) {
+    var k = P.normalizeEdge(e).sink;
+    return k.kind === 'app' ? (k.app || '?') + '.' + (k.verb || '?') : paneLabel(k.urls);
+  }
   function columns() {
     return [
       { key: 'enabled', label: 'On', width: '48px', render: function (t) {
@@ -259,7 +289,10 @@
       { key: 'name', label: 'Name', sortable: true, render: function (t) { return esc(t.name); } },
       { key: 'source', label: 'Source', render: function (t) { return '<code class="zb-pip-node" title="pane: ' + esc(paneLabel(P.normalizeEdge(t).source.urls)) + '">' + esc(paneLabel(P.normalizeEdge(t).source.urls)) + '</code> <span class="sub">' + esc(srcLabel(t)) + '</span>'; } },
       { key: 'filter', label: 'Filter', render: function (t) { var f = P.normalizeEdge(t).filter; return f.kind === 'none' ? '<span class="sub">—</span>' : '<code class="zb-pip-flt">' + esc(f.kind) + ': ' + esc(String(f.value).slice(0, 40)) + '</code>'; } },
-      { key: 'sink', label: 'Sink', render: function (t) { return '<span class="sub">' + esc(sinkLabel(t)) + '</span> → <code class="zb-pip-node" title="pane: ' + esc(paneLabel(P.normalizeEdge(t).sink.urls)) + '">' + esc(paneLabel(P.normalizeEdge(t).sink.urls)) + '</code>'; } },
+      { key: 'sink', label: 'Sink', render: function (t) {
+        var k = P.normalizeEdge(t).sink, tgt = sinkTargetLabel(t);
+        return '<span class="sub">' + esc(sinkLabel(t)) + '</span> → <code class="zb-pip-node" title="' + esc(k.kind === 'app' ? 'app on the bus: ' + tgt : 'pane: ' + tgt) + '">' + esc(tgt) + '</code>';
+      } },
       { key: '_act', label: '', render: function (t) {
         var wrap = el('span', 'zb-cmd-rowact');
         wrap.appendChild(Z.button({ label: 'edit', variant: 'mini', onClick: function () { startEdit(t); } }));
@@ -271,7 +304,7 @@
   function rowsFiltered() {
     return pipes.filter(function (t) {
       var e = P.normalizeEdge(t);
-      var hay = [t.name, e.source.urls, e.source.selector, e.source.pattern, e.filter.value, e.sink.urls, e.sink.selector, e.source.kind, e.sink.kind].join(' ');
+      var hay = [t.name, e.source.urls, e.source.selector, e.source.pattern, e.filter.value, e.sink.urls, e.sink.selector, e.source.kind, e.sink.kind, e.sink.app, e.sink.verb].join(' ');
       return matchFn(hay);
     });
   }

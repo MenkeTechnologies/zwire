@@ -296,6 +296,17 @@
       { id: 'zw.copyUrl', icon: '⧉', label: 'Copy URL', detail: 'this page', keyword: 'cu', run: function () { clip(location.href); } },
       { id: 'zw.copyMarkdown', icon: '⤓', label: 'Copy as Markdown', detail: 'this page', run: function () { clip('[' + document.title + '](' + location.href + ')'); } },
       { id: 'zw.toggleTerminal', icon: '⌥', label: 'Toggle terminal', detail: 'Ctrl+`', run: function () { try { if (window.toggleTerminalPopup) window.toggleTerminalPopup(); } catch (e) {} } },
+      // The suite bus, from any page: which of the other MenkeTechnologies apps are actually
+      // RUNNING right now (proven by a dial, not by a leftover socket file). This is the answer an
+      // author needs before writing an app step or an app-sink pipeline, so it belongs in ⌘K rather
+      // than only inside the editors that consume it.
+      { id: 'zw.suiteApps', icon: '⧉', label: 'Apps on the bus', detail: 'running MenkeTechnologies apps', run: function () {
+        hostReq({ cmd: 'suite_list' }, function (err, r) {
+          if (err) { hostToast('bus: ' + err, true); return; }
+          var apps = (r && r.apps) || [];
+          hostToast(apps.length ? 'on the bus: ' + apps.join(', ') : 'no other apps running (' + ((r && r.probed) || 0) + ' socket(s) probed)');
+        });
+      } },
       { id: 'zw.cycleScheme', icon: '◐', label: 'Cycle color scheme', keyword: 'cs', run: cycleScheme },
       { id: 'zw.ui.light', icon: '◐', label: 'Toggle light mode', detail: 'setting', run: function () { toggleUi('light'); } },
       { id: 'zw.ui.scanlines', icon: '⌂', label: 'Toggle CRT scanlines', detail: 'setting', run: function () { toggleUi('scanlines'); } },
@@ -566,6 +577,31 @@
     if (type === 'batch') { runBatch(sub(v), d); return; }
     if (type === 'js') { zjsRun(v, arg, d); return; }
     if (type === 'action') { runAction(v, d, txn); return; }
+    // Call a verb on ANOTHER running app over its bus socket (zwire-host suite.rs). Inside a
+    // transaction this is refused by the host's REV table — `suite_call` is irreversible because
+    // the write lands in a different process with its own journal — so it takes the same
+    // `busCall` path and fails at the gate rather than running unjournaled.
+    if (type === 'suite') {
+      // {q} is spliced in JSON-ESCAPED, not raw: an argument holding a quote, a backslash or a
+      // newline (a trigger match off a live page routinely does) would otherwise turn a valid
+      // template into a parse error on some pages and not others.
+      var qJson = JSON.stringify(String(arg == null ? '' : arg));
+      var body = String(v).replace(/\{q\}/g, qJson.substring(1, qJson.length - 1));
+      var so; try { so = JSON.parse(body); } catch (errS) { hostToast('app: invalid JSON', true); d('app: invalid JSON'); return; }
+      if (!so || !so.app || !so.verb) { hostToast('app: needs "app" and "verb"', true); d('app: needs "app" and "verb"'); return; }
+      var sArgs = { app: so.app, verb: so.verb, args: so.args || {} };
+      if (txn != null) { busCall('suite_call', sArgs, txn, d); return; }
+      var ds = settle(d, 'app');
+      // hostReq folds a peer refusal (`ok:false`) into `err`, so a chain stops here rather than
+      // continuing past a delivery that never happened.
+      hostReq({ cmd: 'suite_call', app: sArgs.app, verb: sArgs.verb, args: sArgs.args }, function (err, r) {
+        if (err) { hostToast('app: ' + err, true); ds('app: ' + err); return; }
+        var val = r && r.result;
+        hostToast(so.app + '.' + so.verb + ' ◂ ' + (val && typeof val === 'object' ? JSON.stringify(val).slice(0, 140) : String(val == null ? 'ok ✓' : val)));
+        ds(null);
+      });
+      return;
+    }
     if (type === 'scheme') { setScheme(v); d(null); return; }
     if (type === 'host') {
       var obj; try { obj = JSON.parse(sub(v)); } catch (err) { hostToast('host: invalid JSON', true); d('host: invalid JSON'); return; }

@@ -128,7 +128,8 @@
     ['Statusbar', 'powerline HUD — cpu / mem / net / disk / temp / load / battery / IPs / clock'],
     ['Vim mode', 'hjkl / H M L / gg G / zz zt zb / marks / :cmd'],
     ['Schemes', '8 whole-browser color schemes, synced to the native chrome'],
-    ['Find', '⌘F fuzzy in-page bar']
+    ['Find', '⌘F fuzzy in-page bar'],
+    ['Suite bus', 'call typed verbs on the other running MenkeTechnologies apps (zwire-host) — an app step in any command/trigger chain, an app sink in a pipeline']
   ]);
 
   /* ---- ENVIRONMENT ---- */

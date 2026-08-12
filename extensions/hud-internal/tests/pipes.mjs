@@ -130,6 +130,61 @@ check('runEdge dedupe blocks same value in cooldown', r2.fire === false);
 check('runEdge no-match yields no fire', P.runEdge(full, { text: 'nothing here' }, {}, 9e9, 0).fire === false);
 check('runEdge drops at hop budget', P.runEdge(full, { text: 'https://a.com' }, {}, 9e9, P.HOP_BUDGET).fire === false);
 
+/* ------------------------------------------------------------ app sink ---- */
+// The one sink that leaves the browser: deliver into another running app by calling a typed verb
+// on its bus socket. Three things are load-bearing and none are obvious.
+//
+// 1. {q} must be spliced JSON-ESCAPED. Page text carries quotes, backslashes and newlines; a raw
+//    splice turns a valid template into a parse error on some pages and not others.
+// 2. An unparseable template must deliver NOTHING rather than a guess — a half-built args object
+//    reaching another app is worse than no delivery.
+// 3. An app sink cannot close a graph cycle, because nothing it writes lands in a pane a source
+//    could read back. Sharing the pane graph's "any pane" node would refuse it as a self-loop.
+const appSink = { kind: 'app', app: 'zcite', verb: 'item.add', args: '{"title":"{q}"}' };
+const appMsg = P.buildSinkMessage(appSink, ['hello']);
+eq('app sink builds a typed call', appMsg, { act: 'app', app: 'zcite', verb: 'item.add', args: { title: 'hello' }, text: 'hello' });
+
+const messy = 'a "quoted" line\\with a backslash';
+const escMsg = P.buildSinkMessage(appSink, [messy]);
+check('app sink JSON-escapes {q} instead of splicing it raw', escMsg && escMsg.args.title === messy, JSON.stringify(escMsg));
+
+const plainMsg = P.buildSinkMessage({ kind: 'app', app: 'zreq', verb: 'request.send' }, ['one', 'two']);
+eq('app sink with no template sends the joined text as q', plainMsg && plainMsg.args, { q: 'one\ntwo' });
+
+check('app sink with an unparseable template delivers nothing',
+  P.buildSinkMessage({ kind: 'app', app: 'z', verb: 'v', args: '{"a":' }, ['x']) === null);
+
+check('app sink needs a bus name', P.validateEdge({ name: 'n', source: { kind: 'url' }, sink: { kind: 'app', verb: 'v' } }).ok === false);
+check('app sink needs a verb', P.validateEdge({ name: 'n', source: { kind: 'url' }, sink: { kind: 'app', app: 'zcite' } }).ok === false);
+check('app sink rejects a bus name that escapes the socket dir',
+  P.validateEdge({ name: 'n', source: { kind: 'url' }, sink: { kind: 'app', app: '../zcite', verb: 'v' } }).ok === false);
+check('app sink rejects args that are not JSON once {q} is removed',
+  P.validateEdge({ name: 'n', source: { kind: 'url' }, sink: { kind: 'app', app: 'zcite', verb: 'v', args: '{oops' } }).ok === false);
+check('a valid app sink passes validation',
+  P.validateEdge({ name: 'n', source: { kind: 'url' }, sink: appSink }).ok === true);
+
+// The cycle guard: a pane sink with no URL filter collapses onto the "any pane" node and a
+// source with no filter is that same node, so pane→pane is (correctly) a self-loop. The app
+// sink must NOT share that node.
+check('an unfiltered pane→pane edge is still a self-loop', P.wouldCycle([], '', P.sinkNode({ kind: 'navigate', urls: '' })) === true);
+check('an unfiltered app sink is not a self-loop', P.wouldCycle([], '', P.sinkNode(appSink)) === false);
+check('sinkNode addresses an app sink by bus name and verb', P.sinkNode(appSink) === 'app:zcite.item.add');
+check('an app-sink edge introduces no cycle in the whole graph',
+  P.graphCycle([{ enabled: true, source: { urls: '' }, sink: appSink }]) === null);
+
+// runEdge end to end, so the reactive path (extract → filter → gate → message) really produces the
+// cross-app call and dedupes on its text like every other sink.
+const appEdge = {
+  enabled: true, cooldownMs: 1000, dedupe: true, once: false,
+  source: { kind: 'regex', pattern: '(10\\.\\d{4}/\\S+)' },
+  filter: { kind: 'ops', value: 'first' },
+  sink: { kind: 'app', app: 'zcite', verb: 'item.add', args: '{"doi":"{q}"}' }
+};
+const ar = P.runEdge(appEdge, { text: 'see doi 10.1000/xyz123 in the paper' }, {}, 1000, 0);
+check('runEdge fires an app sink with the extracted argument',
+  ar.fire === true && ar.message.act === 'app' && ar.message.args.doi === '10.1000/xyz123', JSON.stringify(ar));
+check('an app sink dedupes on its delivered text', P.runEdge(appEdge, { text: '10.1000/xyz123' }, ar.state, 1200, 0).fire === false);
+
 /* -------------------------------------------------------------------------- */
 if (fail === 0) console.log(`ALL ✓ — pipes engine nominal (${pass} checks)`);
 else console.log(`${fail} CHECK(S) FAILED (${pass} passed)`);

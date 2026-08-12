@@ -33,10 +33,11 @@
     .concat(IS_WIN ? [{ value: 'batch', label: 'Run batch script (Windows)' }] : [])
     .concat([
       { value: 'action', label: 'Browser action' },
+      { value: 'suite', label: 'Call another app (bus)' },
       { value: 'scheme', label: 'Set color scheme' },
       { value: 'host', label: 'zwire-host (JSON)' }
     ]);
-  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', scheme: 'scheme', host: 'host' };
+  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', suite: 'app', scheme: 'scheme', host: 'host' };
   var ACTIONS = [
     ['newTab', 'New tab'], ['newWindow', 'New window'], ['duplicateTab', 'Duplicate tab'],
     ['reopenTab', 'Reopen closed tab'], ['closeTab', 'Close tab'], ['closeOthers', 'Close other tabs'],
@@ -55,12 +56,14 @@
     applescript: 'Runs via zwire-host through osascript (macOS only) — each line becomes an -e arg, so multi-line scripts work with no temp file. {q} = the argument. E.g. tell application "Music" to playpause, or display notification "{q}".',
     batch: 'Runs via zwire-host through cmd.exe /c (Windows only) and toasts the output. {q} = the argument. E.g. echo hi {q} & start "" .',
     action: 'Trigger a built-in browser action.',
+    suite: 'Calls a typed verb on ANOTHER running MenkeTechnologies app over its bus socket (via zwire-host) and toasts the reply — e.g. {"app":"zcite","verb":"item.add","args":{"doi":"{q}"}}. {q} is spliced in JSON-escaped, so a quote or newline in the argument stays valid. The app must already be running; nothing is launched. Not revertible: the write happens in another process, so a self-reverting chain refuses it.',
     scheme: 'Switch the whole browser color scheme.',
     host: 'Sends a JSON message to zwire-host and shows the reply. Use {q} for the argument — e.g. {"cmd":"notify","title":"{q}"} or {"cmd":"exec","argv":["say","{q}"]}. See the HOST tab to explore commands.'
   };
 
   function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
   function opt(pairs) { return pairs.map(function (p) { return { value: p[0], label: p[1] }; }); }
+  var esc = (Z.util && Z.util.escapeHtml) || function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
 
   // Wizard styles (the numbered step rows + Monaco toolbar + LSP pill). Injected once
   // and shared by every page that hosts the wizard (Commands, Triggers).
@@ -109,6 +112,11 @@
   function stepPreview(s) {
     if (s.type === 'action') { var a = ACTIONS.filter(function (x) { return x[0] === s.value; })[0]; return a ? a[1] : s.value; }
     if (s.type === 'scheme') { var sc = SCHEMES.filter(function (x) { return x[0] === s.value; })[0]; return sc ? sc[1] : s.value; }
+    if (s.type === 'suite') {
+      // A row is far more readable as `zcite.item.add` than as the raw JSON body.
+      var so; try { so = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return s.value; }
+      return so && so.app ? so.app + '.' + (so.verb || '?') : s.value;
+    }
     return s.value;
   }
 
@@ -240,10 +248,26 @@
         search.placeholder = 'Filter ' + verbs.length + ' actions…'; search.spellcheck = false;
         search.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:6px;background:#050810;border:1px solid #22384d;color:#9fe;padding:5px 8px;border-radius:4px;font:12px ui-monospace,monospace;';
         var list = el('div');
+        // Fuzzy, with the matched characters highlighted — the SHARED zgui-core matcher every other
+        // filter in zwire uses (R7). This was a plain `indexOf` substring test, which is the one
+        // filter in the app that disagreed with the palette about what "matches": typing `iadd`
+        // found `item.add` everywhere else and nothing here.
+        var FZ = (window.ZGui && window.ZGui.fzf) || null;
+        function rank(q) {
+          if (!q) return verbs.map(function (v) { return { v: v }; });
+          // fzfMatch(needle, haystack) -> {score, indices} | null.
+          if (!FZ) return verbs.filter(function (v) { return String(v.id).toLowerCase().indexOf(q) >= 0; })
+            .map(function (v) { return { v: v }; });
+          return verbs.map(function (v) { var m = FZ.fzfMatch(q, String(v.id)); return m ? { v: v, s: m.score } : null; })
+            .filter(Boolean).sort(function (a, b) { return b.s - a.s; });
+        }
         function draw(q) {
           list.innerHTML = '';
-          verbs.filter(function (v) { return !q || String(v.id).toLowerCase().indexOf(q) >= 0; }).slice(0, 300).forEach(function (v) {
-            var rw = el('div', null, v.id);
+          rank(q).slice(0, 300).forEach(function (hit) {
+            var v = hit.v;
+            // highlightMatch(text, query) escapes the text and wraps hits in <mark class="fzf-hl">,
+            // the same highlight the palette and every list filter paint.
+            var rw = el('div', null, (q && FZ) ? FZ.highlightMatch(String(v.id), q) : esc(String(v.id)));
             rw.style.cssText = 'padding:4px 8px;cursor:pointer;color:#7fe6c0;font:12px ui-monospace,monospace;border-radius:4px;';
             rw.addEventListener('mouseenter', function () { rw.style.background = '#12233a'; });
             rw.addEventListener('mouseleave', function () { rw.style.background = 'transparent'; });
@@ -296,6 +320,7 @@
       if (type === 'batch') return makeMonacoControl('batch', val);
       if (type === 'shell') return makeMonacoControl('shell', val);
       if (type === 'host') return Z.textarea({ placeholder: '{"cmd":"notify","title":"hi {q}"}', rows: 3, value: val || '' });
+      if (type === 'suite') return Z.textarea({ placeholder: '{"app":"zcite","verb":"item.add","args":{"doi":"{q}"}}', rows: 3, value: val || '' });
       return Z.textfield({ placeholder: 'https://example.com   ({q} optional)', value: val || '' });
     }
     function syncSteps() {
@@ -356,6 +381,15 @@
       if (!clean.length) return { ok: false, error: 'Add at least one step' };
       for (var h = 0; h < clean.length; h++) {
         if (clean[h].type === 'host') { try { JSON.parse(String(clean[h].value).replace(/\{q\}/g, '')); } catch (e) { return { ok: false, error: 'Step ' + (h + 1) + ': host value must be valid JSON' }; } }
+        if (clean[h].type === 'suite') {
+          var so;
+          try { so = JSON.parse(String(clean[h].value).replace(/\{q\}/g, '')); }
+          catch (e2) { return { ok: false, error: 'Step ' + (h + 1) + ': app value must be valid JSON' }; }
+          // A missing app or verb is the failure mode worth catching here: the host would answer
+          // "no app named" at run time, unattended, from a trigger nobody is watching.
+          if (!so || !so.app) return { ok: false, error: 'Step ' + (h + 1) + ': app step needs an "app" (the bus name)' };
+          if (!so.verb) return { ok: false, error: 'Step ' + (h + 1) + ': app step needs a "verb"' };
+        }
       }
       return { ok: true, steps: clean };
     }
@@ -424,6 +458,12 @@
       var o; try { o = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return null; }
       return (o && o.cmd) || null;
     }
+    // An app step is always the SAME host verb (`suite_call`) whatever peer verb it names, because
+    // the reversibility question is about zwire's journal, not the peer's: this host cannot
+    // compensate a write that happened in another process. `suite_call` is classed irreversible in
+    // the host's REV table, so revProblems refuses the step in a self-reverting chain from the
+    // host's own answer rather than from a rule mirrored here.
+    if (t === 'suite') return 'suite_call';
     return 'browser.openTab';   // url
   }
   // Steps a self-reverting chain cannot contain, given the host's rev table.

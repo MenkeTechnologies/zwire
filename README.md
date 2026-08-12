@@ -48,8 +48,8 @@ workspace layered on top:
 - **output triggers** — a **Triggers HUD page** that binds a regex to page text
   *as it renders/streams* (the browser analog of a terminal-emulator trigger) and,
   on a match, runs a chain of typed steps — shell / stryke / JavaScript /
-  AppleScript / batch / browser-action / scheme / host — the identical step set a
-  ⌘K command runs, with the matched line passed as `{q}`; per-trigger cooldown, a
+  AppleScript / batch / browser-action / suite-app-call / scheme / host — the
+  identical step set a ⌘K command runs, with the matched line passed as `{q}`; per-trigger cooldown, a
   **once-per-page** mode, and an optional URL-filter regex keep it scoped, and a
   **self-reverting** mode runs the whole chain as one `zwire-host` transaction so a
   failure at any step undoes the steps that already ran;
@@ -57,8 +57,10 @@ workspace layered on top:
   that wires a persisted, reactive dataflow **edge** between tiled webviews:
   extract text from a source pane (selector / regex / selection / URL), transform
   it (a stryke `|>` op chain, JS, or passthrough), and deliver it to a sink pane
-  (navigate / fill a field / replace or append a node / batch-open) — with a graph
-  cycle-check that refuses an A→B→A loop. No rival ships piping between tiled views;
+  (navigate / fill a field / replace or append a node / batch-open) — or past the
+  browser entirely, into another running MenkeTechnologies app as a typed bus call —
+  with a graph cycle-check that refuses an A→B→A loop. No rival ships piping between
+  tiled views;
 - an **automation verb bus** — one namespaced `browser.*` surface (tab / group /
   window ops, edge-snapping, downloads, browsing-data clearing, bookmarks,
   reading list, extensions, power, screenshot, notify, tmux toggle) that the ⌘K
@@ -193,7 +195,7 @@ against the fresh output — the browser analog of a terminal emulator's output
 triggers, a thing a tab-multiplexer can't do because it never sees rendered text.
 On a match the trigger runs a **chain of typed steps** — the identical wizard a ⌘K
 command uses (`shell` / `stryke` / `js` / `applescript` / `batch` / `action` /
-`scheme` / `host` / `url`), rendered by the shared `ZwireStepWizard` and executed
+`suite` / `scheme` / `host` / `url`), rendered by the shared `ZwireStepWizard` and executed
 through the same `window.ZWIRE_CMD_EXEC` path — with the matched line passed as the
 `{q}` argument. Each trigger carries its own cooldown (no process storm on bursty
 output), an optional **once-per-page** mode (fires at most once per page load,
@@ -243,9 +245,12 @@ The **filter** transforms the emitted lines: a stryke-flavoured `|>` op chain
 (`trim |> uniq |> first`, plus `grep`/`reject`/`replace`/`nth`/`take`/`join`/… ),
 a JS expression (`lines`/`text` in scope), or passthrough. The **sink** delivers
 the result to any pane whose URL matches — navigate it to a URL, fill a
-selector-addressed field, replace or append a node, or batch-open every line.
-Sink writes are posted through the pane forwarder, never a direct cross-origin
-DOM write. Each edge carries a cooldown, an optional once-per-page mode, and
+selector-addressed field, replace or append a node, or batch-open every line — or,
+with the **app** sink kind, leave the browser altogether and call a typed verb on
+another running MenkeTechnologies app over its bus socket (see the suite bus client
+below), which is how live page text lands in `zcite` / `zreq` / `zpdf` reactively.
+Sink writes into a pane are posted through the pane forwarder, never a direct
+cross-origin DOM write. Each edge carries a cooldown, an optional once-per-page mode, and
 value-dedupe. Start one from the overlay with the tmux prefix then `|` (seeds the
 active pane as the source); the page is full CRUD with per-edge enable toggles.
 
@@ -275,6 +280,37 @@ uninstall + **app launch**, **keep-awake** power control, **screenshot**,
 through `ZGui.automation` — the shared registry every embedded core contributes
 verbs to — so a stryke script sees one combined, introspectable `browser.*`
 surface via `App::here()->verbs()`.
+
+**Suite bus client (`zwire-host/src/suite.rs`).** The verb bus above is zwire being
+*driven*. This is zwire *driving*: the browser calls typed verbs on the **other running
+MenkeTechnologies apps** over their own bus sockets, and gets their return values back.
+It is reachable three ways, all on the same host command set (`suite_list` /
+`suite_verbs` / `suite_call` / `suite_get`):
+
+- a **⌘K command / trigger step** of type **app** — `{"app":"zcite","verb":"item.add",
+  "args":{"doi":"{q}"}}`, so a regex matching a DOI on a page as it renders files that
+  paper in the reference manager without a human in the loop;
+- a **pipeline sink** of kind **app** — a pane pipeline whose sink is not a pane at all
+  but another application, so extracted page text is delivered reactively into
+  `zcite` / `zreq` / `zpdf` / … as a typed call;
+- the palette command **Apps on the bus**, which reports which apps are actually
+  running.
+
+Three details are load-bearing. **Liveness is proven, not assumed**: the socket
+directory keeps entries from processes that died without unlinking, so enumeration
+dials every candidate and keeps only the ones that answer. **`{q}` is spliced
+JSON-escaped**, because page text routinely carries a quote, a backslash or a newline
+and a raw splice would produce a template that parses on some pages and not others.
+And a cross-app step is **refused inside a self-reverting chain** — `suite_call` is
+classed `irreversible` in the host's reversibility table, because zwire's journal holds
+zwire's own writes and cannot compensate one that happened inside another process. A
+chain that needs all-or-nothing across apps asks the suite's saga coordinator for it
+*through* this client rather than having zwire invent a second one.
+
+Chrome cannot do any of this. A Chrome extension's only route out of the browser is
+native messaging to a **single pre-registered** host binary declared in its manifest;
+there is no way to enumerate other running applications, ask one what it can do, call a
+named operation on it with typed arguments, or read a value back.
 
 **Around it:** a **⌘K command palette** (`zpalette`) — which also carries the
 scheme picker, the light/dark toggle, the settings controls, a **window/tab

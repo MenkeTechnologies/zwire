@@ -2,7 +2,7 @@
  * browser analog of zterminal's terminal triggers). A trigger matches a regex against
  * page text as it renders/streams and, on a match, runs a CHAIN of typed steps — the
  * identical step set a ⌘K command runs (shell / stryke / js / applescript / batch /
- * action / scheme / host / url), via the shared ZwireStepWizard editor. The matched
+ * action / suite / scheme / host / url), via the shared ZwireStepWizard editor. The matched
  * line is the argument, so {q} in any step expands to it.
  *
  * Stored in chrome.storage.local 'zb_triggers' (array). The content-script engine
