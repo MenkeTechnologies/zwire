@@ -307,10 +307,13 @@ zwire's own writes and cannot compensate one that happened inside another proces
 chain that needs all-or-nothing across apps asks the suite's saga coordinator for it
 *through* this client rather than having zwire invent a second one.
 
-Chrome cannot do any of this. A Chrome extension's only route out of the browser is
-native messaging to a **single pre-registered** host binary declared in its manifest;
-there is no way to enumerate other running applications, ask one what it can do, call a
-named operation on it with typed arguments, or read a value back.
+Chrome cannot do any of this. An extension's only route out of the browser is **native
+messaging**, and that requires a host that was installed ahead of time with its own
+manifest file whose `allowed_origins` names the calling extension's id — the docs are
+explicit that those values ["can't contain wildcards"](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging).
+Nothing in that API discovers what is running, asks a program what it can do, calls a
+named operation with typed arguments, or returns a value from one. Every app zwire
+reaches here is found at runtime, introspected for its verb list, and called by name.
 
 **Around it:** a **⌘K command palette** (`zpalette`) — which also carries the
 scheme picker, the light/dark toggle, the settings controls, a **window/tab
