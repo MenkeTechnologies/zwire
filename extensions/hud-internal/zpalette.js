@@ -408,7 +408,17 @@
   // half-compensated at abort time. Errors come back as the refusal text.
   function busCall(verb, args, txn, done) {
     var d = settle(done, verb);
-    hostReq({ cmd: 'call', verb: verb, args: args || {}, txn: txn }, function (err) { d(err ? verb + ': ' + err : null); });
+    hostReq({ cmd: 'call', verb: verb, args: args || {}, txn: txn }, function (err, r) {
+      if (err) { d(verb + ': ' + err); return; }
+      // The `call` ENVELOPE says whether the frame was accepted and journaled; the VERB's own
+      // verdict is inside `result`. Reading only the envelope made every failure inside a
+      // transaction look like a success — a postcondition that did not hold, a host command that
+      // could not run — and the chain committed anyway. A verb that reported failure is a failed
+      // step, which is what the chain (and therefore `txn_abort`) is waiting to hear.
+      var res = r && r.result;
+      if (res && res.ok === false) { d(verb + ': ' + (res.err || 'failed')); return; }
+      d(null);
+    });
   }
   // Small transient toast for host-command feedback (content script — may not
   // have ZGui.toast; fall back to a self-styled corner popup).
@@ -599,6 +609,41 @@
         var val = r && r.result;
         hostToast(so.app + '.' + so.verb + ' ◂ ' + (val && typeof val === 'object' ? JSON.stringify(val).slice(0, 140) : String(val == null ? 'ok ✓' : val)));
         ds(null);
+      });
+      return;
+    }
+    // A POSTCONDITION over the page this chain rendered: `{"state":"page.text","op":"contains",
+    // "value":"Order confirmed"}`. zwire-host projects the LIVE dom (page.rs), evaluates the
+    // predicate host-side, and answers ok:false when it does not hold — so the step fails, the
+    // chain stops, and inside a transaction the journaled steps are replayed backwards. That is the
+    // whole point: the commit decision stops being "did the calls return" and becomes "did the
+    // browser end up on the page we said it would".
+    if (type === 'assert') {
+      // {q} is spliced JSON-ESCAPED, exactly as the `app` step does it — a trigger match off a live
+      // page routinely carries quotes and newlines, which would otherwise break the template.
+      var qA = JSON.stringify(String(arg == null ? '' : arg));
+      var aBody = String(v).replace(/\{q\}/g, qA.substring(1, qA.length - 1));
+      var ao; try { ao = JSON.parse(aBody); } catch (errA) { hostToast('assert: invalid JSON', true); d('assert: invalid JSON'); return; }
+      if (!ao || !ao.op) { hostToast('assert: needs an "op"', true); d('assert: needs an "op"'); return; }
+      var aArgs = {
+        state: ao.state || 'page.text',
+        op: String(ao.op),
+        value: ao.value == null ? '' : String(ao.value),
+        ignore_case: !!ao.ignore_case
+      };
+      if (ao.timeout_ms != null) aArgs.timeout_ms = ao.timeout_ms;
+      if (ao.selector) aArgs.selector = String(ao.selector);
+      if (ao.urls) aArgs.urls = String(ao.urls);
+      // Inside a transaction it travels the bus `call` (class-checked like every other step);
+      // outside one, the same handler is reachable as a plain host command. `page.assert` is `pure`
+      // in the host's REV table — reading a page changes nothing — so it is never refused at the
+      // gate the way an unrevertible step is.
+      if (txn != null) { busCall('page.assert', aArgs, txn, d); return; }
+      var da = settle(d, 'assert');
+      hostReq({ cmd: 'page_get', state: 'page.assert', args: aArgs }, function (err) {
+        if (err) { hostToast('assert: ' + err, true); da('assert: ' + err); return; }
+        hostToast('assert ✓ ' + aArgs.state + ' ' + aArgs.op);
+        da(null);
       });
       return;
     }

@@ -34,10 +34,15 @@
     .concat([
       { value: 'action', label: 'Browser action' },
       { value: 'suite', label: 'Call another app (bus)' },
+      { value: 'assert', label: 'Assert the rendered page' },
       { value: 'scheme', label: 'Set color scheme' },
       { value: 'host', label: 'zwire-host (JSON)' }
     ]);
-  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', suite: 'app', scheme: 'scheme', host: 'host' };
+  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', suite: 'app', assert: 'assert', scheme: 'scheme', host: 'host' };
+  // The postcondition step's vocabulary, mirrored from the host so the editor can offer it. The
+  // host is authoritative — `page_states` returns both lists — and a value it does not know is
+  // refused there, before the page is read.
+  var ASSERT_OPS = ['contains', 'not_contains', 'equals', 'empty', 'nonempty', 'count_at_least', 'count_at_most'];
   var ACTIONS = [
     ['newTab', 'New tab'], ['newWindow', 'New window'], ['duplicateTab', 'Duplicate tab'],
     ['reopenTab', 'Reopen closed tab'], ['closeTab', 'Close tab'], ['closeOthers', 'Close other tabs'],
@@ -112,6 +117,12 @@
   function stepPreview(s) {
     if (s.type === 'action') { var a = ACTIONS.filter(function (x) { return x[0] === s.value; })[0]; return a ? a[1] : s.value; }
     if (s.type === 'scheme') { var sc = SCHEMES.filter(function (x) { return x[0] === s.value; })[0]; return sc ? sc[1] : s.value; }
+    if (s.type === 'assert') {
+      // `page.text contains "Order confirmed"` reads as the condition it is; the JSON body does not.
+      var ao; try { ao = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return s.value; }
+      if (!ao || !ao.op) return s.value;
+      return (ao.state || 'page.text') + ' ' + ao.op + (ao.value == null || ao.value === '' ? '' : ' "' + ao.value + '"');
+    }
     if (s.type === 'suite') {
       // A row is far more readable as `zcite.item.add` than as the raw JSON body.
       var so; try { so = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return s.value; }
@@ -321,6 +332,7 @@
       if (type === 'shell') return makeMonacoControl('shell', val);
       if (type === 'host') return Z.textarea({ placeholder: '{"cmd":"notify","title":"hi {q}"}', rows: 3, value: val || '' });
       if (type === 'suite') return Z.textarea({ placeholder: '{"app":"zcite","verb":"item.add","args":{"doi":"{q}"}}', rows: 3, value: val || '' });
+      if (type === 'assert') return Z.textarea({ placeholder: '{"state":"page.text","op":"contains","value":"Order confirmed"}', rows: 3, value: val || '' });
       return Z.textfield({ placeholder: 'https://example.com   ({q} optional)', value: val || '' });
     }
     function syncSteps() {
@@ -389,6 +401,15 @@
           // "no app named" at run time, unattended, from a trigger nobody is watching.
           if (!so || !so.app) return { ok: false, error: 'Step ' + (h + 1) + ': app step needs an "app" (the bus name)' };
           if (!so.verb) return { ok: false, error: 'Step ' + (h + 1) + ': app step needs a "verb"' };
+        }
+        if (clean[h].type === 'assert') {
+          var ao2;
+          try { ao2 = JSON.parse(String(clean[h].value).replace(/\{q\}/g, '')); }
+          catch (e3) { return { ok: false, error: 'Step ' + (h + 1) + ': assert value must be valid JSON' }; }
+          // An unknown op would be refused by the host at run time, unattended, from a trigger
+          // nobody is watching — and the chain would revert for the wrong reason.
+          if (!ao2 || !ao2.op) return { ok: false, error: 'Step ' + (h + 1) + ': assert step needs an "op" (' + ASSERT_OPS.join(', ') + ')' };
+          if (ASSERT_OPS.indexOf(String(ao2.op)) < 0) return { ok: false, error: 'Step ' + (h + 1) + ': unknown assert op "' + ao2.op + '" (' + ASSERT_OPS.join(', ') + ')' };
         }
       }
       return { ok: true, steps: clean };
@@ -464,6 +485,10 @@
     // the host's REV table, so revProblems refuses the step in a self-reverting chain from the
     // host's own answer rather than from a rule mirrored here.
     if (t === 'suite') return 'suite_call';
+    // A postcondition READS the page and changes nothing, so the host classes `page.assert` `pure`
+    // and a self-reverting chain may contain it. That is the whole design: the step that decides
+    // whether to commit must itself be safe to run inside the transaction it is deciding about.
+    if (t === 'assert') return 'page.assert';
     return 'browser.openTab';   // url
   }
   // Steps a self-reverting chain cannot contain, given the host's rev table.
@@ -503,6 +528,6 @@
     create: create,
     TYPES: TYPES, TYPE_LABEL: TYPE_LABEL, ACTIONS: ACTIONS, SCHEMES: SCHEMES, HINTS: HINTS,
     entrySteps: entrySteps, stepsSummary: stepsSummary, stepPreview: stepPreview,
-    BUS_ACTIONS: BUS_ACTIONS, stepVerb: stepVerb, revProblems: revProblems, loadRevMap: loadRevMap
+    BUS_ACTIONS: BUS_ACTIONS, ASSERT_OPS: ASSERT_OPS, stepVerb: stepVerb, revProblems: revProblems, loadRevMap: loadRevMap
   };
 })();

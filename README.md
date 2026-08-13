@@ -48,7 +48,8 @@ workspace layered on top:
 - **output triggers** — a **Triggers HUD page** that binds a regex to page text
   *as it renders/streams* (the browser analog of a terminal-emulator trigger) and,
   on a match, runs a chain of typed steps — shell / stryke / JavaScript /
-  AppleScript / batch / browser-action / suite-app-call / scheme / host — the
+  AppleScript / batch / browser-action / suite-app-call / page-assert / scheme /
+  host — the
   identical step set a ⌘K command runs, with the matched line passed as `{q}`; per-trigger cooldown, a
   **once-per-page** mode, and an optional URL-filter regex keep it scoped, and a
   **self-reverting** mode runs the whole chain as one `zwire-host` transaction so a
@@ -77,6 +78,34 @@ workspace layered on top:
   transaction opens rather than stranding one half-done, and the whole N-step
   unwind arrives as a single `browser.undo` frame — one native-messaging round
   trip, not N;
+- **the rendered page as typed state** — the suite bus can ask this browser what
+  it is *showing*, not just tell it what to do. `page.url` · `page.title` ·
+  `page.text` · `page.links` · `page.headings` · `page.tables` · `page.forms` ·
+  `page.meta` · `page.selection` (plus `page.extract` for any selector) are
+  answered from the **live DOM** — after the login, after the JavaScript, inside
+  the session the user is actually in — to any running app that dials
+  `App::open("zwire")->get("page.tables")`, with no browser client library, no
+  remote-debugging port and no JavaScript eval channel. The page stops being a
+  destination and becomes an input: zoffice pulls the tables, zreq reads the
+  JSON an authenticated endpoint really returned, a stryke one-liner pipes
+  `page.links` into anything. There are deliberately **no page writes** here
+  (mutation stays on the journaled `browser.*` path, so nothing can change the
+  browser behind `txn_abort`'s back) and `page.forms` publishes a form's *shape*
+  — action, method, field names and types — and never a field's value;
+- **postcondition-gated chains** — the piece the two features above only make
+  sense together. `page.assert` projects the live page and tests it
+  (`contains` · `not_contains` · `equals` · `empty` · `nonempty` ·
+  `count_at_least` · `count_at_most`), and a failed assertion is a failed step —
+  so inside a transaction the browser **unwinds itself when the page did not come
+  out right**. "Open these 40 tabs, group them, pin three — and if the page that
+  came back does not say `Order confirmed`, put my browser back exactly as it
+  was." The commit decision stops being *did the calls return* and becomes *what
+  did the browser actually render*. Playwright and Cypress assert over rendered
+  state but have nothing to roll back to (their isolation model is a throwaway
+  context, not your live browser); browser MCP servers and agentic browsers read
+  the live page and stop or retry on failure rather than restoring what they
+  changed. A page read is `pure` in the host's reversibility table, which is what
+  lets the deciding step run *inside* the transaction it is deciding about;
 - **custom new-tab layouts** — a port of Vivaldi's Start Page onto the zwire new
   tab, and then some: named layouts you switch between (not one start page you
   reconfigure), each with its own **Speed Dial groups**, **widget grid**,
@@ -335,6 +364,46 @@ explicit that those values ["can't contain wildcards"](https://developer.chrome.
 Nothing in that API discovers what is running, asks a program what it can do, calls a
 named operation with typed arguments, or returns a value from one. Every app zwire
 reaches here is found at runtime, introspected for its verb list, and called by name.
+
+**The page as typed state, and the postcondition it enables (`zpage-core.js` +
+`zwire-host/src/page.rs`).** The two sections above both move COMMANDS. This moves DATA
+the other way: any app on the bus can read what the browser is rendering *right now*.
+
+```jsonc
+{"t":"get","id":1,"state":"page.tables"}    // the tables on the active tab, typed
+{"t":"call","id":2,"verb":"page.extract","args":{"selector":"h2 a","attr":"href"}}
+{"t":"call","id":3,"verb":"page.assert","args":{"state":"page.text","op":"contains","value":"Order confirmed"}}
+```
+
+Nine projections plus `page.extract`, each computed in the tab by a pure engine
+(`zpage-core.js`) that the service worker injects on demand. `args` accepts a `tabId` or
+a `urls` regex, so an app can read a **background** tab — and a filter that matches
+nothing answers nothing rather than quietly reporting on a different page.
+
+Two limits are structural, not settings. **No page writes**: mutation stays on the
+journaled `browser.*` verbs, so nothing can change the browser behind `txn_abort`'s
+back. **No field values**: `page.forms` publishes action, method, field names and types,
+never what is typed into them, because autofilled credentials are on the page too. That
+read-only-ness is why every `page.*` verb is `pure` in the reversibility table — and
+*that* is what lets a postcondition run inside the transaction it is deciding about.
+
+The **assert** step (⌘K commands, trigger chains, and the step wizard) is where it pays
+off: `{"state":"page.text","op":"contains","value":"Order confirmed"}`. The host projects
+the live DOM, evaluates the predicate, and answers `ok:false` when it does not hold —
+which the chain executor already treats as a failed step, which aborts the transaction,
+which replays the journaled inverses. A chain therefore commits on **what the browser
+rendered**, not on whether its calls returned. A malformed assertion (an unknown op, a
+projection that does not exist) is refused before the page is ever read and carries no
+verdict, so a chain can never revert because of a typo in its own editor.
+
+Mechanically it is a rendezvous, because the DOM is a process away and the host→browser
+direction had always been fire-and-forget. The browser-attached host process binds a
+second endpoint (`zgui/zwire-page.sock`); every other host process forwards there with
+the bus client; the query is published with a correlation id and the worker answers it
+by id. Nobody polls, a closed browser fails the dial immediately instead of waiting out
+a timeout, and a page read always answers on its own thread — in the attached process
+the query and its answer share one connection, so answering inline would block the only
+reader that could deliver the answer.
 
 **Around it:** a **⌘K command palette** (`zpalette`) — which also carries the
 scheme picker, the light/dark toggle, the settings controls, a **window/tab

@@ -322,5 +322,94 @@ await new Promise((resolve) => {
   });
 });
 
+/* ---- 10. a postcondition over the rendered page gates the chain ---------------------------- */
+// The `assert` step asks zwire-host to project the LIVE dom and test a predicate against it
+// (page.rs). Outside a transaction it is a plain `page_get` naming `page.assert`; what matters is
+// that it is a real step with a real verdict, not a toast.
+await new Promise((resolve) => {
+  const { X, calls } = load({ hostReply: () => ({ ok: true, reply: { ok: true, assert: true, pass: true } }) });
+  X.runCustom({
+    steps: [
+      { type: 'assert', value: '{"state":"page.text","op":"contains","value":"{q}"}' },
+      { type: 'shell', value: 'after' },
+    ],
+  }, 'Order "confirmed"', (err) => {
+    check('a satisfied postcondition lets the chain continue', () => {
+      assert.equal(err, null, `assert step failed: ${err}`);
+      const req = calls.filter((c) => c.kind === 'host').map((c) => c.req).find((r) => r.cmd === 'page_get');
+      assert.ok(req, 'no page_get was issued');
+      assert.equal(req.state, 'page.assert');
+      assert.equal(req.args.state, 'page.text');
+      assert.equal(req.args.op, 'contains');
+      // {q} is spliced JSON-ESCAPED, like the suite step: a match off a live page carries quotes.
+      assert.equal(req.args.value, 'Order "confirmed"');
+      assert.equal(calls.filter((c) => c.kind === 'host' && c.req.cmd === 'exec').length, 1, 'the following step did not run');
+    });
+    resolve();
+  });
+});
+
+await new Promise((resolve) => {
+  const { X, calls } = load({
+    hostReply: (req) => (req.cmd === 'page_get'
+      ? { ok: true, reply: { ok: false, assert: true, pass: false, err: 'assertion failed: page.text contains "Order confirmed"' } }
+      : { ok: true, reply: { ok: true } }),
+  });
+  X.runCustom({
+    steps: [
+      { type: 'assert', value: '{"state":"page.text","op":"contains","value":"Order confirmed"}' },
+      { type: 'shell', value: 'never' },
+    ],
+  }, '', (err) => {
+    check('a page that fails the postcondition stops the chain', () => {
+      assert.ok(err, 'a false postcondition must be reported as a step failure');
+      assert.match(err, /assertion failed/);
+      assert.equal(calls.filter((c) => c.kind === 'host' && c.req.cmd === 'exec').length, 0,
+        'the chain continued past a page that did not satisfy its postcondition');
+    });
+    resolve();
+  });
+});
+
+/* ---- 11. THE POINT: a false postcondition ABORTS the transaction it is inside -------------- */
+// Two things have to be true at once, and each is easy to lose on its own: `page.assert` must be
+// allowed INSIDE the transaction (it is `pure` — reading a page changes nothing), and its `ok:false`
+// must reach the executor as a failed step so the chain aborts. Between them they are what makes
+// the commit decision a fact about what the browser rendered rather than about what returned.
+await new Promise((resolve) => {
+  const { X, calls } = load({
+    hostReply: (req) => {
+      if (req.cmd !== 'call') return { ok: true, reply: { ok: true, txn: 1, steps: 1 } };
+      // The host's `call` ENVELOPE is ok:true whenever the frame was accepted and journaled; the
+      // verb's own verdict is inside `result`. This shape is exactly what a failed postcondition
+      // looks like on the wire, and reading only the envelope would commit the chain.
+      return req.verb === 'page.assert'
+        ? { ok: true, reply: { ok: true, result: { ok: false, assert: true, pass: false, err: 'assertion failed: page.text contains "Order confirmed"' } } }
+        : { ok: true, reply: { ok: true, result: { ok: true } } };
+    },
+  });
+  X.runTxn({
+    steps: [
+      { type: 'action', value: 'newTab' },
+      { type: 'assert', value: '{"state":"page.text","op":"contains","value":"Order confirmed"}' },
+      { type: 'action', value: 'pinTab' },
+    ],
+  }, '', (err) => {
+    check('a transacted chain whose page fails its postcondition aborts and unwinds', () => {
+      assert.ok(err, 'a false postcondition inside a transaction must fail the chain');
+      assert.match(err, /assertion failed/);
+      const reqs = calls.filter((c) => c.kind === 'host').map((c) => c.req);
+      const gated = reqs.find((r) => r.cmd === 'call' && r.verb === 'page.assert');
+      assert.ok(gated, 'the assert step did not travel as a class-checked bus call');
+      assert.equal(gated.txn, reqs[0].txn, 'the postcondition must run inside the open transaction');
+      assert.ok(!reqs.some((r) => r.cmd === 'call' && r.verb === 'browser.pinTab'),
+        'the step after a failed postcondition ran anyway');
+      assert.equal(reqs[reqs.length - 1].cmd, 'txn_abort',
+        'the transaction committed over a page that did not satisfy its postcondition');
+    });
+    resolve();
+  });
+});
+
 if (failures) process.stderr.write(`\n${failures} check(s) failed\n`); else process.stdout.write('\nall checks passed\n');
 process.exit(failures ? 1 : 0);

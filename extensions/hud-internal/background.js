@@ -14,6 +14,10 @@ var HOST = 'com.zwire.hud';
 // `_seq`-stamped action so an aborted transaction can be unwound. Loaded first so execZbCmd and the
 // tab/window listeners below can reach `self.ZB_JOURNAL`.
 try { importScripts('zjournal.js'); } catch (e) { /* journal unavailable: actions still execute, undo does not */ }
+// The page-projection engine (see zpage-core.js). Loaded HERE for the two decisions this worker
+// makes before touching a tab — is the origin readable, and which tab is being asked about — and
+// injected into the target tab for the projection itself.
+try { importScripts('zpage-core.js'); } catch (e) { /* page state unavailable: queries answer with an error */ }
 try { if (self.ZB_JOURNAL) self.ZB_JOURNAL.hydrate(); } catch (e) {}
 
 // Surface uncaught worker errors to the host log — the MV3 service worker has no visible DevTools
@@ -391,6 +395,9 @@ function startSysStream() {
       // arrive as one. Both paths stamp the same `_n`, and execZbCmd runs each `_n` exactly once, so
       // subscribing here adds delivery without reintroducing double execution.
       else if (m.ev === 'pub' && m.topic === 'zbus.action') execZbCmd(m.data);
+      // Another app asked what this browser is rendering. The answer goes back down THIS port as a
+      // `page_reply` carrying the query's id — see servePageQuery.
+      else if (m.ev === 'pub' && m.topic === 'zbus.query') servePageQuery(m.data);
       else if (m.ev === 'pub') applyThemeFromHost(m.topic, m.data);
       // Correlated reply to a content-script stryke_run relayed over this port. The host attaches the
       // browser.* action as m.zbAction; we are its single consumer (execZbCmd runs the tab op in the SW).
@@ -403,6 +410,12 @@ function startSysStream() {
     });
     port.onDisconnect.addListener(function () { void chrome.runtime.lastError; sysPort = null; setTimeout(startSysStream, 5000); });
     port.postMessage({ cmd: 'sysinfo_start' });
+    // Claim THIS host process as the browser's page endpoint, then subscribe to the queries it will
+    // forward. Order matters only in that both must happen on the port whose process is attached to
+    // this worker: the host binds `zwire-page.sock` on `page_serve`, and every other host process
+    // proxies page requests to it. Re-sent on every reconnect; the host makes it idempotent.
+    port.postMessage({ cmd: 'page_serve' });
+    port.postMessage({ cmd: 'sub', topic: 'zbus.query' });
     port.postMessage({ cmd: 'sub', topic: 'zbus.action' });
     port.postMessage({ cmd: 'sub', topic: 'scheme' });
     port.postMessage({ cmd: 'sub', topic: 'ui' });
@@ -410,6 +423,81 @@ function startSysStream() {
   } catch (e) { sysPort = null; setTimeout(startSysStream, 5000); }
 }
 startSysStream();
+
+// ── the rendered page as typed state ────────────────────────────────────────────────────────────
+// Answer one `zbus.query` from the suite bus: pick the tab, check the origin, inject the pure
+// projection engine (zpage-core.js) into it, and post the value back under the query's `qid`.
+//
+// EVERY path replies exactly once, including every failure. The asking app is blocked on a
+// condvar in zwire-host until this answers or its deadline passes, so a silently dropped query is
+// not a missing feature — it is another process sitting still for five seconds.
+function pageReply(qid, ok, value, err) {
+  try {
+    if (sysPort) sysPort.postMessage({ cmd: 'page_reply', qid: qid, ok: !!ok, value: value == null ? null : value, err: err || '' });
+  } catch (e) { reportErr('page-reply', e); }
+}
+// The tab a query addresses. `chrome.tabs.query({})` covers every window, so a `urls` filter can
+// name a background tab — the point of the filter is to read a page that is NOT on screen.
+function pageTab(args, cb) {
+  var P = self.ZWIRE_PAGE;
+  try {
+    chrome.tabs.query({}, function (tabs) {
+      void chrome.runtime.lastError;
+      var list = (tabs || []).slice();
+      // `active` alone is per-window; the focused window's active tab is the one a user means by
+      // "the page". Re-flag it so the pure picker needs no chrome.* knowledge.
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (front) {
+        void chrome.runtime.lastError;
+        var id = front && front[0] && front[0].id;
+        list.forEach(function (t) { t.active = (t.id === id); });
+        cb(P ? P.planTargets(list, args) : null);
+      });
+    });
+  } catch (e) { cb(null); }
+}
+function servePageQuery(q) {
+  if (!q || q.qid == null) return;
+  var P = self.ZWIRE_PAGE;
+  if (!P) { pageReply(q.qid, false, null, 'the projection engine failed to load'); return; }
+  var kind = String(q.state || ''), args = q.args || {};
+  if (!P.isProjection(kind)) { pageReply(q.qid, false, null, 'unknown projection: ' + kind); return; }
+  chrome.storage.local.get({ zb_page_deny: [] }, function (st) {
+    void chrome.runtime.lastError;
+    pageTab(args, function (tab) {
+      if (!tab || tab.id == null) { pageReply(q.qid, false, null, 'no tab matches this query'); return; }
+      var gate = P.originAllowed(tab.url || '', st.zb_page_deny || []);
+      if (!gate.ok) { pageReply(q.qid, false, null, gate.reason); return; }
+      try {
+        // Two injections, not one: the engine is a FILE (so tests run the same bytes the tab does)
+        // and the call is a function with arguments. Both land in the same isolated world, so the
+        // second sees what the first defined.
+        chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['zpage-core.js'] }, function () {
+          if (chrome.runtime.lastError) { pageReply(q.qid, false, null, chrome.runtime.lastError.message); return; }
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            args: [kind, args],
+            func: function (k, a) {
+              var API = window.ZWIRE_PAGE;
+              if (!API) return { __err: 'projection engine missing in tab' };
+              try {
+                var o = {}, key;
+                for (key in (a || {})) if (Object.prototype.hasOwnProperty.call(a, key)) o[key] = a[key];
+                // The selection lives on the window; the engine is deliberately window-free.
+                o.selection = String((window.getSelection && window.getSelection()) || '');
+                return API.project(document, k, o);
+              } catch (e) { return { __err: String((e && e.message) || e) }; }
+            }
+          }, function (res) {
+            if (chrome.runtime.lastError) { pageReply(q.qid, false, null, chrome.runtime.lastError.message); return; }
+            var v = res && res[0] ? res[0].result : null;
+            if (v && v.__err) { pageReply(q.qid, false, null, v.__err); return; }
+            pageReply(q.qid, true, v);
+          });
+        });
+      } catch (e) { pageReply(q.qid, false, null, String((e && e.message) || e)); }
+    });
+  });
+}
 
 // A hud-internal surface changed the theme in chrome.storage (a content-script
 // palette or a HUD page flips zb_ui / zb_scheme). Write it to the host — the

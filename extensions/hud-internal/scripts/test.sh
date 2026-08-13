@@ -71,6 +71,16 @@ fi
 command rm -f /tmp/zwire-hud-pipes.$$
 echo
 
+cyber_section "PAGE STATE (typed DOM projections / origin gate / host catalogue parity)"
+if node tests/pagestate.mjs 2>/tmp/zwire-hud-page.$$; then
+  cyber_ok "page projections nominal"
+else
+  FAIL=1; cyber_fail "page projections compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-page.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-page.$$
+echo
+
 cyber_section "BRACE NAV (zsh brace-expansion batch-open provider)"
 if node tests/bracenav.mjs 2>/tmp/zwire-hud-brace.$$; then
   cyber_ok "brace nav nominal"
