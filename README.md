@@ -175,6 +175,27 @@ page used to keep its own flat copy of the rebuild, so a top/bottom split
 previewed — and reloaded — as side-by-side columns. Both surfaces read and write
 the one `zb_tmux_sessions` array, so an edit in either shows up in the other.
 
+**Files (`pages/files.html`).** The fleet's file manager, inside the browser.
+The page mounts `zpwr-file-browser` (`lib/file-browser`, a submodule) **unmodified** —
+tabbed panes with recursive tiling splits, a folder tree, preview pane, favourites,
+colour labels, bulk rename, and its own fuzzy filter. zwire contributes only the
+backend: `pages/files-host.js` binds `window.zfbHost` to `zwire-host` over one
+persistent native-messaging port, mapping each method to an `fs_*` command. All 32
+methods the browser calls are wired, so no control is dead. Two behave differently
+here by choice — *Open Terminal* opens **zwire's own** PTY terminal tab at that
+directory rather than launching the platform's terminal application, and the
+directory watch resolves as a no-op, matching every other backend in the fleet
+(the shared browser has no host-event channel on any of them).
+
+**Timeline (`pages/timeline.html`).** Browsing history as an arrangement. The grid
+is `zpwr-clip-engine` (`lib/clip-engine`, a submodule) and is not forked, patched or
+subclassed; zwire adds a single domain file (`pages/history-domain.js`) in the same
+shape as the engine's own `domains/*.js`. The mapping is literal — lane = an origin
+you visited, unit = one hour, cell value = visit intensity normalised against the
+busiest hour, drawn as the engine's 0..1 band. The surface is deliberately
+read-only: painting a cell would assert a visit that never happened, and the
+domain's `serialize` would then hand that back as real data.
+
 **Hooks (`pages/hooks.html`).** Bind
 [stryke](https://github.com/MenkeTechnologies/strykelang) scripts to browser
 lifecycle events. The service worker fires 55 catalogued events — tab
@@ -515,7 +536,7 @@ without a host and silently hand them back to the browser's built-in downloader.
 | Layer | What it is |
 |---|---|
 | **Base** | The compiled `fork/` build — a patched Chromium (pinned tag `150.0.7871.46`), unbranded release |
-| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 24 HUD pages (incl. the Sessions manager, the Pipelines editor, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
+| **HUD workspace** | `extensions/hud-internal` — the tiling overlay (`ztmux-config`/`ztmux-pane` driving `ZGui.tmux`), ⌘K palette (`zpalette`), vim nav + keymap (`zkeys`/`zvim`), find (`zfind`), status bar (`zpowerline` → `ZGui.powerline`), the 8-scheme picker (with light/dark toggle), and 26 HUD pages (incl. the Files browser, the History Timeline, the Sessions manager, the Pipelines editor, Keyboard remapper, Host console, App Store + a live Audio page). MV3 content scripts on `chrome://*/*` + `http(s)`; bridges to a native host. Needs `--extensions-on-chrome-urls` |
 | **GUI toolkit** | `extensions/hud-internal/lib/zgui-core` — the shared `ZGui` component library (260 `webui/*` modules), a submodule loaded straight from path. Every HUD page composes `ZGui` components; zwire supplies only the glue. The New Tab extension cannot read another extension's directory, so `newtab/lib/` carries same-revision copies of the few modules it loads |
 | **Native host** | `extensions/hud-internal/native/zwire-host` — a single Rust binary (native-messaging host + Unix-socket daemon: sysmon, fs, exec, PTY, KV, hooks, OS ops), a submodule. Backs the Host console + powerline stats + the audio EQ/meters file bridge |
 | **New tab** | `newtab/` — a `chrome_url_overrides.newtab` extension (in-repo, not a submodule): the full HUD new-tab (Orbitron, CRT scanlines, neon omnibox), fonts vendored locally, plus the custom **layout** engine (`zntp-core.js`), its widgets (`widgets.js`) and its inline editor (`layout-edit.js`) |
@@ -640,9 +661,13 @@ pulls the `monaco-editor` / `monaco-vim` / `monaco-emacs` devDeps). `install.sh`
 if any artifact is missing — without it those three pages render their surrounding chrome
 and simply no editor.
 
-`--recurse-submodules` pulls the three submodules zwire depends on:
+`--recurse-submodules` pulls the shared repositories zwire depends on:
 `extensions/zpwrchrome` (the MV3 power-tool), `extensions/hud-internal/lib/zgui-core`
-(the shared `ZGui` toolkit the HUD pages are built from), and
+(the shared `ZGui` toolkit the HUD pages are built from),
+`extensions/hud-internal/lib/file-browser` (`zpwr-file-browser` — the fleet's file
+manager, which the Files page mounts unmodified),
+`extensions/hud-internal/lib/clip-engine` (`zpwr-clip-engine` — the arrangement grid
+the History Timeline renders on, to which zwire contributes only a domain), and
 `extensions/hud-internal/native/zwire-host` (the Rust native host). The launcher
 skips any extension dir missing a `manifest.json`, so a not-yet-fetched submodule
 degrades gracefully rather than failing the launch.

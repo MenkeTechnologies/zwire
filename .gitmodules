@@ -7,3 +7,9 @@
 [submodule "extensions/hud-internal/native/zwire-host"]
 	path = extensions/hud-internal/native/zwire-host
 	url = https://github.com/MenkeTechnologies/zwire-host.git
+[submodule "extensions/hud-internal/lib/file-browser"]
+	path = extensions/hud-internal/lib/file-browser
+	url = https://github.com/MenkeTechnologies/zpwr-file-browser.git
+[submodule "extensions/hud-internal/lib/clip-engine"]
+	path = extensions/hud-internal/lib/clip-engine
+	url = https://github.com/MenkeTechnologies/zpwr-clip-engine.git

@@ -191,6 +191,16 @@ fi
 command rm -f /tmp/zwire-hud-trg.$$
 echo
 
+cyber_section "HISTORY TIMELINE (clip-engine domain: bucketing + lane order + unit band)"
+if node tests/history-timeline.mjs 2>/tmp/zwire-hud-tl.$$; then
+  cyber_ok "history timeline domain nominal"
+else
+  FAIL=1; cyber_fail "history timeline domain compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-tl.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-tl.$$
+echo
+
 cyber_section "NEW-TAB LAYOUTS (store invariants + url gate + Vivaldi geometry)"
 if node tests/ntp-layout.mjs 2>/tmp/zwire-hud-ntp.$$; then
   cyber_ok "new-tab layouts nominal"

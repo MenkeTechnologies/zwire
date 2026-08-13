@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>zwire · Files</title>
+<link rel="stylesheet" href="../lib/zgui-core/webui/all.css">
+<link rel="stylesheet" href="ext-page.css">
+<!-- the SHARED file browser's own stylesheet, straight from the submodule -->
+<link rel="stylesheet" href="../lib/file-browser/webui/file-browser.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="../lib/zgui-core/webui/util.js"></script>
+<script src="../lib/zgui-core/webui/fzf.js"></script>
+<script src="../lib/zgui-core/webui/icons.js"></script>
+<script src="../lib/zgui-core/webui/search-box.js"></script>
+<script src="../lib/zgui-core/webui/colorscheme.js"></script>
+<script src="../lib/zgui-core/webui/crt.js"></script>
+<script src="../lib/zgui-core/webui/fx.js"></script>
+<script src="../lib/zgui-core/webui/toast.js"></script>
+<script src="../lib/zgui-core/webui/command-palette.js"></script>
+<script src="../palette-cmds.js"></script>
+<script src="../lib/zgui-core/webui/widgets.js"></script>
+<script src="../lib/zgui-core/webui/card.js"></script>
+<script src="../lib/zgui-core/webui/field.js"></script>
+<script src="../lib/zgui-core/webui/modal.js"></script>
+<script src="../lib/zgui-core/webui/modal-drag.js"></script>
+<script src="../lib/zgui-core/webui/popconfirm.js"></script>
+<script src="../lib/zgui-core/webui/button-group.js"></script>
+<!-- zwire's zwire-host bridge; MUST precede file-browser.js so the shared file's
+     self-installing Tauri bridge sees window.zfbHost already taken. -->
+<script src="files-host.js"></script>
+<script src="hud-accel.js"></script>
+<script src="zg-boot.js"></script>
+<script src="files.js"></script>
+</body>
+</html>
