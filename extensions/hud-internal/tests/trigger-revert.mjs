@@ -112,6 +112,7 @@ function loadWizard() {
   const fn = new Function('window', 'document', 'navigator', 'chrome', 'localStorage', wizSrc);
   fn(window, document, navigator, chrome, { getItem: () => null, setItem() {} });
   assert.ok(window.ZwireStepWizard && window.ZwireStepWizard.revProblems, 'step-wizard must export revProblems');
+  assert.ok(window.ZwireStepWizard.premiseProblems, 'step-wizard must export premiseProblems');
   return window.ZwireStepWizard;
 }
 
@@ -188,6 +189,39 @@ check('an action the host does not serve is not a bus verb', () => {
   const bad = W.revProblems([{ type: 'action', value: 'copyUrl' }], { 'browser.goBack': 'inverse' });
   assert.equal(bad.length, 1);
   assert.equal(bad[0].verb, null, 'copyUrl was classed as a bus verb');
+});
+
+/* ---- premise steps: a fact with nothing to gate ------------------------------------------- */
+// `page.witness` files a premise against the chain's TRANSACTION, and only a self-reverting chain
+// opens one. The host refuses the step outright without a transaction — correct, but at fire time,
+// unattended. Same argument as revProblems: ask at save time, where someone can be told.
+
+check('a premise step in a self-reverting chain is accepted', () => {
+  const bad = W.premiseProblems([{ type: 'witness', value: '{"state":"page.tables"}' },
+    { type: 'action', value: 'pinTab' }], true);
+  assert.deepEqual(bad, [], `a premise was refused inside the transaction it gates: ${JSON.stringify(bad)}`);
+});
+
+check('a premise step in a chain with no transaction is refused, with its index', () => {
+  const bad = W.premiseProblems([{ type: 'action', value: 'pinTab' },
+    { type: 'witness', value: '{"state":"page.tables"}' }], false);
+  assert.equal(bad.length, 1);
+  assert.equal(bad[0].index, 1, 'the wrong step was blamed');
+  assert.match(bad[0].reason, /transaction/);
+});
+
+check('a chain with no premises is untouched either way', () => {
+  const steps = [{ type: 'action', value: 'pinTab' }, { type: 'assert', value: '{"op":"nonempty"}' }];
+  assert.deepEqual(W.premiseProblems(steps, false), []);
+  assert.deepEqual(W.premiseProblems(steps, true), []);
+});
+
+check('a premise is a bus verb the host classes, not a local step', () => {
+  // If `stepVerb` did not name it, revProblems would refuse every premise in a self-reverting chain
+  // as "not a bus verb" — the exact chains premises exist for.
+  assert.equal(W.stepVerb({ type: 'witness', value: '{"state":"page.tables"}' }, {}), 'page.witness');
+  const bad = W.revProblems([{ type: 'witness', value: '{"state":"page.tables"}' }], { 'page.witness': 'pure' });
+  assert.deepEqual(bad, [], `a pure premise was refused from a revertible chain: ${JSON.stringify(bad)}`);
 });
 
 if (failures) process.stderr.write(`\n${failures} check(s) failed\n`); else process.stdout.write('\nall checks passed\n');

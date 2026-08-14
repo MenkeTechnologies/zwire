@@ -411,5 +411,74 @@ await new Promise((resolve) => {
   });
 });
 
+/* ---- 12. a PREMISE travels inside the transaction it gates -------------------------------- */
+// The mirror of the assert step. `page.witness` declares a fact about the page the chain is
+// reasoning about; zwire-host ledgers it and re-reads it at commit (witness.rs). Two things have to
+// hold: the step must travel as a class-checked bus `call` inside the OPEN transaction (a premise
+// filed outside it gates nothing), and a premise with no `op` must stay the CONTENT form rather
+// than being silently turned into a predicate.
+await new Promise((resolve) => {
+  const { X, calls } = load({
+    hostReply: (req) => (req.cmd === 'call'
+      ? { ok: true, reply: { ok: true, result: { ok: true, witness: 3 } } }
+      : { ok: true, reply: { ok: true, txn: 1, steps: 1 } }),
+  });
+  X.runTxn({
+    steps: [
+      { type: 'witness', value: '{"state":"page.tables"}' },
+      { type: 'action', value: 'pinTab' },
+    ],
+  }, '', (err) => {
+    check('a premise runs inside the transaction and lets the chain continue', () => {
+      assert.equal(err, null, `premise step failed: ${err}`);
+      const reqs = calls.filter((c) => c.kind === 'host').map((c) => c.req);
+      const gated = reqs.find((r) => r.cmd === 'call' && r.verb === 'page.witness');
+      assert.ok(gated, 'the premise did not travel as a class-checked bus call');
+      assert.equal(gated.txn, reqs[0].txn, 'the premise was filed outside the transaction it gates');
+      assert.equal(gated.args.state, 'page.tables');
+      assert.ok(!('op' in gated.args), 'a premise with no op must stay the content form');
+      assert.equal(reqs[reqs.length - 1].cmd, 'txn_commit');
+    });
+    resolve();
+  });
+});
+
+/* ---- 13. THE POINT: a commit refused over a stale premise is reported as the revert it is -- */
+// The host answers a conflicted commit with `ok:false` + `conflict` + the violations, having ALREADY
+// unwound the chain. The executor must surface that as a chain failure naming the premise — reading
+// it as an ordinary close error would tell the user "txn_commit: …" for a browser that was silently
+// rolled back, and reading only the envelope would report success.
+await new Promise((resolve) => {
+  const { X, calls } = load({
+    hostReply: (req) => (req.cmd === 'txn_commit'
+      ? {
+        ok: true,
+        reply: {
+          ok: false, conflict: true, aborted: true, steps: 2, premises: 1,
+          err: 'commit refused: 1 of 1 premise(s) no longer hold',
+          violations: [{ witness: 1, state: 'page.tables', reason: 'changed', err: 'page.tables changed: aaa → bbb' }],
+        },
+      }
+      : { ok: true, reply: { ok: true, result: { ok: true } } }),
+  });
+  X.runTxn({
+    steps: [
+      { type: 'witness', value: '{"state":"page.tables"}' },
+      { type: 'action', value: 'pinTab' },
+    ],
+  }, '', (err) => {
+    check('a commit refused over a stale premise fails the chain and names the premise', () => {
+      assert.ok(err, 'a refused commit must not read as success');
+      assert.match(err, /premise/);
+      assert.match(err, /page\.tables/, `the violated premise was not named: ${err}`);
+      const reqs = calls.filter((c) => c.kind === 'host').map((c) => c.req);
+      // The host already unwound; the executor must NOT send a second abort on top of it.
+      assert.equal(reqs.filter((r) => r.cmd === 'txn_abort').length, 0,
+        'the executor double-unwound a transaction the host had already closed');
+    });
+    resolve();
+  });
+});
+
 if (failures) process.stderr.write(`\n${failures} check(s) failed\n`); else process.stdout.write('\nall checks passed\n');
 process.exit(failures ? 1 : 0);

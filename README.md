@@ -48,7 +48,7 @@ workspace layered on top:
 - **output triggers** — a **Triggers HUD page** that binds a regex to page text
   *as it renders/streams* (the browser analog of a terminal-emulator trigger) and,
   on a match, runs a chain of typed steps — shell / stryke / JavaScript /
-  AppleScript / batch / browser-action / suite-app-call / page-assert / scheme /
+  AppleScript / batch / browser-action / suite-app-call / page-assert / page-premise / scheme /
   host — the
   identical step set a ⌘K command runs, with the matched line passed as `{q}`; per-trigger cooldown, a
   **once-per-page** mode, and an optional URL-filter regex keep it scoped, and a
@@ -106,6 +106,22 @@ workspace layered on top:
   the live page and stop or retry on failure rather than restoring what they
   changed. A page read is `pure` in the host's reversibility table, which is what
   lets the deciding step run *inside* the transaction it is deciding about;
+- **premise-gated chains** — the other half of that gate, and the half nothing else
+  has. A postcondition tests the page a chain *produced*; nothing tested the page it
+  was *decided on*. Between reading a projection and committing, the browser is a
+  shared mutable object with other writers — the user, a `setInterval`, a server
+  push, a second agent — so a chain can act on a reading that stopped being true
+  while it was mid-flight. `page.witness` declares a projection as a **premise** of
+  the transaction: with an op it must still satisfy that predicate at commit,
+  without one it must be byte-identical. `txn_commit` re-reads the whole premise set
+  and, on any violation, turns the commit into an **abort** — the journaled inverses
+  replay and the browser ends where it started. A premise nobody could re-read
+  (browser closed, tab gone, origin denied) refuses the commit too, because "could
+  not confirm" is not "held". Validation is **one round trip**: the set goes out as a
+  single `page.batch` answered by one `scripting.executeScript` per target tab, so
+  every projection in it comes from one DOM turn — checking them one at a time would
+  let a set "hold" in a state the page was never simultaneously in. A transaction
+  with no premises costs nothing and behaves exactly as before;
 - **custom new-tab layouts** — a port of Vivaldi's Start Page onto the zwire new
   tab, and then some: named layouts you switch between (not one start page you
   reconfigure), each with its own **Speed Dial groups**, **widget grid**,
@@ -395,6 +411,28 @@ which replays the journaled inverses. A chain therefore commits on **what the br
 rendered**, not on whether its calls returned. A malformed assertion (an unknown op, a
 projection that does not exist) is refused before the page is ever read and carries no
 verdict, so a chain can never revert because of a typo in its own editor.
+
+The **premise** step is its mirror, and closes the window an assertion cannot see. An
+assert asks *did the browser end up where we said it would*; a premise asks *was the
+page we decided on still the page we acted on*:
+
+```jsonc
+{"t":"begin","id":1,"txn":9001}
+{"t":"call","id":2,"verb":"page.witness","args":{"state":"page.tables"},"txn":9001}
+{"t":"call","id":3,"verb":"browser.newTab","args":{},"txn":9001}
+{"t":"commit","id":4,"txn":9001}
+// ← {"ok":false,"conflict":true,"aborted":true,"steps":1,
+//    "violations":[{"state":"page.tables","reason":"changed"}]}
+```
+
+`page.witness` ledgers the projection against the open transaction; `txn_commit`
+re-reads every premise in ONE `page.batch` and refuses the commit if any of them moved,
+unwinding through the same journal a failed step uses. Premises are **declared, not
+inferred** — a chain's own steps navigate, so an implicitly captured read set would
+conflict with itself on nearly every real chain. In the step wizard a premise is a step
+type like any other (`{"state":"page.links","op":"count_at_least","value":"1"}`), and a
+chain that is not self-reverting is refused it at save time rather than at 3am from a
+trigger, because a premise with no transaction to gate would silently protect nothing.
 
 Mechanically it is a rendezvous, because the DOM is a process away and the host→browser
 direction had always been fire-and-forget. The browser-attached host process binds a

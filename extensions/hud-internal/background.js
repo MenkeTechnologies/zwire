@@ -438,8 +438,10 @@ function pageReply(qid, ok, value, err) {
 }
 // The tab a query addresses. `chrome.tabs.query({})` covers every window, so a `urls` filter can
 // name a background tab — the point of the filter is to read a page that is NOT on screen.
-function pageTab(args, cb) {
-  var P = self.ZWIRE_PAGE;
+// The open tabs, with `active` re-flagged to mean "the focused window's active tab". Fetched ONCE
+// per query: a batch resolves every read against the SAME tab list, so two premises about "the
+// page" can never disagree about which tab that was because the user switched between them.
+function pageTabs(cb) {
   try {
     chrome.tabs.query({}, function (tabs) {
       void chrome.runtime.lastError;
@@ -450,16 +452,23 @@ function pageTab(args, cb) {
         void chrome.runtime.lastError;
         var id = front && front[0] && front[0].id;
         list.forEach(function (t) { t.active = (t.id === id); });
-        cb(P ? P.planTargets(list, args) : null);
+        cb(list);
       });
     });
-  } catch (e) { cb(null); }
+  } catch (e) { cb([]); }
+}
+function pageTab(args, cb) {
+  var P = self.ZWIRE_PAGE;
+  pageTabs(function (list) { cb(P ? P.planTargets(list, args) : null); });
 }
 function servePageQuery(q) {
   if (!q || q.qid == null) return;
   var P = self.ZWIRE_PAGE;
   if (!P) { pageReply(q.qid, false, null, 'the projection engine failed to load'); return; }
   var kind = String(q.state || ''), args = q.args || {};
+  // A BATCH is not a projection — it is several of them, answered in one injection so the whole set
+  // comes from a single DOM turn. See servePageBatch.
+  if (P.isBatch(kind)) { servePageBatch(q); return; }
   if (!P.isProjection(kind)) { pageReply(q.qid, false, null, 'unknown projection: ' + kind); return; }
   chrome.storage.local.get({ zb_page_deny: [] }, function (st) {
     void chrome.runtime.lastError;
@@ -495,6 +504,79 @@ function servePageQuery(q) {
           });
         });
       } catch (e) { pageReply(q.qid, false, null, String((e && e.message) || e)); }
+    });
+  });
+}
+
+// Answer one `page.batch`: several projections, ONE injection per target tab.
+//
+// This is the read behind PREMISE validation (native/zwire-host/src/witness.rs). Before a browser
+// transaction is allowed to commit, every premise it declared is re-read and compared — and doing
+// that one read at a time would let the page change between the answers, so a premise set could
+// "hold" in a state the page was never simultaneously in. One `executeScript` per tab running one
+// synchronous `projectMany` is what makes the re-read a SNAPSHOT rather than a sequence.
+//
+// Reads addressing DIFFERENT tabs are grouped and injected concurrently. Two tabs are two renderer
+// processes with two independent event loops, so cross-tab simultaneity is not available at any
+// price; per-tab atomicity is, and that is what is claimed.
+//
+// A read that cannot be answered — no matching tab, a denied origin, an unknown projection, a tab
+// that refuses injection — fails ALONE. The host reads a failed read as "this premise could not be
+// confirmed", which refuses the commit; collapsing the batch into a single error would throw away
+// which premise that was.
+function servePageBatch(q) {
+  var P = self.ZWIRE_PAGE, args = q.args || {};
+  var reads = args.reads || [];
+  if (!reads.length) { pageReply(q.qid, true, []); return; }
+  if (reads.length > P.MAX_BATCH) { pageReply(q.qid, false, null, 'too many reads in one batch: ' + reads.length + ' > ' + P.MAX_BATCH); return; }
+  chrome.storage.local.get({ zb_page_deny: [] }, function (st) {
+    void chrome.runtime.lastError;
+    pageTabs(function (tabs) {
+      var out = new Array(reads.length), groups = {}, order = [], i, r, tab, gate, key;
+      for (i = 0; i < reads.length; i++) {
+        r = reads[i] || {};
+        if (!P.isProjection(String(r.state || ''))) { out[i] = { ok: false, err: 'unknown projection: ' + r.state }; continue; }
+        tab = P.planTargets(tabs, r.args || {});
+        if (!tab || tab.id == null) { out[i] = { ok: false, err: 'no tab matches this read' }; continue; }
+        gate = P.originAllowed(tab.url || '', st.zb_page_deny || []);
+        if (!gate.ok) { out[i] = { ok: false, err: gate.reason }; continue; }
+        key = String(tab.id);
+        if (!groups[key]) { groups[key] = { tab: tab, idx: [], reads: [] }; order.push(key); }
+        groups[key].idx.push(i);
+        groups[key].reads.push({ state: String(r.state), args: r.args || {} });
+      }
+      var left = order.length;
+      if (!left) { pageReply(q.qid, true, out); return; }
+      function done() { left -= 1; if (left === 0) pageReply(q.qid, true, out); }
+      order.forEach(function (k) {
+        var g = groups[k];
+        function fail(msg) {
+          g.idx.forEach(function (n) { out[n] = { ok: false, err: String(msg) }; });
+          done();
+        }
+        try {
+          chrome.scripting.executeScript({ target: { tabId: g.tab.id }, files: ['zpage-core.js'] }, function () {
+            if (chrome.runtime.lastError) { fail(chrome.runtime.lastError.message); return; }
+            chrome.scripting.executeScript({
+              target: { tabId: g.tab.id },
+              args: [g.reads],
+              func: function (rs) {
+                var API = window.ZWIRE_PAGE;
+                if (!API) return { __err: 'projection engine missing in tab' };
+                try {
+                  return API.projectMany(document, rs, { selection: String((window.getSelection && window.getSelection()) || '') });
+                } catch (e) { return { __err: String((e && e.message) || e) }; }
+              }
+            }, function (res) {
+              if (chrome.runtime.lastError) { fail(chrome.runtime.lastError.message); return; }
+              var v = res && res[0] ? res[0].result : null;
+              if (!v || v.__err || typeof v.length !== 'number') { fail((v && v.__err) || 'the batch returned no results'); return; }
+              for (var n = 0; n < g.idx.length; n++) out[g.idx[n]] = v[n] || { ok: false, err: 'missing result' };
+              done();
+            });
+          });
+        } catch (e) { fail(String((e && e.message) || e)); }
+      });
     });
   });
 }

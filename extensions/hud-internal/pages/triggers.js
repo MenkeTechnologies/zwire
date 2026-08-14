@@ -116,6 +116,11 @@
       var bad = W.revProblems(res.steps, revMap);
       if (bad.length) { toast('Step ' + (bad[0].index + 1) + ' cannot be reverted: ' + bad[0].reason, 'error'); return; }
     }
+    // …and the mirror of it: a PREMISE step is only meaningful inside a transaction, which only a
+    // self-reverting chain opens. Caught here for the same reason — otherwise the host refuses the
+    // step when the trigger fires, with nobody watching.
+    var noTxn = W.premiseProblems(res.steps, !!revertToggle.get());
+    if (noTxn.length) { toast('Step ' + (noTxn[0].index + 1) + ': ' + noTxn[0].reason, 'error'); return; }
     // No two triggers may share a name — keeps the list unambiguous.
     var lname = name.toLowerCase();
     for (var d = 0; d < trigs.length; d++) {

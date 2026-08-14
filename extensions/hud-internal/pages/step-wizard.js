@@ -35,10 +35,11 @@
       { value: 'action', label: 'Browser action' },
       { value: 'suite', label: 'Call another app (bus)' },
       { value: 'assert', label: 'Assert the rendered page' },
+      { value: 'witness', label: 'Witness a page premise' },
       { value: 'scheme', label: 'Set color scheme' },
       { value: 'host', label: 'zwire-host (JSON)' }
     ]);
-  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', suite: 'app', assert: 'assert', scheme: 'scheme', host: 'host' };
+  var TYPE_LABEL = { url: 'open url', shell: 'shell', stryke: 'stryke', js: 'javascript', applescript: 'applescript', batch: 'batch', action: 'action', suite: 'app', assert: 'assert', witness: 'premise', scheme: 'scheme', host: 'host' };
   // The postcondition step's vocabulary, mirrored from the host so the editor can offer it. The
   // host is authoritative — `page_states` returns both lists — and a value it does not know is
   // refused there, before the page is read.
@@ -122,6 +123,15 @@
       var ao; try { ao = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return s.value; }
       if (!ao || !ao.op) return s.value;
       return (ao.state || 'page.text') + ' ' + ao.op + (ao.value == null || ao.value === '' ? '' : ' "' + ao.value + '"');
+    }
+    if (s.type === 'witness') {
+      // A premise with no op is the CONTENT form — "this projection must not change" — so the row
+      // has to say `unchanged` rather than fall back to the raw JSON and look like a broken step.
+      var wo; try { wo = JSON.parse(String(s.value || '').replace(/\{q\}/g, '')); } catch (e) { return s.value; }
+      if (!wo) return s.value;
+      var wstate = wo.state || 'page.text';
+      if (!wo.op) return wstate + ' unchanged';
+      return wstate + ' still ' + wo.op + (wo.value == null || wo.value === '' ? '' : ' "' + wo.value + '"');
     }
     if (s.type === 'suite') {
       // A row is far more readable as `zcite.item.add` than as the raw JSON body.
@@ -333,6 +343,7 @@
       if (type === 'host') return Z.textarea({ placeholder: '{"cmd":"notify","title":"hi {q}"}', rows: 3, value: val || '' });
       if (type === 'suite') return Z.textarea({ placeholder: '{"app":"zcite","verb":"item.add","args":{"doi":"{q}"}}', rows: 3, value: val || '' });
       if (type === 'assert') return Z.textarea({ placeholder: '{"state":"page.text","op":"contains","value":"Order confirmed"}', rows: 3, value: val || '' });
+      if (type === 'witness') return Z.textarea({ placeholder: '{"state":"page.tables"}  ·  {"state":"page.links","op":"count_at_least","value":"1"}', rows: 3, value: val || '' });
       return Z.textfield({ placeholder: 'https://example.com   ({q} optional)', value: val || '' });
     }
     function syncSteps() {
@@ -410,6 +421,16 @@
           // nobody is watching — and the chain would revert for the wrong reason.
           if (!ao2 || !ao2.op) return { ok: false, error: 'Step ' + (h + 1) + ': assert step needs an "op" (' + ASSERT_OPS.join(', ') + ')' };
           if (ASSERT_OPS.indexOf(String(ao2.op)) < 0) return { ok: false, error: 'Step ' + (h + 1) + ': unknown assert op "' + ao2.op + '" (' + ASSERT_OPS.join(', ') + ')' };
+        }
+        if (clean[h].type === 'witness') {
+          var wo2;
+          try { wo2 = JSON.parse(String(clean[h].value).replace(/\{q\}/g, '')); }
+          catch (e4) { return { ok: false, error: 'Step ' + (h + 1) + ': premise value must be valid JSON' }; }
+          // An op is OPTIONAL here — no op is the content form, "this projection must not change" —
+          // but an op the host does not know is refused at commit, which would revert a chain for a
+          // typo instead of for a page that moved.
+          if (!wo2 || !wo2.state) return { ok: false, error: 'Step ' + (h + 1) + ': premise step needs a "state" (the projection it pins)' };
+          if (wo2.op != null && ASSERT_OPS.indexOf(String(wo2.op)) < 0) return { ok: false, error: 'Step ' + (h + 1) + ': unknown premise op "' + wo2.op + '" (' + ASSERT_OPS.join(', ') + ')' };
         }
       }
       return { ok: true, steps: clean };
@@ -489,6 +510,10 @@
     // and a self-reverting chain may contain it. That is the whole design: the step that decides
     // whether to commit must itself be safe to run inside the transaction it is deciding about.
     if (t === 'assert') return 'page.assert';
+    // A premise reads the page and ledgers a fact about it; it changes nothing in the browser, so
+    // the host classes `page.witness` `pure` too. It has to be: the step that decides whether the
+    // commit may stand must itself be legal inside the transaction it is deciding about.
+    if (t === 'witness') return 'page.witness';
     return 'browser.openTab';   // url
   }
   // Steps a self-reverting chain cannot contain, given the host's rev table.
@@ -510,6 +535,26 @@
     });
     return out;
   }
+  /* Premise steps that have nothing to gate. -> [{ index, reason }]; empty means fine.
+   *
+   * `page.witness` files a fact against the chain's TRANSACTION, and only a self-reverting chain
+   * opens one. In a plain chain the host refuses the step outright ("needs an open transaction"),
+   * which is the correct answer but arrives at fire time, unattended, from a trigger nobody is
+   * watching — the same argument that puts `revProblems` at save time. So the editor asks the
+   * question here instead, where there is someone to tell.
+   *
+   * The reverse is deliberately NOT an error: a self-reverting chain with no premises is the
+   * ordinary case, gated on its postconditions alone. */
+  function premiseProblems(steps, selfReverting) {
+    if (selfReverting) return [];
+    var out = [];
+    (steps || []).forEach(function (s, i) {
+      if (s && s.type === 'witness') {
+        out.push({ index: i, reason: 'a premise needs a transaction to gate — turn on self-reverting, or use an assert step' });
+      }
+    });
+    return out;
+  }
   // Ask the host for its surface and reduce it to { verb: revClass }. `cb(map|null)`.
   function loadRevMap(cb) {
     try {
@@ -528,6 +573,7 @@
     create: create,
     TYPES: TYPES, TYPE_LABEL: TYPE_LABEL, ACTIONS: ACTIONS, SCHEMES: SCHEMES, HINTS: HINTS,
     entrySteps: entrySteps, stepsSummary: stepsSummary, stepPreview: stepPreview,
-    BUS_ACTIONS: BUS_ACTIONS, ASSERT_OPS: ASSERT_OPS, stepVerb: stepVerb, revProblems: revProblems, loadRevMap: loadRevMap
+    BUS_ACTIONS: BUS_ACTIONS, ASSERT_OPS: ASSERT_OPS, stepVerb: stepVerb, revProblems: revProblems,
+    premiseProblems: premiseProblems, loadRevMap: loadRevMap
   };
 })();

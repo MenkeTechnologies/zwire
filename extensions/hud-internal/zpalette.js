@@ -647,6 +647,40 @@
       });
       return;
     }
+    // A PREMISE of this chain: `{"state":"page.tables"}` pins the projection as it is RIGHT NOW, and
+    // `txn_commit` refuses to let the chain stand if it stopped holding by the time the chain ends.
+    // The mirror of an assert. An assert asks "did the browser end up where we said it would"; a
+    // premise asks "was the page we decided on still the page we acted on" — the window between the
+    // two that the user, a timer, a server push or a second agent can change underneath a chain.
+    // With `op`, the premise is the predicate ("still at least one row"); without, it is the
+    // content itself ("nothing about this table moved").
+    if (type === 'witness') {
+      var qW = JSON.stringify(String(arg == null ? '' : arg));
+      var wBody = String(v).replace(/\{q\}/g, qW.substring(1, qW.length - 1));
+      var wo; try { wo = JSON.parse(wBody); } catch (errW) { hostToast('premise: invalid JSON', true); d('premise: invalid JSON'); return; }
+      if (!wo || !wo.state) { hostToast('premise: needs a "state"', true); d('premise: needs a "state"'); return; }
+      var wArgs = { state: String(wo.state) };
+      if (wo.op != null) {
+        wArgs.op = String(wo.op);
+        wArgs.value = wo.value == null ? '' : String(wo.value);
+        wArgs.ignore_case = !!wo.ignore_case;
+      }
+      if (wo.timeout_ms != null) wArgs.timeout_ms = wo.timeout_ms;
+      if (wo.selector) wArgs.selector = String(wo.selector);
+      if (wo.attr) wArgs.attr = String(wo.attr);
+      if (wo.urls) wArgs.urls = String(wo.urls);
+      // Only the transaction path is meaningful. Outside one the host answers "page.witness needs an
+      // open transaction" — sent anyway rather than short-circuited here, so the chain fails with
+      // the HOST's reason instead of a mirrored rule that could drift from it.
+      if (txn != null) { busCall('page.witness', wArgs, txn, d); return; }
+      var dw = settle(d, 'premise');
+      hostReq({ cmd: 'page_get', state: 'page.witness', args: wArgs }, function (err) {
+        if (err) { hostToast('premise: ' + err, true); dw('premise: ' + err); return; }
+        hostToast('premise ✓ ' + wArgs.state + (wArgs.op ? ' ' + wArgs.op : ' unchanged'));
+        dw(null);
+      });
+      return;
+    }
     if (type === 'scheme') { setScheme(v); d(null); return; }
     if (type === 'host') {
       var obj; try { obj = JSON.parse(sub(v)); } catch (err) { hostToast('host: invalid JSON', true); d('host: invalid JSON'); return; }
@@ -726,6 +760,17 @@
             var undone = (r && r.steps) || 0;
             hostToast('reverted: ' + chainErr + (undone ? ' · ' + undone + ' step(s) undone' : ''), true);
             fin(chainErr);
+            return;
+          }
+          // A commit REFUSED because a premise stopped holding is not an ordinary close failure: the
+          // host already unwound the chain (witness.rs turns the conflict into an abort), so the
+          // browser is back where it started and the only thing missing is telling the user WHICH
+          // premise moved. Reporting it as a bare "txn_commit: …" would hide both facts.
+          if (closeErr && r && r.conflict) {
+            var vio = (r.violations || [])[0] || {};
+            var why = (vio.state || 'a premise') + ': ' + (vio.err || vio.reason || closeErr);
+            hostToast('premise no longer held — reverted: ' + why + (r.steps ? ' · ' + r.steps + ' step(s) undone' : ''), true);
+            fin('premise: ' + why);
             return;
           }
           fin(closeErr ? 'txn_commit: ' + closeErr : null);

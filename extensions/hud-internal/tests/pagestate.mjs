@@ -167,6 +167,40 @@ check('a missing document is an error', !!P.project(null, 'page.text', {}).__err
 const many = doc(Array.from({ length: P.MAX_ITEMS + 40 }, (_, i) => el('a', { href: '/x' + i }, [], 'l' + i)));
 check('list projections are capped', P.project(many, 'page.links', {}).length === P.MAX_ITEMS, String(P.project(many, 'page.links', {}).length));
 
+/* --------------------------------------------------------------- batch */
+// `projectMany` is the read behind PREMISE validation: before a browser transaction commits, the
+// host re-reads every premise the chain declared and refuses the commit if one stopped holding
+// (native/zwire-host/src/witness.rs). Re-reading them one at a time would let the page move between
+// the answers, so the whole set is projected in ONE synchronous pass. What this section pins is that
+// the batch is not a SECOND projection implementation, and that one bad read cannot take the others
+// down with it — each entry gates a different premise, so a batch that fails wholesale would refuse
+// a commit for premises that were never even looked at.
+const batchReads = [
+  { state: 'page.title', args: {} },
+  { state: 'page.extract', args: { selector: 'h1' } },
+  { state: 'page.extract', args: {} },
+  { state: 'page.nope', args: {} },
+  { state: 'page.selection', args: {} },
+];
+const batched = P.projectMany(page, batchReads, { selection: '  picked   text ' });
+eq('a batch answers one entry per read', batched.length, batchReads.length);
+eq('a batch entry is the same value a single read gives', batched[0], { ok: true, value: P.project(page, 'page.title', {}) });
+eq('a batch read projects with its own args', batched[1], { ok: true, value: [{ text: 'Order confirmed' }] });
+check('a read with no selector fails alone', batched[2].ok === false && /selector/.test(batched[2].err), JSON.stringify(batched[2]));
+check('an unknown projection fails alone', batched[3].ok === false, JSON.stringify(batched[3]));
+check('the reads around a failure still answer', batched[0].ok === true && batched[4].ok === true, JSON.stringify(batched));
+eq('the caller-supplied selection reaches the batch', batched[4].value, 'picked text');
+const tooMany = Array.from({ length: P.MAX_BATCH + 5 }, () => ({ state: 'page.title', args: {} }));
+eq('a batch is capped at MAX_BATCH', P.projectMany(page, tooMany, {}).length, P.MAX_BATCH);
+eq('an empty batch is an empty answer, not an error', P.projectMany(page, [], {}), []);
+// The safety rule holds on this path too — and by identity with the single path, not by a second
+// implementation that could drift into carrying values.
+const batchedForms = P.projectMany(page, [{ state: 'page.forms', args: {} }], {})[0];
+eq('the batch projects exactly what a single read does', batchedForms.value, forms);
+check('the batch path never carries a field value either',
+  !JSON.stringify(batchedForms.value).includes('4111111111111111') && !/"value"/.test(JSON.stringify(batchedForms.value)),
+  JSON.stringify(batchedForms.value));
+
 /* -------------------------------------------------------- origin gate */
 check('https is readable', P.originAllowed('https://shop.example/x', []).ok);
 check('file is readable', P.originAllowed('file:///tmp/a.html', []).ok);
@@ -211,6 +245,22 @@ if (block) {
 }
 const extractVerb = /pub const EXTRACT_VERB: &str = "([^"]+)"/.exec(rs);
 eq('the extract verb matches the host', P.EXTRACT, extractVerb && extractVerb[1]);
+
+const batchVerb = /pub const BATCH_VERB: &str = "([^"]+)"/.exec(rs);
+eq('the batch verb matches the host', P.BATCH, batchVerb && batchVerb[1]);
+check('a batch is not itself a projection', P.isProjection(P.BATCH) === false && P.isBatch(P.BATCH) === true);
+// Both halves must cap a batch at the SAME size. A host cap larger than this one would let an
+// oversized batch through to a tab that silently truncates it — the missing answers come back as
+// premises nobody could confirm, and a commit is refused over a page that never changed.
+const maxBatch = /pub const MAX_BATCH: usize = (\d+);/.exec(rs);
+check('the host publishes a batch cap', !!maxBatch);
+eq('the batch cap matches the host', String(P.MAX_BATCH), maxBatch && maxBatch[1]);
+// `page.witness` is answered entirely by the host (the premise ledger lives with the transaction
+// journal), so it must never look projectable here: a witness that somehow reached the browser has
+// to come back an error, not a value.
+const witnessVerb = /pub const WITNESS_VERB: &str = "([^"]+)"/.exec(rs);
+check('the host publishes a witness verb', !!witnessVerb);
+check('the witness verb is not projectable in the browser', witnessVerb && P.isProjection(witnessVerb[1]) === false);
 
 // The postcondition ops the step wizard offers must be exactly the ones the host will accept: an op
 // in the picker that the host refuses is a chain that reverts because of its own editor.

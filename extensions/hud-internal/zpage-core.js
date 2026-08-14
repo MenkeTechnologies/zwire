@@ -57,6 +57,12 @@
     { id: 'page.selection', label: "The user's current selection" }
   ];
   var EXTRACT = 'page.extract';
+  // Several projections in ONE call. Not a projection itself — a container for them — so
+  // `isProjection` deliberately says no and the batch path is entered by name.
+  var BATCH = 'page.batch';
+  // Ceiling on one batch, mirrored by the host (`page.rs` MAX_BATCH) so an oversized set is refused
+  // before it ever reaches a renderer. Bounds the synchronous work one injection can ask a tab to do.
+  var MAX_BATCH = 32;
 
   function str(v) { return v == null ? '' : String(v); }
   function trim(s) { return str(s).replace(/^\s+|\s+$/g, ''); }
@@ -235,16 +241,47 @@
     }
   }
 
+  /* Project SEVERAL views of `doc` in ONE synchronous pass.
+   *
+   * This is what makes a PREMISE set checkable. zwire-host re-reads every premise of a transaction
+   * before it lets the commit stand (native/zwire-host/src/witness.rs), and re-reading them one at a
+   * time would let the page move BETWEEN the answers — a set could then validate in a state the page
+   * was never simultaneously in, which is worse than not checking, because it looks like a guarantee.
+   * The whole set is therefore projected inside a single function body: the DOM cannot change while
+   * it runs, so every value comes from one moment.
+   *
+   * One entry per read, in the order asked, each `{ok:true,value}` or `{ok:false,err}`. A read that
+   * fails is ISOLATED — a bad selector in read 3 must not cost reads 1, 2 and 4 their answers, since
+   * on the host side each one gates a different premise. */
+  function projectMany(doc, reads, opts) {
+    var list = reads || [], out = [], i, key, r, src, o, v;
+    for (i = 0; i < list.length && i < MAX_BATCH; i++) {
+      r = list[i] || {};
+      src = r.args || {};
+      o = {};
+      for (key in src) if (Object.prototype.hasOwnProperty.call(src, key)) o[key] = src[key];
+      o.selection = (opts || {}).selection;
+      v = project(doc, str(r.state), o);
+      if (v && v.__err) out.push({ ok: false, err: str(v.__err) });
+      else out.push({ ok: true, value: v });
+    }
+    return out;
+  }
+
   var API = {
     PROJECTIONS: PROJECTIONS,
     EXTRACT: EXTRACT,
+    BATCH: BATCH,
+    MAX_BATCH: MAX_BATCH,
     MAX_ITEMS: MAX_ITEMS,
     MAX_TEXT: MAX_TEXT,
     MAX_CELL: MAX_CELL,
     isProjection: isProjection,
+    isBatch: function (id) { return id === BATCH; },
     originAllowed: originAllowed,
     planTargets: planTargets,
-    project: project
+    project: project,
+    projectMany: projectMany
   };
 
   try { root.ZWIRE_PAGE = API; } catch (e) {}
