@@ -99,7 +99,10 @@ done
 # blank with only a console 404. Guard the one entry point each page loads.
 #   lib/file-browser  -> pages/files.js injects webui/file-browser.js
 #   lib/clip-engine   -> pages/timeline.js imports webui/grid/index.js
-for sub in "lib/file-browser/webui/file-browser.js" "lib/clip-engine/webui/grid/index.js"; do
+# clip-engine carries its own NESTED zgui-core submodule at webui/lib/zgui-core, which a
+# non-recursive `git submodule update --init` leaves empty, so guard that one too — the
+# grid's browser-drawer.js imports ../lib/zgui-core/webui/esm/util.mjs from it.
+for sub in "lib/file-browser/webui/file-browser.js" "lib/clip-engine/webui/grid/index.js" "lib/clip-engine/webui/lib/zgui-core/webui/esm/util.mjs"; do
   [ -s "$DEST/ext/hud-internal/$sub" ] \
     || { cyber_fail "installed hud-internal is missing $sub — run: git submodule update --init --recursive"; exit 1; }
 done
