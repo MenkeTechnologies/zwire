@@ -12,12 +12,14 @@
   // DOWNLOADS points at the native page — zpwrchrome owns the download manager
   // (its takeover cancels + reissues Chrome downloads), so a HUD downloads page
   // built on chrome.downloads.search would only show the cancelled stubs.
+  // The nav is deliberately trimmed: pages that are NOT listed here (Files,
+  // Timeline, Notes, Feeds, Translate, Reading List, Terminal) are reached from
+  // the dashboard tile grid instead, so the nav row stays scannable.
   var PAGES = [['DASHBOARD', 'dashboard.html'],
     ['AUDIO', 'audio.html'], ['HOOKS', 'hooks.html'],
     ['EXTENSIONS', 'extensions.html'], ['SETTINGS', 'settings.html'],
     ['APP STORE', 'store.html'],
-    ['FILES', 'files.html'],
-    ['HISTORY', 'history.html'], ['TIMELINE', 'timeline.html'],
+    ['HISTORY', 'history.html'],
     ['DOWNLOADS', 'chrome://downloads'], ['BOOKMARKS', 'bookmarks.html'],
     ['CI', 'ci.html'], ['SHORTCUTS', 'keys.html'], ['EXT KEYS', 'extshortcuts.html'],
     ['COMMANDS', 'commands.html'], ['TRIGGERS', 'triggers.html'], ['PIPELINES', 'pipes.html'], ['SESSIONS', 'sessions.html'],

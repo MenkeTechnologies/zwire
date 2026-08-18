@@ -94,6 +94,16 @@ done
 [ -s "$DEST/ext/hud-internal/lib/hooks-editor/hooks-editor.bundle.js" ] \
   || { cyber_fail "installed hud-internal is missing lib/hooks-editor/ — Hooks/Commands/Triggers would ship without Monaco"; exit 1; }
 
+# Same trap for the git SUBMODULE libs: an uninitialised submodule is an EMPTY
+# directory, so rsync copies it happily and the pages that import from it render
+# blank with only a console 404. Guard the one entry point each page loads.
+#   lib/file-browser  -> pages/files.js injects webui/file-browser.js
+#   lib/clip-engine   -> pages/timeline.js imports webui/grid/index.js
+for sub in "lib/file-browser/webui/file-browser.js" "lib/clip-engine/webui/grid/index.js"; do
+  [ -s "$DEST/ext/hud-internal/$sub" ] \
+    || { cyber_fail "installed hud-internal is missing $sub — run: git submodule update --init --recursive"; exit 1; }
+done
+
 # 3) the native host — one self-contained Rust binary
 cp "$HOST_BIN" "$DEST/native/zwire-host"; chmod +x "$DEST/native/zwire-host"
 cp "$ZPWR_HOST_BIN" "$DEST/native/zpwrchrome-host"; chmod +x "$DEST/native/zpwrchrome-host"

@@ -139,6 +139,18 @@ if (-not (Test-Path $HeStaged) -or (Get-Item $HeStaged).Length -eq 0) {
   throw "installed hud-internal is missing lib\hooks-editor\ — Hooks/Commands/Triggers would ship without Monaco"
 }
 
+# Same trap for the git SUBMODULE libs: an uninitialised submodule is an EMPTY
+# directory, so the copy above succeeds and the pages that import from it render
+# blank with only a console 404. Guard the one entry point each page loads.
+#   lib\file-browser  -> pages\files.js injects webui\file-browser.js
+#   lib\clip-engine   -> pages\timeline.js imports webui\grid\index.js
+foreach ($sub in @("lib\file-browser\webui\file-browser.js", "lib\clip-engine\webui\grid\index.js")) {
+  $SubStaged = Join-Path $Dest "ext\hud-internal\$sub"
+  if (-not (Test-Path $SubStaged) -or (Get-Item $SubStaged).Length -eq 0) {
+    throw "installed hud-internal is missing $sub — run: git submodule update --init --recursive"
+  }
+}
+
 Copy-Item -Force $HostBin (Join-Path $Dest "native\zwire-host.exe")
 Say "native // zwire-host.exe"
 
