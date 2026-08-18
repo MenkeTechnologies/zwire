@@ -27,6 +27,12 @@
 <script src="../lib/zgui-core/webui/modal-drag.js"></script>
 <script src="../lib/zgui-core/webui/popconfirm.js"></script>
 <script src="../lib/zgui-core/webui/button-group.js"></script>
+<!-- the context-menu RENDERER. file-browser.js builds the item lists and calls the bare
+     global showContextMenu(); its own shim routes that to ZGui.contextMenu.show, and with
+     this script missing that shim degrades to a plain preventDefault() — right-click in the
+     browser then suppresses Chrome's menu and shows nothing of its own. app-shell lazily
+     pulls toast/modal/menu but not this one, so the page has to list it. -->
+<script src="../lib/zgui-core/webui/context-menu.js"></script>
 <!-- zwire's zwire-host bridge; MUST precede file-browser.js so the shared file's
      self-installing Tauri bridge sees window.zfbHost already taken. -->
 <script src="files-host.js"></script>
