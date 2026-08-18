@@ -834,6 +834,269 @@
     };
   }
 
+  /* ---- REAL tmux (zwire-host `tmux_*` → ztmux-core) --------------------------
+   * The suite has two things called tmux and they are not the same thing.
+   * `ztmux-config.js` tiles WEB panes with a tmux prefix key; these rows drive
+   * the multiplexer actually running in the user's terminal — the session tree,
+   * send-keys, capture, buffers, snapshots — over tmux's own wire protocol.
+   *
+   * Backend-agnostic like the rest of this file: the consumer injects `host`
+   * (one zwire-host request, `host(req, cb(err, reply))`), plus `toast`, `copy`,
+   * `prompt`, `pageUrl` and `selection`. Nothing here touches chrome.*.
+   *
+   * Two row shapes, for two different costs:
+   *
+   * ACTION rows are always published. Their ids are what a chain, a trigger or a
+   * hook names, and a row that exists only while a tmux server happens to be up
+   * is a row those callers cannot depend on — so they publish unconditionally
+   * and say "no tmux server" when there is none.
+   *
+   * PANE rows are query-only. Sixteen panes is a normal day here; a palette that
+   * opens with sixteen unasked rows in it is a worse palette. They surface when
+   * the query starts with `tmux` (or `pane`), which is also where `tmux <text>`
+   * turns into "send this text to that pane".
+   */
+
+  // Primed on palette open (see primeTmux) and read by the provider, which must
+  // answer synchronously. Writes never use these — an action re-reads the tree so
+  // it acts on the pane that is active NOW, not the one that was active when the
+  // palette opened.
+  var TMUX_PANES = [];
+  var TMUX_SNAPS = [];
+
+  /// Flatten `tmux_tree` into rows: one entry per pane, carrying everything a
+  /// row needs to label itself and everything an action needs to target it.
+  function flattenTmuxTree(tree) {
+    var out = [];
+    if (!tree || !tree.running || !tree.sessions) return out;
+    tree.sessions.forEach(function (s) {
+      (s.windows || []).forEach(function (w) {
+        (w.panes || []).forEach(function (p) {
+          out.push({
+            session: s.name, attached: !!s.attached,
+            window: w.index, windowName: w.name, windowActive: !!w.active,
+            index: p.index, id: p.id, cmd: p.cmd || '', size: p.size || '',
+            active: !!p.active,
+            // `select-pane -t` takes the pane id; the human label is the classic
+            // session:window.pane address, which is what the user reads in tmux.
+            target: s.name + ':' + w.index + '.' + p.index
+          });
+        });
+      });
+    });
+    return out;
+  }
+  /// The pane the user is looking at: active pane, of the active window, of the
+  /// attached session. With nothing attached (a detached server driven purely
+  /// from the browser) the first active pane is the honest best answer.
+  function tmuxActivePane(panes) {
+    var i;
+    for (i = 0; i < panes.length; i++) if (panes[i].attached && panes[i].windowActive && panes[i].active) return panes[i];
+    for (i = 0; i < panes.length; i++) if (panes[i].windowActive && panes[i].active) return panes[i];
+    return panes[0] || null;
+  }
+  /// Panes with the one the user is looking at first — the order every tmux row
+  /// list uses, so ⏎ on an unfiltered `tmux` query hits the obvious target.
+  function tmuxOrdered(panes) {
+    var act = tmuxActivePane(panes);
+    return act ? [act].concat(panes.filter(function (p) { return p !== act; })) : panes.slice();
+  }
+  function tmuxLabel(p) {
+    return p.target + (p.cmd ? ' — ' + p.cmd : '') + (p.active ? ' ·' : '');
+  }
+
+  /// Fill the caches the provider reads. Called when the palette opens; `refresh`
+  /// re-runs the current query so rows appear the moment the answers land.
+  function primeTmux(host, refresh) {
+    if (typeof host !== 'function') return;
+    function done() { if (typeof refresh === 'function') try { refresh(); } catch (e) {} }
+    try {
+      host({ cmd: 'tmux_tree' }, function (err, r) {
+        TMUX_PANES = err ? [] : flattenTmuxTree(r && r.result);
+        done();
+      });
+      host({ cmd: 'tmux_snap_list' }, function (err, r) {
+        TMUX_SNAPS = (!err && r && r.result && r.result.snapshots) || [];
+        done();
+      });
+    } catch (e) {}
+  }
+
+  /// Run `fn(pane)` against the pane that is active right now. Re-reads the tree
+  /// rather than trusting the open-time cache: between opening ⌘K and pressing ⏎
+  /// the user may have switched panes, and typing a command into the pane they
+  /// just left is the one failure mode this whole surface must not have.
+  function withActivePane(host, toast, fn) {
+    host({ cmd: 'tmux_tree' }, function (err, r) {
+      if (err) { toast('tmux: ' + err, true); return; }
+      var panes = flattenTmuxTree(r && r.result);
+      if (!panes.length) { toast('tmux: no server running'); return; }
+      var p = tmuxActivePane(panes);
+      if (!p) { toast('tmux: no active pane'); return; }
+      fn(p);
+    });
+  }
+
+  /// Report a write's outcome once, in the row's own words. Every tmux action
+  /// ends here so a refusal reads the same wherever it came from.
+  function tmuxReport(toast, label) {
+    return function (err, r) {
+      if (err) { toast('tmux: ' + err, true); return; }
+      if (r && r.ok === false) { toast('tmux: ' + (r.err || 'refused'), true); return; }
+      toast(label);
+    };
+  }
+
+  function makeTmuxItems(ctx) {
+    ctx = ctx || {};
+    var host = ctx.host || function (_r, cb) { if (cb) cb('no host'); };
+    var toast = ctx.toast || function () {};
+    var copy = ctx.copy || function () {};
+    var prompt = ctx.prompt || function (_o, cb) { cb(null); };
+    var pageUrl = ctx.pageUrl || function () { return ''; };
+    var selection = ctx.selection || function () { return ''; };
+    // One-key window/pane verbs. `tmux_run` is fire-and-forget, which is what
+    // these are: the answer is the terminal redrawing, not a reply.
+    var RUN = [
+      ['newWindow', '＋', 'new window', ['new-window']],
+      ['splitH', '▥', 'split pane horizontally', ['split-window', '-h']],
+      ['splitV', '▤', 'split pane vertically', ['split-window', '-v']],
+      ['zoom', '⤢', 'zoom / unzoom the pane', ['resize-pane', '-Z']],
+      ['nextWindow', '→', 'next window', ['next-window']],
+      ['prevWindow', '←', 'previous window', ['previous-window']]
+    ];
+    var out = [
+      { id: 'zw.tmux.status', icon: '▦', label: 'Tmux: server status', detail: 'sessions · windows · panes', run: function () {
+        host({ cmd: 'tmux_status' }, function (err, st) {
+          if (err) { toast('tmux: ' + err, true); return; }
+          if (!st || !st.running) { toast('tmux: no server running'); return; }
+          host({ cmd: 'tmux_tree' }, function (e2, r) {
+            var panes = e2 ? [] : flattenTmuxTree(r && r.result);
+            var sess = {}, wins = {};
+            panes.forEach(function (p) { sess[p.session] = 1; wins[p.session + ':' + p.window] = 1; });
+            toast('tmux ' + (st.socket || '') + ' · ' + Object.keys(sess).length + ' sessions · '
+              + Object.keys(wins).length + ' windows · ' + panes.length + ' panes'
+              + (st.attached ? ' · attached' : ' · detached'));
+          });
+        });
+      } },
+      // Typed, NOT executed: a URL arriving on a shell prompt is something the
+      // user then edits (wraps in curl, adds flags). Enter is theirs to press.
+      { id: 'zw.tmux.sendUrl', icon: '⇥', label: 'Tmux: send this page URL to the active pane', detail: 'types it, no ⏎', run: function () {
+        var url = pageUrl();
+        if (!url) { toast('tmux: no page url', true); return; }
+        withActivePane(host, toast, function (p) {
+          host({ cmd: 'tmux_send', panes: [p.id], text: url, enter: false }, tmuxReport(toast, 'tmux ▸ ' + p.target + ': url typed'));
+        });
+      } },
+      { id: 'zw.tmux.sendCmd', icon: '⌘', label: 'Tmux: run a command in the active pane', detail: 'types it and presses ⏎', run: function () {
+        prompt({ title: 'Tmux', message: 'Command to run in the active pane.', placeholder: 'ls -la' }, function (text) {
+          if (text == null || !String(text).trim()) return;
+          withActivePane(host, toast, function (p) {
+            host({ cmd: 'tmux_send', panes: [p.id], text: String(text), enter: true }, tmuxReport(toast, 'tmux ▸ ' + p.target + ': ' + text));
+          });
+        });
+      } },
+      { id: 'zw.tmux.capture', icon: '⧉', label: 'Tmux: copy the active pane', detail: 'visible text → clipboard', run: function () {
+        withActivePane(host, toast, function (p) {
+          host({ cmd: 'tmux_capture', pane: p.id }, function (err, r) {
+            if (err) { toast('tmux: ' + err, true); return; }
+            var text = (r && r.result) || '';
+            copy(text);
+            toast('tmux ◂ ' + p.target + ': ' + String(text).split('\n').length + ' lines copied');
+          });
+        });
+      } },
+      // The two directions of one seam: the browser's text into tmux's paste
+      // buffer, and tmux's newest buffer back into the browser clipboard. A
+      // buffer is how text crosses between them without a file or a shell.
+      { id: 'zw.tmux.pushSelection', icon: '⇩', label: 'Tmux: selection → tmux buffer', detail: 'page URL when nothing is selected', run: function () {
+        var text = String(selection() || '').trim() || pageUrl();
+        if (!text) { toast('tmux: nothing to send', true); return; }
+        host({ cmd: 'tmux_set_buffer', name: 'zwire', content: text },
+          tmuxReport(toast, 'tmux ▸ buffer "zwire": ' + text.length + ' chars'));
+      } },
+      { id: 'zw.tmux.pullBuffer', icon: '⇧', label: 'Tmux: newest tmux buffer → clipboard', detail: 'paste-buffer', run: function () {
+        host({ cmd: 'tmux_buffers' }, function (err, r) {
+          if (err) { toast('tmux: ' + err, true); return; }
+          var list = (r && r.result && r.result.buffers) || [];
+          if (!list.length) { toast('tmux: no paste buffers'); return; }
+          host({ cmd: 'tmux_buffer', name: list[0].name }, function (e2, b) {
+            if (e2) { toast('tmux: ' + e2, true); return; }
+            var text = (b && b.result && b.result.content) || '';
+            copy(text);
+            toast('tmux ◂ ' + list[0].name + ': ' + text.length + ' chars copied');
+          });
+        });
+      } },
+      { id: 'zw.tmux.sync', icon: '⇉', label: 'Tmux: toggle synchronize-panes', detail: 'active window · types into every pane', run: function () {
+        withActivePane(host, toast, function (p) {
+          host({ cmd: 'tmux_broadcast_list' }, function (err, r) {
+            var wins = (!err && r && r.result && r.result.windows) || [];
+            var cur = null;
+            wins.forEach(function (w) { if (w.session === p.session && String(w.windowIndex) === String(p.window)) cur = w; });
+            var on = !(cur && cur.sync);
+            host({ cmd: 'tmux_sync', window: p.session + ':' + p.window, on: on },
+              tmuxReport(toast, 'tmux ▸ ' + p.session + ':' + p.window + ': synchronize-panes ' + (on ? 'on' : 'off')));
+          });
+        });
+      } },
+      { id: 'zw.tmux.snapSave', icon: '💾', label: 'Tmux: save the session', detail: 'layout · cwd · command lines · pane contents', run: function () {
+        prompt({ title: 'Tmux', message: 'Name for this saved session.', placeholder: 'work' }, function (name) {
+          if (name == null || !String(name).trim()) return;
+          host({ cmd: 'tmux_snap_save', name: String(name).trim(), contents: true },
+            tmuxReport(toast, 'tmux ▸ saved "' + String(name).trim() + '"'));
+        });
+      } },
+      { id: 'zw.tmux.snapRestore', icon: '↺', label: 'Tmux: restore a saved session', detail: 'type `tmux` to pick one by name', run: function () {
+        prompt({ title: 'Tmux', message: 'Saved session to restore.', placeholder: 'work' }, function (name) {
+          if (name == null || !String(name).trim()) return;
+          host({ cmd: 'tmux_snap_restore', name: String(name).trim(), relaunch: true },
+            tmuxReport(toast, 'tmux ▸ restored "' + String(name).trim() + '"'));
+        });
+      } }
+    ];
+    RUN.forEach(function (r) {
+      out.push({ id: 'zw.tmux.' + r[0], icon: r[1], label: 'Tmux: ' + r[2], detail: 'tmux ' + r[3].join(' '), run: function () {
+        host({ cmd: 'tmux_run', args: r[3] }, tmuxReport(toast, 'tmux ▸ ' + r[3].join(' ')));
+      } });
+    });
+    return out;
+  }
+
+  /// `tmux` alone lists the live panes (⏎ focuses one) and the saved sessions;
+  /// `tmux <text>` turns every pane into a send target for that text. The pane
+  /// the user is looking at leads both lists.
+  function makeTmuxProvider(ctx) {
+    ctx = ctx || {};
+    var host = ctx.host || function (_r, cb) { if (cb) cb('no host'); };
+    var toast = ctx.toast || function () {};
+    return function tmuxProvider(q) {
+      var m = /^(?:tmux|pane)\b\s*([\s\S]*)$/i.exec(String(q || '').trim());
+      if (!m) return [];
+      var text = m[1].trim();
+      var panes = tmuxOrdered(TMUX_PANES);
+      var out = [];
+      if (text) {
+        panes.forEach(function (p, i) {
+          out.push({ id: 'zw.tmux.send.' + slug(p.id), icon: '⇥', label: 'Tmux: run in ' + tmuxLabel(p), detail: text, top: i === 0,
+            run: function () { host({ cmd: 'tmux_send', panes: [p.id], text: text, enter: true }, tmuxReport(toast, 'tmux ▸ ' + p.target + ': ' + text)); } });
+        });
+        return out.slice(0, 16);
+      }
+      panes.forEach(function (p, i) {
+        out.push({ id: 'zw.tmux.focus.' + slug(p.id), icon: '▣', label: 'Tmux: focus ' + tmuxLabel(p), detail: p.windowName || p.session, top: i === 0,
+          run: function () { host({ cmd: 'tmux_focus', session: p.session, window: p.window, pane: p.id }, tmuxReport(toast, 'tmux ▸ focus ' + p.target)); } });
+      });
+      TMUX_SNAPS.forEach(function (s) {
+        out.push({ id: 'zw.tmux.snap.' + slug(s.name), icon: '↺', label: 'Tmux: restore ' + s.name, detail: s.sessions + ' sessions · ' + s.windows + ' windows · ' + s.panes + ' panes', secondary: true,
+          run: function () { host({ cmd: 'tmux_snap_restore', name: s.name, relaunch: true }, tmuxReport(toast, 'tmux ▸ restored "' + s.name + '"')); } });
+      });
+      if (!out.length) out.push({ id: 'zw.tmux.none', icon: '▦', label: 'Tmux: no server running', detail: 'nothing to list', run: function () {} });
+      return out.slice(0, 24);
+    };
+  }
+
   root.ZWIRE_PALETTE_CMDS = {
     SEARCH: SEARCH,
     parseTabQuery: parseTabQuery,
@@ -866,6 +1129,12 @@
     makeBraceProvider: makeBraceProvider,
     // URL surgery mini-language
     urlSurgery: urlSurgery,
-    makeUrlSurgeryProvider: makeUrlSurgeryProvider
+    makeUrlSurgeryProvider: makeUrlSurgeryProvider,
+    // REAL tmux — the multiplexer in the terminal, not the web-pane tiling
+    flattenTmuxTree: flattenTmuxTree,
+    tmuxActivePane: tmuxActivePane,
+    primeTmux: primeTmux,
+    makeTmuxItems: makeTmuxItems,
+    makeTmuxProvider: makeTmuxProvider
   };
 })(typeof window !== 'undefined' ? window : this);

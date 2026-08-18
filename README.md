@@ -23,6 +23,10 @@ workspace layered on top:
 - a **tmux-style tiling overlay** — unlimited windows, recursive pane splits,
   each pane an embedded webview of any site;
 - a **⌘K command palette**, **vim-style navigation**, and a **find bar**;
+- **the real tmux server too** — the same ⌘K palette lists the live panes of the
+  multiplexer running in the user's terminal, runs commands in them, and moves
+  text between the browser and tmux's paste buffers, over tmux's own wire
+  protocol (no `tmux` subprocess);
 - durable, named **session management** with full CRUD + SVG layout previews;
 - **HUD reimplementations of Chrome's own internal pages** (extensions,
   settings, history, bookmarks, version) — Settings is sectioned like Chrome's
@@ -730,6 +734,45 @@ but is four.
   goes wrong: hud-internal's worker never starts, so browser-level ⌘K stays
   bound in the profile but has no listener — the palette stops opening on web
   pages and from the omnibox, while HUD pages (page-level ⌘K) still work.
+
+### Real tmux from ⌘K
+
+zwire has two things called tmux and they are not the same thing. The **tiling
+overlay** above is a window manager for *web panes* that borrows tmux's model and
+its prefix key. This is the other one: the **actual multiplexer running in the
+terminal**, driven from the same palette.
+
+The rows go out over `zb-host` to `zwire-host`'s `tmux_*` commands, which speak
+tmux's client/server wire protocol (imsg framing, protocol version 8) straight to
+the server socket via [`ztmux-core`](https://crates.io/crates/ztmux-core) — not
+control mode, and no `tmux` subprocess per action. A running
+[`ztmux`](https://github.com/MenkeTechnologies/ztmux) server is preferred over
+upstream `tmux` when both are up.
+
+| Row | What it does |
+|---|---|
+| `tmux` (typed) | lists every live pane — `session:window.pane — cmd` — plus the saved sessions; ⏎ focuses one |
+| `tmux <text>` (typed) | turns every pane into a send target for that text; the pane you are looking at leads the list |
+| `Tmux: run a command in the active pane` | prompts, then types it and presses ⏎ |
+| `Tmux: send this page URL to the active pane` | types the URL and stops — pressing Enter stays yours, so you can wrap it in `curl` first |
+| `Tmux: copy the active pane` | that pane's visible text → the browser clipboard |
+| `Tmux: selection → tmux buffer` / `newest tmux buffer → clipboard` | the two directions of the browser↔terminal text seam, through tmux's paste buffers |
+| `Tmux: toggle synchronize-panes` | broadcast typing across the active window, read off its current state |
+| `Tmux: save / restore the session` | native session snapshots (layout, cwd, command lines, pane contents) kept in zwire's own state dir |
+| `Tmux: new window · split · zoom · next/prev window` | the one-key window verbs |
+
+Two shapes for two costs. The **action rows are always published**, server or no
+server: their ids (`zw.tmux.*`) are what a chain, a trigger or a hook names, and a
+row that comes and goes with the server is a row none of them can depend on — so
+they report "no tmux server" instead of vanishing. The **pane rows are
+query-only**: sixteen panes is a normal day, and a palette that opens with sixteen
+unasked rows in it is a worse palette.
+
+Every write re-reads the session tree first. The palette caches panes when it
+opens, but between opening ⌘K and pressing ⏎ you can switch panes — and a command
+typed into the pane you just left is the one failure this surface must not have.
+Pane row ids come from the tmux pane id, so renaming a session, a window or the
+running program never moves them. `tests/tmux.mjs` pins all of it.
 
 ## `[0x03] INSTALL`
 

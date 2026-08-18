@@ -224,6 +224,11 @@
     // The scheme KEY is the id — `s.label` is display text and is what a localized
     // build would rewrite, so a scheme row keyed on it would rename its own verb.
     ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ id: 'zw.scheme.' + n, icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the whole browser', run: function () { setScheme(n); } }); });
+    // Real-tmux actions. Published unconditionally, not gated on a running server:
+    // these ids are what a chain, a trigger or a hook names, and a row that comes
+    // and goes with the server is a row none of them can depend on. Each says so
+    // when there is nothing to drive.
+    if (PC.makeTmuxItems) PC.makeTmuxItems(TMUXCTX).forEach(function (it) { out.push(it); });
     return out;
   }
   // Frecent rows are identified by their URL — the title is page-supplied text that
@@ -831,6 +836,31 @@
     open: open,
     copy: clip
   }) : function () { return []; };
+  // REAL tmux (zwire-host `tmux_*` → ztmux-core): the multiplexer in the user's
+  // terminal, as opposed to ztmux-config.js's web-pane tiling of the same name.
+  // The provider owns the typed surface (`tmux` lists panes, `tmux <text>` sends
+  // it); the action rows come from makeTmuxItems and are published with the rest.
+  // ZGui.modal only rides along on http/https/file pages (it is injected with the
+  // tmux overlay's block, not this one), so a chrome:// page falls back to the
+  // platform prompt rather than losing the row.
+  var TMUXCTX = {
+    host: hostReq,
+    toast: hostToast,
+    copy: clip,
+    prompt: function (opts, cb) {
+      try {
+        if (window.ZGui && ZGui.modal && ZGui.modal.prompt) {
+          ZGui.modal.prompt(opts).then(function (v) { cb(v == null ? null : v); }, function () { cb(null); });
+          return;
+        }
+      } catch (e) {}
+      try { cb(window.prompt((opts && opts.message) || (opts && opts.title) || '', '')); }
+      catch (e) { cb(null); }
+    },
+    pageUrl: function () { try { return location.href; } catch (e) { return ''; } },
+    selection: function () { try { return String(window.getSelection() || ''); } catch (e) { return ''; } }
+  };
+  var tmuxProvider = PC.makeTmuxProvider ? PC.makeTmuxProvider(TMUXCTX) : function () { return []; };
   function getRates(cb) { try { chrome.runtime.sendMessage({ type: 'zbGetRates' }, function (r) { void chrome.runtime.lastError; cb(r); }); } catch (e) { cb(null); } }
   function refreshPalette() { try { var inp = document.querySelector('.palette-input'); if (inp) inp.dispatchEvent(new Event('input')); } catch (e) {} }
 
@@ -914,8 +944,9 @@
     // otherwise the second open would dedupe every row against the first open's ids
     // and publish nothing at all.
     publishedIds = {};
-    try { ZGui.palette.clear(); publish(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); ZGui.palette.registerProvider(urlSurgeryProvider); } ZGui.palette.open(); } catch (ex) {}
+    try { ZGui.palette.clear(); publish(items()); if (ZGui.palette.registerProvider) { ZGui.palette.registerProvider(computeProvider); ZGui.palette.registerProvider(searchProvider); ZGui.palette.registerProvider(customProvider); ZGui.palette.registerProvider(tabQueryProvider); ZGui.palette.registerProvider(braceProvider); ZGui.palette.registerProvider(urlSurgeryProvider); ZGui.palette.registerProvider(tmuxProvider); } ZGui.palette.open(); } catch (ex) {}
     try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
+    try { if (PC.primeTmux) PC.primeTmux(hostReq, refreshPalette); } catch (e) {}      // live tmux panes + saved sessions for the `tmux` query
     try {
       chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {
         void chrome.runtime.lastError;

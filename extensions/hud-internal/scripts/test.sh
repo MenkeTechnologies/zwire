@@ -181,6 +181,16 @@ fi
 command rm -f /tmp/zwire-hud-chain.$$
 echo
 
+cyber_section "REAL TMUX (active-pane targeting / typed pane rows / buffer seam)"
+if node tests/tmux.mjs 2>/tmp/zwire-hud-tmux.$$; then
+  cyber_ok "real tmux nominal"
+else
+  FAIL=1; cyber_fail "real tmux compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-tmux.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-tmux.$$
+echo
+
 cyber_section "PALETTE ID CONTRACT (stable slugs / no label-keyed ids / diagnostics sink)"
 if node tests/palette-ids.mjs 2>/tmp/zwire-hud-pids.$$; then
   cyber_ok "palette id contract nominal"
