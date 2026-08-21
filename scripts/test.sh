@@ -47,7 +47,9 @@ cyber_section "SHARED-FILE PARITY (newtab/ vs extensions/hud-internal/)"
 # forgetting the other silently forks the two surfaces — the HUD palette and the new-tab
 # palette disagreeing about a command, or the layout engine validating differently on
 # each side. Compare them here so the drift is a test failure, not a bug report.
-DUPES=(schemes.js palette-cmds.js cmd-defaults.js zntp-core.js lib/term/term-overlay.js)
+DUPES=(schemes.js palette-cmds.js cmd-defaults.js zntp-core.js
+  lib/term/term-overlay.js lib/term/terminal.js lib/term/terminal.css lib/term/xterm.js lib/term/xterm.css
+  lib/term/fonts/HackNerdFontMono-Regular.woff2 lib/zgui-core/webui/modal-drag.js)
 DUP_BAD=0
 for f in "${DUPES[@]}"; do
   if [[ ! -f "newtab/$f" || ! -f "extensions/hud-internal/$f" ]]; then

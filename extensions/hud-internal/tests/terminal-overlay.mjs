@@ -1,48 +1,51 @@
-// Ctrl+` terminal overlay test (lib/term/term-overlay.js) — the terminal on EXTENSION pages.
+// Ctrl+` terminal test (lib/term/term-overlay.js) — the terminal on EXTENSION pages.
 //
-// Content scripts match http/https/file/chrome://*, so the overlay every web page gets never
-// reaches a HUD page or the new-tab page. term-overlay.js is what puts the keystroke there, by
-// framing the HUD's own Terminal page. Three things make that work, and each fails silently:
+// Content scripts match http/https/file/chrome://*, so the terminal every web page gets never
+// reaches a HUD page or the new-tab page. term-overlay.js loads that same terminal there on the
+// first toggle. What it must get right, and what fails quietly otherwise:
 //
-//   1. THE KEY. Same combo as the content-script overlay (zpalette.js), or the terminal is
+//   1. THE KEY. Same combo as the content-script binding (zpalette.js), or the terminal is
 //      "missing" on exactly the pages this file exists to serve.
-//   2. THE URL. From a HUD page the frame resolves against this extension; from the new-tab
-//      page it must address the HUD explicitly, because that page belongs to another
-//      extension and a relative URL would point at a file that isn't there.
-//   3. THE GRANT. Chromium allows a chrome-extension:// initiator to load a web-accessible
-//      resource only via `extension_ids` — `"matches": ["<all_urls>"]` does NOT cover it
-//      (web_accessible_resources_info.cc, IsResourceWebAccessibleImpl). So the HUD manifest
-//      has to name the new-tab extension's id, and that id is derived from its manifest key:
-//      rotate the key without updating the grant and the new-tab terminal frame goes blank.
+//   2. THE ASSETS. The real terminal, in the order the real terminal needs: modal-drag.js
+//      publishes initModalDragResize, which terminal.js calls while injecting its pane —
+//      load it afterwards and the pane comes up FIXED instead of floating, draggable and
+//      dockable, which is the whole difference between this and a docked panel.
+//   3. STANDING DOWN. terminal.js binds Ctrl+` itself once loaded. A capture-phase listener
+//      here that keeps swallowing the key would make that binding permanently unreachable.
 //
-// The new-tab extension cannot load a script from the HUD's origin (CSP `script-src 'self'`), so
-// it carries a byte-identical copy at the same relative path; scripts/test.sh's SHARED-FILE
-// PARITY gate is what keeps the two from drifting.
+// Each extension serves its own copy of the assets (a page cannot load a script from another
+// extension's origin under `script-src 'self'`), so the new-tab tree carries byte-identical
+// copies at the same relative paths; scripts/test.sh's SHARED-FILE PARITY gate compares them.
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const SRC = new URL('../lib/term/term-overlay.js', import.meta.url);
-const HUD_ID = 'omcgnnjfmbmpdlofklbpddkhnfibfhgg';
 
 const src = fs.readFileSync(SRC, 'utf8');
 
-// Minimal window/document shim: the file only needs a keydown/message listener sink and a
-// body to hang the frame on. Nothing here renders — the assertions are on the pure halves.
+// Window/document shim. Enough DOM to watch what gets injected: `injected` records every
+// <link>/<script> appended to head, in order, and a script's onload is fired on demand so the
+// sequential chain can be walked the way a browser would walk it. `state.pane` stands in for
+// terminal.js having injected #terminalPane.
 function load() {
   const listeners = {};
+  const injected = [];
+  const state = { pane: null };
   const win = {
     addEventListener: (t, fn) => { (listeners[t] = listeners[t] || []).push(fn); }
   };
   const doc = {
     addEventListener: (t, fn) => { (listeners['doc:' + t] = listeners['doc:' + t] || []).push(fn); },
-    getElementById: () => null,
+    getElementById: (id) => (id === 'terminalPane' ? state.pane : null),
+    createElement: (tag) => ({ tag }),
+    head: { appendChild: (el) => { injected.push(el); } },
+    documentElement: {},
     body: null
   };
-  new Function('window', 'document', 'location', 'chrome', src)(
-    win, doc, { protocol: 'chrome-extension:', host: HUD_ID }, undefined);
+  new Function('window', 'document', 'chrome', src)(
+    win, doc, { runtime: { getURL: (rel) => 'chrome-extension://self/' + rel } });
   assert.ok(win.zwireTermOverlay, 'window.zwireTermOverlay missing');
-  return { api: win.zwireTermOverlay, listeners, win };
+  return { api: win.zwireTermOverlay, listeners, win, state, injected };
 }
 
 let pass = 0, fail = 0;
@@ -52,7 +55,7 @@ const check = (name, cond, detail) => {
   console.error(`  ✗ ${name}${detail ? ' — ' + detail : ''}`);
 };
 
-const { api, listeners, win } = load();
+const { api, listeners, win, state, injected } = load();
 
 // ---- 1. the key ----
 {
@@ -67,38 +70,75 @@ const { api, listeners, win } = load();
   check('a missing event does not throw', api.isTermCombo(undefined) === false);
   check('the key is bound on the capture phase of document',
     (listeners['doc:keydown'] || []).length === 1);
-  check('the frame relay is listening', (listeners.message || []).length === 1);
   check('toggleTerminalPopup is exposed for palette entries',
     typeof win.toggleTerminalPopup === 'function');
 }
 
-// ---- 2. the URL ----
+// ---- 2. the assets ----
+// The floating pane is terminal.js's own (`.terminal-pane dock-br` + #termDragHandle, made
+// draggable by initModalDragResize). Loading the wrong set, or the right set in the wrong
+// order, is how it comes back as a fixed panel instead.
 {
-  const fromNewTab = api.terminalUrl({ protocol: 'chrome-extension:', host: 'gpoepnekoiplhkegjpocnpeijiefgieb' });
-  check('a foreign extension page addresses the HUD absolutely',
-    fromNewTab === `chrome-extension://${HUD_ID}/pages/terminal.html`, fromNewTab);
-  const fromHud = api.terminalUrl({ protocol: 'chrome-extension:', host: HUD_ID });
-  check('a HUD page resolves to the same Terminal page',
-    fromHud === `chrome-extension://${HUD_ID}/pages/terminal.html`, fromHud);
-  check('a web page (a HUD page hosted nowhere else) still gets an absolute HUD URL',
-    api.terminalUrl({ protocol: 'https:', host: 'example.com' }) === fromNewTab);
+  const { css, js } = api.assets;
+  check('xterm + terminal styling is loaded', css.join() === 'lib/term/xterm.css,lib/term/terminal.css', css.join());
+  check('the scripts are the web-page set, drag helper first',
+    js.join() === 'lib/zgui-core/webui/modal-drag.js,lib/term/xterm.js,lib/term/terminal.js', js.join());
+  check('modal-drag.js precedes terminal.js (it publishes initModalDragResize)',
+    js.indexOf('lib/zgui-core/webui/modal-drag.js') < js.indexOf('lib/term/terminal.js'));
+
+  // Every asset must exist in BOTH trees — each extension serves its own copy, and a page
+  // that 404s one of these gets a terminal with no styling, no drag, or no terminal at all.
+  for (const rel of [...css, ...js]) {
+    check(`the HUD ships ${rel}`, fs.existsSync(new URL('../' + rel, import.meta.url)));
+    check(`the new-tab extension ships ${rel}`,
+      fs.existsSync(new URL('../../../newtab/' + rel, import.meta.url)));
+  }
+  // terminal.css @font-face's this file; a missing copy silently falls back to a system font.
+  const FONT = 'lib/term/fonts/HackNerdFontMono-Regular.woff2';
+  check(`the new-tab extension ships ${FONT}`,
+    fs.existsSync(new URL('../../../newtab/' + FONT, import.meta.url)));
 }
 
-// ---- 3. the grant ----
+// ---- 3. standing down once terminal.js owns the key ----
+// Driven through the listener this file actually registered, with the shim flipped to look
+// like terminal.js has injected its pane.
 {
-  const hud = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
-  const ntManifest = JSON.parse(fs.readFileSync(new URL('../../../newtab/manifest.json', import.meta.url), 'utf8'));
-  // Extension id = first 32 bytes of SHA-256 over the DER public key, hex mapped 0-9a-f -> a-p.
-  const ntId = crypto.createHash('sha256').update(Buffer.from(ntManifest.key, 'base64')).digest('hex')
-    .slice(0, 32).replace(/[0-9a-f]/g, (c) => 'abcdefghijklmnop'[parseInt(c, 16)]);
-  const entry = (hud.web_accessible_resources || []).find((w) => (w.resources || []).includes('pages/*'));
-  check('the HUD exposes pages/* as a web-accessible resource', !!entry);
-  check('and grants it to the new-tab extension by id',
-    !!entry && (entry.extension_ids || []).includes(ntId),
-    `newtab id ${ntId} not in [${(entry && entry.extension_ids || []).join(', ')}]`);
-  check('the HUD id this file frames matches the HUD manifest key',
-    crypto.createHash('sha256').update(Buffer.from(hud.key, 'base64')).digest('hex')
-      .slice(0, 32).replace(/[0-9a-f]/g, (c) => 'abcdefghijklmnop'[parseInt(c, 16)]) === HUD_ID);
+  const keydown = (listeners['doc:keydown'] || [])[0];
+  const press = () => {
+    let prevented = false, stopped = false;
+    keydown({ ctrlKey: true, key: '`', code: 'Backquote',
+      preventDefault: () => { prevented = true; }, stopImmediatePropagation: () => { stopped = true; } });
+    return { prevented, stopped };
+  };
+
+  check('nothing is loaded before the first toggle', api.isLoaded() === false);
+  const cold = press();
+  check('while unloaded the key is claimed here', cold.prevented && cold.stopped);
+
+  // That press starts the real injection. Walk the chain the way a browser would — each
+  // script's onload pulls in the next — and check what actually landed in the document.
+  for (let i = 0; i < 8 && injected.some((el) => el.tag === 'script' && el.onload); i++) {
+    const next = injected.find((el) => el.tag === 'script' && el.onload);
+    const fire = next.onload; next.onload = null; fire();
+  }
+  const hrefs = injected.filter((el) => el.tag === 'link').map((el) => el.href);
+  const srcs = injected.filter((el) => el.tag === 'script').map((el) => el.src);
+  check('the first press injects the stylesheets',
+    hrefs.join() === api.assets.css.map((r) => 'chrome-extension://self/' + r).join(), hrefs.join());
+  check('and the scripts, in dependency order',
+    srcs.join() === api.assets.js.map((r) => 'chrome-extension://self/' + r).join(), srcs.join());
+  check('a later caller does not pull a second copy of xterm down',
+    (api.load(() => {}), injected.filter((el) => el.tag === 'script').length === api.assets.js.length),
+    `${injected.filter((el) => el.tag === 'script').length} scripts injected`);
+
+  // terminal.js has now loaded: it owns both the global and the key.
+  state.pane = { id: 'terminalPane' };
+  win.showTerminal = () => {};
+  check('isLoaded() sees the injected pane', api.isLoaded() === true);
+  const warm = press();
+  check('once loaded the key is left to terminal.js',
+    !warm.prevented && !warm.stopped,
+    'swallowing it here would make terminal.js\'s own binding unreachable');
 }
 
 // ---- the new-tab page actually loads it ----
