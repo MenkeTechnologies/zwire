@@ -221,6 +221,16 @@ fi
 command rm -f /tmp/zwire-hud-tl.$$
 echo
 
+cyber_section "TERMINAL OVERLAY (Ctrl+backquote on HUD pages + the new-tab page)"
+if node tests/terminal-overlay.mjs 2>/tmp/zwire-hud-term.$$; then
+  cyber_ok "terminal overlay nominal"
+else
+  FAIL=1; cyber_fail "terminal overlay compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-term.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-term.$$
+echo
+
 cyber_section "AUTO-HIBERNATE (capture-live tabs are never discarded)"
 if node tests/hibernate.mjs 2>/tmp/zwire-hud-hib.$$; then
   cyber_ok "auto-hibernate nominal"

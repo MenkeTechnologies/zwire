@@ -524,8 +524,12 @@ reader, a **Reading List**, a **Notes** manager
 Keyboard, Commands, Sessions, a **Hooks** page, CI, a **Host** console, a
 **Terminal**, and an **App Store**, plus a live **Audio** page. Files, Timeline, Notes, Translate, Feeds,
 Reading List and Terminal open from the **Dashboard** tile grid rather than the
-page nav bar, which is kept short enough to scan. Every
-shortcut, and the tmux prefix itself, is remappable on the Keyboard page.
+page nav bar, which is kept short enough to scan. ``Ctrl+` `` opens the terminal
+as a docked overlay on any HUD page and on the new-tab page too, not only on web
+pages: those are extension pages, where content scripts never run, so the overlay
+there frames the Terminal page itself — one terminal, one PTY protocol, reachable
+from every surface. Every shortcut, and the tmux prefix itself, is remappable
+on the Keyboard page.
 
 **New Tab layouts (`newtab/` + `pages/newtab.html`).** The new tab is a *layout*,
 not a fixed page. A layout owns a nav rail of **Speed Dial groups**, a
