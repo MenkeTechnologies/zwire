@@ -546,7 +546,12 @@
         fxCmd('glow', 'Toggle neon glow', '✦'),
         fxCmd('anim', 'Toggle animations', '⚡'),
         { icon: '▤', label: 'Toggle status bar (tmux/session powerline)', hint: 'setting', run: function () { try { chrome.storage.local.get('zb_status', function (o) { void chrome.runtime.lastError; chrome.storage.local.set({ zb_status: (o && o.zb_status === false) }); }); } catch (e) {} } },
-        { icon: '⚙', label: 'Open Settings page', hint: 'setting', run: function () { go('settings.html'); } }
+        { icon: '⚙', label: 'Open Settings page', hint: 'setting', run: function () { go('settings.html'); } },
+        // Same row, same label as the web-page palette's zw.toggleTerminal (zpalette.js) —
+        // ⌘K is one command surface, so a command that exists on a web page must exist here
+        // too or the palette is lying about what this browser can do. The overlay itself is
+        // lib/term/term-overlay.js, loaded by every HUD page.
+        { icon: '⌥', label: 'Toggle terminal', hint: 'Ctrl+`', run: function () { try { if (window.toggleTerminalPopup) window.toggleTerminalPopup(); } catch (e) {} } }
       ].concat(SCHEMES.map(function (s) {
         return { icon: '◈', label: 'Scheme: ' + s[1], hint: 'theme', run: function () { try { if (ZGui.colorscheme && ZGui.colorscheme.apply) ZGui.colorscheme.apply(s[0]); } catch (e) {} } };
       }));

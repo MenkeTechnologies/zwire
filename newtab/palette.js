@@ -131,6 +131,13 @@
     PAGES.forEach(function (p) { out.push({ icon: p[0], label: 'Open: ' + p[1], detail: p[2], run: function () { goCurrent(p[2]); } }); });
     SETTINGS.forEach(function (p) { out.push({ icon: '⚙', label: 'Settings: ' + p[0], detail: p[1], run: function () { goCurrent(p[1]); } }); });
     ORDER.forEach(function (n) { var s = SCHEMES[n]; if (!s) return; out.push({ icon: '◐', label: 'Scheme: ' + (s.label || n), detail: 'theme the browser', run: function () { setScheme(n); } }); });
+    // The terminal, same row and label as every other palette (zpalette.js on web pages,
+    // zg-boot.js on HUD pages). The overlay is lib/term/term-overlay.js, vendored into this
+    // extension; without it the row would be a lie, so it is listed only when it loaded.
+    if (typeof window.toggleTerminalPopup === 'function') {
+      out.push({ icon: '⌥', label: 'Toggle terminal', detail: 'Ctrl+`',
+        run: function () { try { window.toggleTerminalPopup(); } catch (e) {} } });
+    }
     layoutItems(out);
     return out;
   }

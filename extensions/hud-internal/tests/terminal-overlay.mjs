@@ -120,5 +120,31 @@ const { api, listeners, win } = load();
   check(`all ${pages.length} HUD pages include the overlay`, missing.length === 0, missing.join(', '));
 }
 
+// ---- the same command on every ⌘K surface ----
+// ⌘K is one command surface with three implementations: zpalette.js on web pages,
+// zg-boot.js on HUD pages, newtab/palette.js on the new-tab page. A command that exists on
+// one and not the others is the bug this file was opened for — the keystroke was there and
+// the palette row was not, so the terminal read as missing either way. Each surface must
+// publish the row with the same label and the same hint, and route it through
+// toggleTerminalPopup rather than a private path that could drift.
+{
+  const surfaces = [
+    ['web pages (zpalette.js)', new URL('../zpalette.js', import.meta.url)],
+    ['HUD pages (pages/zg-boot.js)', new URL('../pages/zg-boot.js', import.meta.url)],
+    ['the new-tab page (newtab/palette.js)', new URL('../../../newtab/palette.js', import.meta.url)]
+  ];
+  for (const [where, url] of surfaces) {
+    const text = fs.readFileSync(url, 'utf8');
+    const at = [...text.matchAll(/'Toggle terminal'/g)].map((m) => m.index);
+    check(`${where} publishes one Toggle terminal row`, at.length === 1, `${at.length} found`);
+    // The row's own object literal, which may wrap across lines: from the label back to the
+    // brace that opens it, forward to the run handler's end.
+    const row = at.length === 1 ? text.slice(text.lastIndexOf('{', at[0]), at[0] + 260) : '';
+    check(`${where} hints the same keystroke`, row.includes('Ctrl+`'), row.trim().slice(0, 110));
+    check(`${where} routes it through toggleTerminalPopup`,
+      row.includes('toggleTerminalPopup'), row.trim().slice(0, 110));
+  }
+}
+
 console.log(`terminal-overlay: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
