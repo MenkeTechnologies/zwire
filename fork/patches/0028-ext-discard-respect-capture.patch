@@ -1,0 +1,64 @@
+diff --git a/chrome/browser/ui/tabs/BUILD.gn b/chrome/browser/ui/tabs/BUILD.gn
+old mode 100644
+new mode 100755
+index 3ba47130bf..232e6e64e5
+--- a/chrome/browser/ui/tabs/BUILD.gn
++++ b/chrome/browser/ui/tabs/BUILD.gn
+@@ -76,7 +76,13 @@ if (!is_android) {
+       "tab_list_bridge.h",
+     ]
+ 
+-    deps = [ "//chrome/browser/tab_group_sync:factories" ]
++    deps = [
++      # zwire HUD (fork patch 0028): DiscardTab() asks the capture indicator
++      # whether the tab is on camera/mic/screen before honouring an
++      # extension-initiated discard.
++      "//chrome/browser/media/webrtc",
++      "//chrome/browser/tab_group_sync:factories",
++    ]
+ 
+     public_deps = [
+       ":tab_strip",
+diff --git a/chrome/browser/ui/tabs/tab_list_bridge.cc b/chrome/browser/ui/tabs/tab_list_bridge.cc
+index 71981ac3ca..08c3b6e8b1 100644
+--- a/chrome/browser/ui/tabs/tab_list_bridge.cc
++++ b/chrome/browser/ui/tabs/tab_list_bridge.cc
+@@ -9,6 +9,8 @@
+ 
+ #include "base/check_op.h"
+ #include "base/notimplemented.h"
++#include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
++#include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
+ #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
+ #include "chrome/browser/tab_group_sync/tab_group_sync_service_factory.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -198,6 +200,29 @@ content::WebContents* TabListBridge::DiscardTab(tabs::TabHandle tab) {
+     return nullptr;
+   }
+ 
++  // zwire HUD (fork patch 0028) — never discard a tab that is capturing.
++  // Discarding destroys the WebContents, which ends every MediaStreamTrack it
++  // owns: a call on that tab loses its camera, microphone and screen share in
++  // the same instant, with no crash and nothing in the log. Chromium already
++  // refuses this for its own Memory Saver — DiscardEligibilityPolicy::CanDiscard
++  // checks IsCapturingVideo/Audio/Window/Display and IsBeingMirrored — but that
++  // policy is not consulted here: chrome.tabs.discard() reaches
++  // TabLifecycleUnit::Discard with reason EXTERNAL, which only checks tabstrip
++  // membership and the already-discarded bit. Enforce the same capture rule at
++  // this bridge, the single funnel every extension-initiated discard passes
++  // through. Returning nullptr reports "not discarded", which is the truth.
++  scoped_refptr<MediaStreamCaptureIndicator> capture_indicator =
++      MediaCaptureDevicesDispatcher::GetInstance()
++          ->GetMediaStreamCaptureIndicator();
++  if (capture_indicator &&
++      (capture_indicator->IsCapturingVideo(contents) ||
++       capture_indicator->IsCapturingAudio(contents) ||
++       capture_indicator->IsBeingMirrored(contents) ||
++       capture_indicator->IsCapturingWindow(contents) ||
++       capture_indicator->IsCapturingDisplay(contents))) {
++    return nullptr;
++  }
++
+   resource_coordinator::TabLifecycleUnitExternal* tab_lifecycle_unit_external =
+       resource_coordinator::TabLifecycleUnitExternal::FromWebContents(contents);
+   CHECK(tab_lifecycle_unit_external);

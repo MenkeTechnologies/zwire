@@ -221,6 +221,16 @@ fi
 command rm -f /tmp/zwire-hud-tl.$$
 echo
 
+cyber_section "AUTO-HIBERNATE (capture-live tabs are never discarded)"
+if node tests/hibernate.mjs 2>/tmp/zwire-hud-hib.$$; then
+  cyber_ok "auto-hibernate nominal"
+else
+  FAIL=1; cyber_fail "auto-hibernate compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-hib.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-hib.$$
+echo
+
 cyber_section "NEW-TAB LAYOUTS (store invariants + url gate + Vivaldi geometry)"
 if node tests/ntp-layout.mjs 2>/tmp/zwire-hud-ntp.$$; then
   cyber_ok "new-tab layouts nominal"

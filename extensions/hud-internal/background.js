@@ -18,6 +18,9 @@ try { importScripts('zjournal.js'); } catch (e) { /* journal unavailable: action
 // makes before touching a tab — is the origin readable, and which tab is being asked about — and
 // injected into the target tab for the projection itself.
 try { importScripts('zpage-core.js'); } catch (e) { /* page state unavailable: queries answer with an error */ }
+// The auto-hibernate decision core (see zhibernate-core.js). Which tabs the sweep may discard
+// is a safety decision — it lives in its own pure module so tests/hibernate.mjs pins it.
+try { importScripts('zhibernate-core.js'); } catch (e) { /* core unavailable: the sweep below turns itself off */ }
 try { if (self.ZB_JOURNAL) self.ZB_JOURNAL.hydrate(); } catch (e) {}
 
 // Surface uncaught worker errors to the host log — the MV3 service worker has no visible DevTools
@@ -876,18 +879,37 @@ function captureVisible() {
 
 // ---- Auto-hibernate / sleeping tabs (ports Edge sleeping tabs / Chrome Memory
 // Saver). Discard tabs left untouched past the threshold (zb_autohibernate mins;
-// 0 = off, default 30). Active / pinned / audible / already-discarded are spared.
+// 0 = off, default 30). Active / pinned / audible / already-discarded are spared,
+// and so is any tab holding a live capture — camera, microphone, screen share or an
+// open WebRTC session. That last exemption is the one Chromium enforces for its own
+// Memory Saver and does NOT enforce for chrome.tabs.discard(); discarding such a tab
+// ends every MediaStreamTrack it owns, which drops a call mid-sentence with no crash
+// and nothing in the log. zhibernate-core.js carries the decision + the full note,
+// zcapture-main.js reports the capture state, fork patch 0028 is the native backstop.
 var tabLastActive = {};
+// {tabId: {frameId: true|false}} — a tab is capture-live while any of its frames is.
+var captureByTab = {};
 try { chrome.tabs.onActivated.addListener(function (info) { tabLastActive[info.tabId] = Date.now(); }); } catch (e) {}
-function staleTabIds(tabs, lastActive, now, thresholdMs) {
-  return (tabs || []).filter(function (t) {
-    if (t.active || t.pinned || t.audible || t.discarded) return false;
-    var la = lastActive[t.id]; if (la == null) return false;   // unseen → let the next sweep age it
-    return (now - la) > thresholdMs;
-  }).map(function (t) { return t.id; });
-}
+try {
+  chrome.runtime.onMessage.addListener(function (msg, sender) {
+    if (!msg || msg.type !== 'zbCapture' || !sender || !sender.tab || sender.tab.id == null) return;
+    var tid = sender.tab.id, fid = sender.frameId == null ? 0 : sender.frameId;
+    if (!captureByTab[tid]) captureByTab[tid] = {};
+    captureByTab[tid][fid] = !!msg.live;
+  });
+} catch (e) {}
+// A gone tab keeps no capture state; a navigated top frame starts from nothing (the
+// old document's tracks died with it, and the new one re-reports if it captures).
+try { chrome.tabs.onRemoved.addListener(function (tid) { delete captureByTab[tid]; }); } catch (e) {}
+try {
+  chrome.webNavigation.onCommitted.addListener(function (d) {
+    if (d && d.frameId === 0 && d.tabId != null) delete captureByTab[d.tabId];
+  });
+} catch (e) {}
 function hibernateSweep() {
   try {
+    var core = self.ZWIRE_HIBERNATE;
+    if (!core) return;   // no decision core loaded → never discard blind
     chrome.storage.local.get('zb_autohibernate', function (o) {
       void chrome.runtime.lastError;
       var mins = (o && typeof o.zb_autohibernate === 'number') ? o.zb_autohibernate : 30;
@@ -895,7 +917,7 @@ function hibernateSweep() {
       chrome.tabs.query({}, function (tabs) {
         void chrome.runtime.lastError; var now = Date.now();
         (tabs || []).forEach(function (t) { if (t.id != null && !t.active && tabLastActive[t.id] == null) tabLastActive[t.id] = now; });   // seed so a later sweep can age it
-        staleTabIds(tabs, tabLastActive, now, mins * 60000).forEach(function (id) { try { chrome.tabs.discard(id, function () { void chrome.runtime.lastError; }); } catch (e) {} });
+        core.staleTabIds(tabs, tabLastActive, now, mins * 60000, captureByTab).forEach(function (id) { try { chrome.tabs.discard(id, function () { void chrome.runtime.lastError; }); } catch (e) {} });
       });
     });
   } catch (e) {}
