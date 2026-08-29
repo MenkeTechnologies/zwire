@@ -50,7 +50,7 @@ index 70615782c5..6cb740a4c0 100644
  void LaunchAudioServiceInProcess(
      mojo::PendingReceiver<audio::mojom::AudioService> receiver) {
    // NOTE: If BrowserMainLoop is uninitialized, we have no AudioManager. In
-@@ -166,6 +193,177 @@ uint32_t ScanEdidBitstreams() {
+@@ -166,6 +193,208 @@ uint32_t ScanEdidBitstreams() {
  }
  #endif  // PASS_EDID_ON_COMMAND_LINE
  
@@ -97,7 +97,9 @@ index 70615782c5..6cb740a4c0 100644
 +  return *s;
 +}
 +
-+void OnZwireEqRead(const std::string& spec) {
++// Push the spec to the audio service. GetAudioService() is UI-thread-bound, so
++// this is the only part of the sync that runs on the UI thread.
++void PushZwireEqOnUi(const std::string& spec) {
 +  DCHECK_CURRENTLY_ON(BrowserThread::UI);
 +  if (spec == LastZwireEqSpec()) {
 +    return;  // no change — avoid churning the audio-thread cascade rebuild
@@ -107,26 +109,55 @@ index 70615782c5..6cb740a4c0 100644
 +  GetAudioService().SetZwireEqConfig(spec);
 +}
 +
-+void PollZwireEqOnce() {
-+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-+  base::ThreadPool::PostTaskAndReplyWithResult(
-+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-+      base::BindOnce(&ReadZwireEqFileBlocking), base::BindOnce(&OnZwireEqRead));
-+}
++// The EQ poll. Lives entirely on a ThreadPool sequence at USER_VISIBLE, exactly
++// like ZwireMeterPump below. The first version drove a UI-thread RepeatingTimer
++// that posted the file read at TaskPriority::BEST_EFFORT; in a shipped build that
++// read was observed never to happen at all ($STATE/audio-eq's atime stayed frozen
++// while the page rewrote it on every knob move), so the engine sat on its
++// launch-time seed spec and no knob ever reached it. BEST_EFFORT work is
++// deferrable for arbitrarily long and a UI-thread timer starves under input, and
++// the meter pump on this same shape kept running throughout — so the sync moves
++// onto its own sequence at the same priority, which also keeps it alive while the
++// UI thread is saturated, which is precisely what a knob drag does.
++class ZwireEqPump {
++ public:
++  ZwireEqPump() = default;
++
++  // Runs on the pump sequence.
++  void Start() {
++    Tick();
++    timer_.Start(FROM_HERE, base::Milliseconds(25),
++                 base::BindRepeating(&ZwireEqPump::Tick,
++                                     base::Unretained(this)));
++  }
++
++ private:
++  // 25ms poll: the read is off the UI thread and the UI hop only turns into a
++  // mojo call on a real change (PushZwireEqOnUi is cache-guarded), so knob->engine
++  // latency is bounded by the poll, not by UI-thread contention. Deliberately no
++  // pump-side cache: the UI-side guard is the single source of truth, so clearing
++  // it on an audio-service restart (see GetAudioService) re-pushes the live spec
++  // to the fresh process on the very next tick.
++  void Tick() {
++    std::string spec = ReadZwireEqFileBlocking();  // this is the MayBlock sequence
++    GetUIThreadTaskRunner({})->PostTask(
++        FROM_HERE, base::BindOnce(&PushZwireEqOnUi, std::move(spec)));
++  }
++
++  base::RepeatingTimer timer_;
++};
 +
 +void EnsureZwireEqSyncStarted() {
 +  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-+  static base::NoDestructor<base::RepeatingTimer> timer;
-+  if (timer->IsRunning()) {
++  static base::NoDestructor<base::SequenceBound<ZwireEqPump>> pump(
++      base::ThreadPool::CreateSequencedTaskRunner(
++          {base::MayBlock(), base::TaskPriority::USER_VISIBLE}));
++  static bool started = false;
++  if (started) {
 +    return;
 +  }
-+  PollZwireEqOnce();
-+  // 25ms poll: the file read is on the ThreadPool and pushes over mojo only on a
-+  // real change (cache-guarded), so the cost is negligible but knob→engine latency
-+  // drops from up-to-100ms of poll granularity to up-to-25ms. Combined with the
-+  // page's ~20ms debounce + direct fs_write, knob response is ~40-50ms.
-+  timer->Start(FROM_HERE, base::Milliseconds(25),
-+               base::BindRepeating(&PollZwireEqOnce));
++  started = true;
++  pump->AsyncCall(&ZwireEqPump::Start);
 +}
 +
 +// zwire HUD output-meter pump (fork patch 0025): pull a compact meter frame from
@@ -228,7 +259,7 @@ index 70615782c5..6cb740a4c0 100644
  }  // namespace
  
  audio::mojom::AudioService& GetAudioService() {
-@@ -173,6 +371,8 @@ audio::mojom::AudioService& GetAudioService() {
+@@ -173,6 +402,8 @@ audio::mojom::AudioService& GetAudioService() {
    if (g_service_override) {
      return *g_service_override;
    }
@@ -237,7 +268,7 @@ index 70615782c5..6cb740a4c0 100644
  
    // NOTE: We use sequence-local storage slot not because we support access from
    // any sequence, but to limit the lifetime of this Remote to the lifetime of
-@@ -183,6 +383,9 @@ audio::mojom::AudioService& GetAudioService() {
+@@ -183,6 +414,9 @@ audio::mojom::AudioService& GetAudioService() {
        remote_slot;
    auto& remote = remote_slot.GetOrCreateValue();
    if (!remote) {
