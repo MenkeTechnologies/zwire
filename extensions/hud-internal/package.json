@@ -20,7 +20,12 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "overrides": {
+      "dompurify": ">=3.4.13"
+    }
   },
   "devDependencies": {
     "esbuild": "^0.28.1",

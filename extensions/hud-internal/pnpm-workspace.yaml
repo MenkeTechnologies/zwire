@@ -4,3 +4,12 @@
 # — left unset, `pnpm test` aborts with ERR_PNPM_IGNORED_BUILDS before it runs.
 allowBuilds:
   esbuild: true
+
+# monaco-editor 0.55.1 pins dompurify 3.2.7, and the newest monaco (0.56.0) only
+# reaches 3.4.8 — both below the 3.4.13 that fixes the advisories Dependabot is
+# tracking. It reported "the latest possible version of dompurify that can be
+# installed is 3.2.7. The earliest fixed version is 3.4.13" and failed the job.
+# Forcing the resolution is the only way up from here; 3.x is API-compatible and
+# monaco only uses DOMPurify.sanitize.
+overrides:
+  dompurify: '>=3.4.13'
