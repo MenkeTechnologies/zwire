@@ -395,7 +395,10 @@
       '.zb-logo{display:flex;align-items:center;gap:12px;}',
       '.zb-logo .zb{background:var(--cyan);color:var(--bg-primary);font-weight:bold;padding:3px 7px;border-radius:2px;letter-spacing:1px;}',
       '.zb-logo .ti{color:var(--accent);letter-spacing:3px;font-size:18px;text-shadow:0 0 10px var(--accent-glow);}',
-      '.zb-filter{margin-left:auto;min-width:min(320px,45vw);}',
+      // Shrinkable, not fixed-wide: a 320px min-width meant that as soon as logo + gap
+      // + 320px passed the window width, the filter wrapped onto its own line and pushed
+      // the nav row down one. flex-basis + a small min-width lets it narrow instead.
+      '.zb-filter{margin-left:auto;flex:0 1 240px;min-width:160px;max-width:min(320px,40vw);}',
       '.zb-filter .zg-searchbox{width:100%;}',
       '.zb-navrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0 8px;}',
       '.zb-navrow .zs-btn-mini.zg-nav-native{opacity:.6;}',
