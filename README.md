@@ -8,7 +8,7 @@
 
 [![Base](https://img.shields.io/badge/base-chromium%20fork-05d9e8.svg)](#0x02-architecture)
 [![Workspace](https://img.shields.io/badge/HUD-tiling%20workspace-ff2a6d.svg)](#0x01-the-hud-workspace)
-[![Patches](https://img.shields.io/badge/native%20fork-27%20patches-d300c5.svg)](#0x05-full-hud-fork)
+[![Patches](https://img.shields.io/badge/native%20fork-28%20patches-d300c5.svg)](#0x05-full-hud-fork)
 [![Docs](https://img.shields.io/badge/docs-online-05d9e8.svg)](https://menketechnologies.github.io/zwire/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -141,14 +141,14 @@ workspace layered on top:
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 
-The HUD layer (`extensions/hud-internal`) is ~14,600 lines of extension code
-across 11 subsystems and 24 pages, assembled on the **`zgui-core`** shared GUI
+The HUD layer (`extensions/hud-internal`) is ~18,300 lines of extension code
+across 11 subsystems and 26 pages, assembled on the **`zgui-core`** shared GUI
 toolkit (260 `ZGui.*` components, a git submodule loaded straight from
 `lib/zgui-core/webui/`) and bridged to the **`zwire-host`** native agent (a
-single Rust binary, its own submodule). Under it, a **27-patch C++ fork**
+single Rust binary, its own submodule). Under it, a **28-patch C++ fork**
 restyles the *native* chrome the extension layer can't reach.
 
-**zwire is the full fork.** The 27-patch series (`fork/`) compiles a patched
+**zwire is the full fork.** The 28-patch series (`fork/`) compiles a patched
 Chromium so the *native* chrome carries the HUD too — sharp tab shapes, the
 Share Tech Mono UI font, the neon toolbar, the omnibox, the 8 HUD schemes wired
 into the color mixer + DevTools, native Views menus/dialogs bound to the HUD
@@ -175,7 +175,7 @@ Chrome can no longer be scripted this way; a Chromium build can.
 ## `[0x01] THE HUD WORKSPACE`
 
 `extensions/hud-internal` is where zwire stops being "a browser" and becomes a
-workspace. It is a content-script + page bundle (~14,600 LOC), not a theme.
+workspace. It is a content-script + page bundle (~18,300 LOC), not a theme.
 
 **`ztmux` — the tiling overlay.** A tmux server, in the browser. The tiling
 window-manager itself is `ZGui.tmux` from the shared `zgui-core` toolkit; zwire
@@ -660,7 +660,7 @@ without a host and silently hand them back to the browser's built-in downloader.
 | **Power-tool** | `extensions/zpwrchrome` — the MV3 power-tool, loaded as a submodule (reuse, not copy) |
 | **Theme** | `theme/` — a colors-only Chrome theme. Present but **not** launcher-loaded — the fork's native color mixer (patch 0002) and the HUD skin own the palette, and a static theme applies last and would override them |
 | **Launcher** | `bin/zwire` — starts the base against `$ZWIRE_STATE/profile` with `newtab` + `zpwrchrome` + `hud-internal` loaded and `--extensions-on-chrome-urls` set (any dir missing a `manifest.json` is skipped, so a missing submodule degrades gracefully) |
-| **Fork** | `fork/` — the 27-patch source build that restyles the native chrome (tab shapes, fonts, borders, omnibox, DevTools schemes, native menus/dialogs) and tunes native behavior (forced zwire new-tab, session restore, framing, browser-wide audio EQ + meters) the extension layer can't reach; this is what zwire ships as |
+| **Fork** | `fork/` — the 28-patch source build that restyles the native chrome (tab shapes, fonts, borders, omnibox, DevTools schemes, native menus/dialogs) and tunes native behavior (forced zwire new-tab, session restore, framing, browser-wide audio EQ + meters) the extension layer can't reach; this is what zwire ships as |
 
 A Chrome theme extension changes **colors only** — it cannot reshape tabs, fonts,
 or toolbar (those are native C++), and it cannot add a tiling overlay or a

@@ -45,7 +45,7 @@
   <text x="38" y="168" class="h">EXTENSION LAYER &#183; MV3 content scripts on chrome://*/* + http(s), bridged to zwire-host</text>
 
   <rect x="36" y="180" width="600" height="110" rx="4" class="sub"/>
-  <text x="48" y="200" class="cyan title" font-size="12.5">hud-internal &#8212; ~11,800 L &#183; 22 HUD pages &#183; 11 subsystems</text>
+  <text x="48" y="200" class="cyan title" font-size="12.5">hud-internal &#8212; ~18,300 L &#183; 26 HUD pages &#183; 11 subsystems</text>
   <text x="48" y="218" class="dim">&#8250; ztmux tiling overlay &#8212; panes / windows / sessions (durable CRUD)</text>
   <text x="48" y="234" class="dim">&#8250; &#8984;K palette (zpalette) &#183; vim nav (zvim / zkeys) &#183; find (zfind)</text>
   <text x="48" y="250" class="dim">&#8250; powerline statusbar (zstatus) &#183; 8-scheme picker (light/dark)</text>
@@ -72,7 +72,7 @@
   <!-- ===== FORK BASE ===== -->
   <rect x="20" y="328" width="955" height="272" rx="4" class="box"/>
   <text x="38" y="350" class="h">COMPILED CHROMIUM FORK &#183; pinned tag 150.0.7871.46 &#183; unbranded release</text>
-  <text x="38" y="368" class="dim">fork/patches &#8212; a 25-patch series restyling the chrome the extension layer can't reach</text>
+  <text x="38" y="368" class="dim">fork/patches &#8212; a 28-patch series restyling the chrome the extension layer can't reach</text>
 
   <!-- row 1 -->
   <rect x="36" y="380" width="300" height="56" rx="4" class="chip"/>
@@ -123,5 +123,5 @@
   <text x="235" y="545" fill="#ff2a6d" font-size="15" font-weight="700" text-anchor="middle">&#10007;</text>
   <text x="36" y="562" class="dim" font-size="9.5">reaches the engine only via $STATE files &amp; the browser process</text>
 
-  <text x="24" y="666" class="dim" font-size="10">a 25-patch Chromium fork + a ~11,800-line HUD extension layer, one keyboard-driven browser.</text>
+  <text x="24" y="666" class="dim" font-size="10">a 28-patch Chromium fork + a ~18,300-line HUD extension layer, one keyboard-driven browser.</text>
 </svg>
