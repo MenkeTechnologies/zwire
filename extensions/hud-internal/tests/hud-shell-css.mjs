@@ -1,14 +1,15 @@
 // HUD shell header layout (pages/zg-boot.js injectCss) vs the zgui-core cascade.
 //
 // The shell mounts a real <header class="zb-header"> holding two stacked rows:
-// .zb-header-inner (logo + filter) and .zb-navrow (page nav). zgui-core's
-// cyberpunk.css styles the BARE `header` ELEMENT as a flex row with
-// justify-content:space-between — and an element rule wins over a class rule that
-// never declares `display`. With no override the two rows became flex siblings:
-// nav pushed to the right edge, inner squeezed, and the filter (margin-left:auto,
-// 240px basis) wrapped under the logo — rendering a row too low and spilling past
-// the header's bottom border. These assertions pin the override AND the reason for
-// it, so the day cyberpunk.css stops flexing `header` we find out here.
+// .zb-header-inner (the ZW // TITLE logo) and .zb-navrow (the filter, then the page
+// tabs). zgui-core's cyberpunk.css styles the BARE `header` ELEMENT as a flex row
+// with justify-content:space-between — and an element rule wins over a class rule
+// that never declares `display`. With no override the two rows became flex
+// siblings: nav pushed to the right edge, inner squeezed, and the filter wrapped
+// under the logo — rendering a row too low and spilling past the header's bottom
+// border. These assertions pin the override AND the reason for it, so the day
+// cyberpunk.css stops flexing `header` we find out here; they also pin the filter's
+// place at the head of the nav row, left of the tabs.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
@@ -35,10 +36,20 @@ assert.match(rule('.zb-header'), /display:\s*block/, '.zb-header must declare di
 // The rows are only stacked because the header is a block box; each is its own flex row.
 assert.match(rule('.zb-header-inner'), /display:\s*flex/);
 assert.match(rule('.zb-navrow'), /display:\s*flex/);
-// The filter rides the logo row on the right and shrinks rather than wrapping below it.
+// The filter shrinks rather than pushing the tabs onto a second line, and it no longer
+// floats to a right edge — it is a normal leading cell of the nav row.
 const filter = rule('.zb-filter');
-assert.match(filter, /margin-left:\s*auto/);
-assert.match(filter, /flex:\s*0 1 /, '.zb-filter must be shrinkable or it wraps onto a second header line');
+assert.doesNotMatch(filter, /margin-left:\s*auto/, '.zb-filter must not right-align — it leads the nav row');
+assert.match(filter, /flex:\s*0 1 /, '.zb-filter must be shrinkable or it pushes the page tabs onto a second line');
+
+// --- placement: the filter host is the nav row's first child -----------------
+const mount = SHELL.slice(SHELL.indexOf('function mount(opts)'), SHELL.indexOf('// CRT scanlines via ZGui.crt'));
+const filterAt = mount.indexOf("el('div', 'zb-filter')");
+const navrowAt = mount.indexOf("el('nav', 'zb-navrow')");
+const tabsAt = mount.indexOf('navActions(opts.current)');
+assert.notEqual(filterAt, -1, 'mount no longer creates a .zb-filter host');
+assert.ok(navrowAt < filterAt && filterAt < tabsAt, 'the filter host must be appended to .zb-navrow BEFORE the page tabs');
+assert.match(mount.slice(filterAt, tabsAt), /navrow\.appendChild\(filterHost\)/, 'the filter host must live in the nav row, not the logo row');
 
 // --- the cascade this override exists to beat --------------------------------
 assert.match(ALL, /@import url\("\.\/cyberpunk\.css"\)/, 'HUD pages load cyberpunk.css through all.css');
