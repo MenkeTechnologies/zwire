@@ -221,6 +221,16 @@ fi
 command rm -f /tmp/zwire-hud-tl.$$
 echo
 
+cyber_section "HUD SHELL CSS (header stacking vs the bare-<header> cascade)"
+if node tests/hud-shell-css.mjs 2>/tmp/zwire-hud-shell.$$; then
+  cyber_ok "shell header layout nominal"
+else
+  FAIL=1; cyber_fail "shell header layout compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-shell.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-shell.$$
+echo
+
 cyber_section "TERMINAL OVERLAY (Ctrl+backquote on HUD pages + the new-tab page)"
 if node tests/terminal-overlay.mjs 2>/tmp/zwire-hud-term.$$; then
   cyber_ok "terminal overlay nominal"

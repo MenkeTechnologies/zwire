@@ -388,8 +388,14 @@
       // natural page scroll (override any appShell/all.css overflow lock)
       'html,body{height:auto!important;overflow-y:auto!important;margin:0;background:var(--bg-primary);color:var(--text);}',
       '.zb-app{min-height:100vh;position:relative;}',
-      // sticky old-HUD header
-      '.zb-header{position:sticky;top:0;z-index:20;background:var(--bg-primary);border-bottom:1px solid var(--border);',
+      // sticky old-HUD header. display:block is load-bearing: cyberpunk.css styles the bare
+      // `header` ELEMENT as `display:flex;justify-content:space-between;flex-wrap:wrap`, and this
+      // shell mounts a real <header>. Without the override the two rows became flex SIBLINGS —
+      // .zb-header-inner squeezed to the left, .zb-navrow pushed to the right edge — so the filter
+      // (margin-left:auto, 240px basis) no longer fit beside the logo and wrapped onto a second
+      // line INSIDE inner: it rendered below the logo, mid-page, level with the nav row and
+      // spilling past the header's bottom border. Block stacking restores inner-then-navrow.
+      '.zb-header{display:block;position:sticky;top:0;z-index:20;background:var(--bg-primary);border-bottom:1px solid var(--border);',
       ' padding:14px 22px 0;box-shadow:0 6px 18px rgba(0,0,0,.35);}',
       '.zb-header-inner{display:flex;align-items:center;gap:18px;flex-wrap:wrap;}',
       '.zb-logo{display:flex;align-items:center;gap:12px;}',
