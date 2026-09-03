@@ -391,9 +391,8 @@
       // sticky old-HUD header. display:block is load-bearing: cyberpunk.css styles the bare
       // `header` ELEMENT as `display:flex;justify-content:space-between;flex-wrap:wrap`, and this
       // shell mounts a real <header>. Without the override the two rows became flex SIBLINGS —
-      // .zb-header-inner squeezed to the left, .zb-navrow pushed to the right edge — so the filter
-      // (margin-left:auto, 240px basis) no longer fit beside the logo and wrapped onto a second
-      // line INSIDE inner: it rendered below the logo, mid-page, level with the nav row and
+      // .zb-header-inner squeezed to the left, .zb-navrow pushed to the right edge — and the
+      // filter wrapped onto a second line inside inner, rendering below the logo, mid-page, and
       // spilling past the header's bottom border. Block stacking restores inner-then-navrow.
       '.zb-header{display:block;position:sticky;top:0;z-index:20;background:var(--bg-primary);border-bottom:1px solid var(--border);',
       ' padding:14px 22px 0;box-shadow:0 6px 18px rgba(0,0,0,.35);}',
@@ -401,10 +400,11 @@
       '.zb-logo{display:flex;align-items:center;gap:12px;}',
       '.zb-logo .zb{background:var(--cyan);color:var(--bg-primary);font-weight:bold;padding:3px 7px;border-radius:2px;letter-spacing:1px;}',
       '.zb-logo .ti{color:var(--accent);letter-spacing:3px;font-size:18px;text-shadow:0 0 10px var(--accent-glow);}',
-      // Shrinkable, not fixed-wide: a 320px min-width meant that as soon as logo + gap
-      // + 320px passed the window width, the filter wrapped onto its own line and pushed
-      // the nav row down one. flex-basis + a small min-width lets it narrow instead.
-      '.zb-filter{margin-left:auto;flex:0 1 240px;min-width:160px;max-width:min(320px,40vw);}',
+      // The filter is the nav row's FIRST cell — left of the page tabs, not off in the header's
+      // top-right corner. Shrinkable, not fixed-wide: a hard 320px floor made it the widest thing
+      // on the row and shoved the tabs onto a second line on a narrow window. flex-basis + a small
+      // min-width lets it narrow first instead.
+      '.zb-filter{flex:0 1 240px;min-width:160px;max-width:min(320px,40vw);margin-right:6px;}',
       '.zb-filter .zg-searchbox{width:100%;}',
       '.zb-navrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0 8px;}',
       '.zb-navrow .zs-btn-mini.zg-nav-native{opacity:.6;}',
@@ -486,14 +486,14 @@
     injectCss();
     var root = document.getElementById('app') || document.body;
     var app = el('div', 'zb-app');
-    // header: ZW // TITLE  +  ZGui.searchBox filter
+    // header: ZW // TITLE on its own row
     var header = el('header', 'zb-header');
     var inner = el('div', 'zb-header-inner');
     inner.appendChild(el('div', 'zb-logo', '<span class="zb">ZW</span> <span class="ti">// ' + (opts.title || 'ZWIRE') + '</span>'));
-    var filterHost = el('div', 'zb-filter'); inner.appendChild(filterHost);
     header.appendChild(inner);
-    // cross-page nav row
+    // cross-page nav row: the ZGui.searchBox filter leads it, page tabs follow.
     var navrow = el('nav', 'zb-navrow');
+    var filterHost = el('div', 'zb-filter'); navrow.appendChild(filterHost);
     navActions(opts.current).forEach(function (b) { navrow.appendChild(b); });
     header.appendChild(navrow);
     app.appendChild(header);
