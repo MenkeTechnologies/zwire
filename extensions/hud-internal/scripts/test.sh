@@ -251,6 +251,16 @@ fi
 command rm -f /tmp/zwire-hud-hib.$$
 echo
 
+cyber_section "TAB FLOW (snooze / auto-archive / recent tab / audio focus)"
+if node tests/tabflow.mjs 2>/tmp/zwire-hud-flow.$$; then
+  cyber_ok "tab flow nominal"
+else
+  FAIL=1; cyber_fail "tab flow compromised"
+  command sed 's/^/    /' /tmp/zwire-hud-flow.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-flow.$$
+echo
+
 cyber_section "NEW-TAB LAYOUTS (store invariants + url gate + Vivaldi geometry)"
 if node tests/ntp-layout.mjs 2>/tmp/zwire-hud-ntp.$$; then
   cyber_ok "new-tab layouts nominal"

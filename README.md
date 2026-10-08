@@ -346,7 +346,8 @@ home / zoom), **downloads** (pause / resume / cancel / retry / clear / reveal),
 **browsing-data** clearing (cache / cookies / history / passwords / all),
 **history + bookmark + reading-list** edits, **extension** enable/disable/
 uninstall + **app launch**, **keep-awake** power control, **screenshot**,
-**notify**, and the **`tmux`** overlay toggle. The typed manifest is published
+**notify**, **tab flow** (`snoozeTab` / `wakeSnoozed` / `archiveIdle` /
+`restoreArchived` / `recentTab` / `audioFocus`), and the **`tmux`** overlay toggle. The typed manifest is published
 through `ZGui.automation` — the shared registry every embedded core contributes
 verbs to — so a stryke script sees one combined, introspectable `browser.*`
 surface via `App::here()->verbs()`.
@@ -469,7 +470,20 @@ jumps focus to the nearest link/field), **Read Aloud** (`zspeak` — text-to-spe
 of the selection/article), **Link Peek** (`zpeek` — Alt+click a link → floating
 preview), **Element Zapper** (`zzap` — click to hide page clutter, persists per
 site), **auto-hibernate** (sleeping tabs after 30 min idle — never a tab holding
-a live camera, microphone, screen share or WebRTC session), and an **inline
+a live camera, microphone, screen share or WebRTC session), **tab flow** (`ztabflow-core.js`):
+**tab snooze** (close a tab now, reopen it later — `snoozeTab` takes a `duration` such
+as `90m` / `1h30m` / `2d`, or an `until` epoch / ISO time / `tomorrow` for 09:00 local;
+re-snoozing a URL replaces its schedule so it wakes once, and a browser closed past the
+wake time reopens it on next launch), **auto-archive** (Arc-style: unpinned tabs idle
+past a threshold — `archiveIdle` with an `idle` duration, default `12h`, or the periodic
+`zb_autoarchive` hours setting — are closed into an archive whose ⌘K rows restore any
+entry; the active tab, audible tabs and live-capture tabs are never closed, and Chrome's
+own `lastAccessed` decides idleness so a worker restart cannot age a just-used tab),
+**recent-tab switching** (`recentTab` / ⌘K "Switch to last used tab" — Ctrl+Tab in
+recently-used order within the window; `n` steps further back), **audio focus**
+(Vivaldi's "active tab only": every other audible tab is muted, and only the mutes this
+feature made are given back on focus or switch-off — a mute or unmute you set by hand
+is never overridden), and an **inline
 compute layer** (ported from zgo-core): type a sum (`2^10`, `sqrt(2)+1`), a unit
 conversion (`10 km to miles`, `72 f in c`, `1 gb to mb`), a live currency
 conversion (`100 usd to eur`, rates fetched + cached by the host), a percentage

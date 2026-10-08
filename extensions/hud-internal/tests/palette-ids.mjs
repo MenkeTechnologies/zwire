@@ -67,6 +67,15 @@ const SHORTCUTS = [
   { extId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', name: 'open-thing', ext: 'Shared Name', desc: 'Do the thing', keybinding: 'Ctrl+1' },
   { extId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'open-thing', ext: 'Shared Name', desc: 'Do the thing', keybinding: 'Ctrl+2' },
 ];
+// Archived and snoozed tabs (ztabflow-core.js) — one entry per URL, titles colliding.
+const ARCHIVE = [
+  { url: 'https://a.example/old', title: 'Untitled', archivedAt: 1 },
+  { url: 'https://b.example/old', title: 'Untitled', archivedAt: 2 },
+];
+const SNOOZED = [
+  { url: 'https://a.example/later', title: 'Untitled', wakeAt: 1e12 },
+  { url: 'https://b.example/later', title: 'Untitled', wakeAt: 2e12 },
+];
 
 function boot(dynamic) {
   const docEvents = {};
@@ -205,7 +214,7 @@ assert.deepEqual(second.map((i) => i.id), first.map((i) => i.id), 'row ids are i
 // rest) or into one ambiguous verb. Fresh boot: the dedupe set is per-open, and a
 // second sandbox proves the ids come from the data rather than from arrival order.
 {
-  const { sandbox: dyn } = boot({ zb_tabs: TABS, zb_exts: EXTS, zb_shortcuts: SHORTCUTS });
+  const { sandbox: dyn, store: dynStore } = boot({ zb_tabs: TABS, zb_exts: EXTS, zb_shortcuts: SHORTCUTS, zb_archive: ARCHIVE, zb_snoozed: SNOOZED });
   const rows = vocabulary(dyn);
   assert.equal(rows.filter((it) => !it.id).length, 0, 'dynamic rows carry ids too');
 
@@ -215,6 +224,16 @@ assert.deepEqual(second.map((i) => i.id), first.map((i) => i.id), 'row ids are i
 
   const manageIds = rows.filter((it) => /^zw\.ext\.[a-z]+$/.test(String(it.id))).map((it) => it.id);
   assert.equal(new Set(manageIds).size, EXTS.length, 'same-named extensions keep distinct ids');
+
+  for (const [prefix, list, verb] of [['zw.archived.', ARCHIVE, 'restoreArchived'], ['zw.snoozed.', SNOOZED, 'wakeSnoozed']]) {
+    const got = rows.filter((it) => String(it.id).startsWith(prefix));
+    assert.equal(new Set(got.map((it) => it.id)).size, list.length, `same-titled ${prefix} rows keep distinct ids`);
+    // The row must act on ITS url — a row that restores / wakes "the newest" would hand back
+    // the wrong tab whenever the user picked any other entry.
+    got[1].run();
+    assert.equal(dynStore.zb_cmd.a, verb, `${prefix} row runs ${verb}`);
+    assert.equal(dynStore.zb_cmd.url, list[1].url, `${prefix} row targets its own url`);
+  }
 
   // Shortcut rows are search-only (a provider), so they never reach the published
   // list — assert on the producer's own output, which is where the id is minted.
@@ -228,6 +247,8 @@ assert.deepEqual(second.map((i) => i.id), first.map((i) => i.id), 'row ids are i
     zb_tabs: TABS.map((t) => ({ ...t, title: 'Sans titre' })),
     zb_exts: EXTS.map((e) => ({ ...e, name: 'Nom partagé' })),
     zb_shortcuts: SHORTCUTS.map((s) => ({ ...s, ext: 'Nom partagé', desc: 'Faire la chose' })),
+    zb_archive: ARCHIVE.map((e) => ({ ...e, title: 'Sans titre' })),
+    zb_snoozed: SNOOZED.map((e) => ({ ...e, title: 'Sans titre' })),
   });
   const localized = vocabulary(dyn);
   assert.deepEqual(localized.map((i) => i.id), before,

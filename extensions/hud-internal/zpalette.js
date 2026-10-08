@@ -236,6 +236,14 @@
   function frecentItems(frec) {
     return (frec || []).map(function (f) { return { id: 'zw.frecent.' + slug(f.url), icon: '★', label: (f.title || f.url), detail: f.url, run: function () { open(f.url); } }; });
   }
+  // Archived and snoozed tabs (worker: ztabflow-core.js) are keyed by URL — each list holds one
+  // entry per URL, so the URL is a stable, unique id where the page title is not.
+  function archivedItems(list) {
+    return (list || []).map(function (e) { return { id: 'zw.archived.' + slug(e.url), icon: '🗄', label: 'Archived: ' + (e.title || e.url), detail: e.url, run: function () { cmd({ a: 'restoreArchived', url: e.url }); } }; });
+  }
+  function snoozedItems(list) {
+    return (list || []).map(function (e) { return { id: 'zw.snoozed.' + slug(e.url), icon: '⏾', label: 'Snoozed: ' + (e.title || e.url), detail: 'wakes ' + new Date(e.wakeAt).toLocaleString() + ' · ' + e.url, run: function () { cmd({ a: 'wakeSnoozed', url: e.url }); } }; });
+  }
 
   /* ---- command runner (pulled from zgo): browser verbs + web-search --------- */
   function clip(text) { try { navigator.clipboard.writeText(text); } catch (e) {} }
@@ -286,6 +294,17 @@
       { id: 'zw.zap', icon: '◳', label: 'Zap page elements', detail: 'click to hide · persists', run: function () { try { if (window.__zbZapStart) window.__zbZapStart(); } catch (e) {} } },
       { id: 'zw.zapClear', icon: '↺', label: 'Clear zapped elements', detail: 'this site', run: function () { try { if (window.__zbZapClear) window.__zbZapClear(); } catch (e) {} } },
       { id: 'zw.autoHibernate', icon: '🌙', label: 'Toggle auto-hibernate (30m)', detail: 'sleeping tabs', run: function () { try { chrome.storage.local.get('zb_autohibernate', function (o) { var on = (o && typeof o.zb_autohibernate === 'number') ? o.zb_autohibernate : 30; chrome.storage.local.set({ zb_autohibernate: on ? 0 : 30 }); }); } catch (e) {} } },
+      // Tab flow (worker: ztabflow-core.js). Snooze closes the tab and reopens it at wake time;
+      // archive closes idle unpinned tabs into a list the archived rows below restore from.
+      { id: 'zw.snoozeTab', icon: '⏾', label: 'Snooze tab for 1 hour', detail: 'close now · reopen later', run: function () { cmd({ a: 'snoozeTab', duration: '1h' }); } },
+      { id: 'zw.snoozeTab.3h', icon: '⏾', label: 'Snooze tab for 3 hours', detail: 'close now · reopen later', run: function () { cmd({ a: 'snoozeTab', duration: '3h' }); } },
+      { id: 'zw.snoozeTab.tomorrow', icon: '⏾', label: 'Snooze tab until tomorrow', detail: '09:00 local', run: function () { cmd({ a: 'snoozeTab', until: 'tomorrow' }); } },
+      { id: 'zw.wakeSnoozed', icon: '☀', label: 'Wake all snoozed tabs', detail: 'reopen now', run: function () { cmd({ a: 'wakeSnoozed' }); } },
+      { id: 'zw.archiveIdle', icon: '🗄', label: 'Archive idle tabs', detail: 'close unpinned tabs idle 12h+', run: function () { cmd({ a: 'archiveIdle', idle: '12h' }); } },
+      { id: 'zw.restoreArchived', icon: '↩', label: 'Restore last archived tab', run: function () { cmd({ a: 'restoreArchived' }); } },
+      { id: 'zw.autoArchive', icon: '🗄', label: 'Toggle auto-archive (12h)', detail: 'close idle tabs into the archive', run: function () { try { chrome.storage.local.get('zb_autoarchive', function (o) { var on = (o && typeof o.zb_autoarchive === 'number') ? o.zb_autoarchive : 0; chrome.storage.local.set({ zb_autoarchive: on ? 0 : 12 }); }); } catch (e) {} } },
+      { id: 'zw.recentTab', icon: '⇆', label: 'Switch to last used tab', detail: 'recent order', run: function () { cmd({ a: 'recentTab' }); } },
+      { id: 'zw.audioFocus', icon: '🎧', label: 'Toggle audio focus', detail: 'only the active tab plays', run: function () { cmd({ a: 'audioFocus' }); } },
       { id: 'zw.duplicateTab', icon: '⧉', label: 'Duplicate tab', run: function () { cmd({ a: 'duplicateTab' }); } },
       { id: 'zw.reopenTab', icon: '↺', label: 'Reopen closed tab', run: function () { cmd({ a: 'reopenTab' }); } },
       { id: 'zw.closeTab', icon: '✕', label: 'Close tab', run: function () { cmd({ a: 'closeTab' }); } },
@@ -948,7 +967,7 @@
     try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
     try { if (PC.primeTmux) PC.primeTmux(hostReq, refreshPalette); } catch (e) {}      // live tmux panes + saved sessions for the `tmux` query
     try {
-      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds'], function (o) {
+      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds', 'zb_archive', 'zb_snoozed'], function (o) {
         void chrome.runtime.lastError;
         try {
           customCache = (o && o.zb_custom_cmds) || [];
@@ -966,6 +985,7 @@
           publish(customItems(defCmds));
         } catch (e) {}
         try { publish(frecentItems(o && o.zb_frecent)); } catch (e) {}
+        try { publish(archivedItems(o && o.zb_archive)); publish(snoozedItems(o && o.zb_snoozed)); } catch (e) {}
         try { shortcutsCache = (o && o.zb_shortcuts) || []; } catch (e) {}
         try { publish(extItems(o && o.zb_exts)); } catch (e) {}
         try { hudTabs = (o && o.zb_tabs) || []; } catch (e) {}

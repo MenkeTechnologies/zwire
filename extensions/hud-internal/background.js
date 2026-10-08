@@ -21,6 +21,9 @@ try { importScripts('zpage-core.js'); } catch (e) { /* page state unavailable: q
 // The auto-hibernate decision core (see zhibernate-core.js). Which tabs the sweep may discard
 // is a safety decision — it lives in its own pure module so tests/hibernate.mjs pins it.
 try { importScripts('zhibernate-core.js'); } catch (e) { /* core unavailable: the sweep below turns itself off */ }
+// Tab-flow decision core (see ztabflow-core.js): snooze, auto-archive, recent-tab and audio focus.
+// Loaded after the hibernate core, whose live-capture check it shares.
+try { importScripts('ztabflow-core.js'); } catch (e) { /* core unavailable: the tab-flow verbs do nothing */ }
 try { if (self.ZB_JOURNAL) self.ZB_JOURNAL.hydrate(); } catch (e) {}
 
 // Surface uncaught worker errors to the host log — the MV3 service worker has no visible DevTools
@@ -924,6 +927,169 @@ function hibernateSweep() {
 }
 try { chrome.alarms.create('zb-hibernate', { periodInMinutes: 5 }); chrome.alarms.onAlarm.addListener(function (a) { if (a.name === 'zb-hibernate') hibernateSweep(); }); } catch (e) {}
 
+// ---- Tab flow: snooze · auto-archive · recent tab · audio focus (ztabflow-core.js) ----
+// The decisions are pure and pinned by tests/tabflow.mjs; this block only reads chrome state,
+// asks the core, and applies the answer. Each stored list is read-modify-written inside one
+// serial queue so two wakeups (the minute alarm and a worker boot) cannot both reopen a tab.
+var tabflowQ = Promise.resolve();
+function tabflowSerial(fn) {
+  tabflowQ = tabflowQ.then(fn).catch(function (e) { reportErr('tabflow', e); });
+  return tabflowQ;
+}
+function tabflowCore() { return self.ZWIRE_TABFLOW; }
+
+// SNOOZE — close the tab(s) now, reopen at wake time. `req` is {duration?, until?, tabId?}.
+function snoozeTabs(req) {
+  return tabflowSerial(async function () {
+    var T = tabflowCore(); if (!T) return;
+    var now = Date.now(), at = T.wakeTime(req, now);
+    if (at == null) { fireHook('tab-snooze-rejected', { duration: req.duration, until: req.until }); return; }
+    var tabs = req.tabId != null ? [await chrome.tabs.get(req.tabId)]
+      : await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    var entries = [], ids = [];
+    tabs.forEach(function (t) { var e = T.snoozeEntry(t, at, now); if (e) { entries.push(e); ids.push(t.id); } });
+    if (!entries.length) return;
+    var o = await chrome.storage.local.get('zb_snoozed');
+    // Persist BEFORE closing: a worker torn down between the two steps loses a tab's
+    // presence on screen, never the tab itself.
+    await chrome.storage.local.set({ zb_snoozed: T.snoozeAdd(o.zb_snoozed, entries) });
+    await chrome.tabs.remove(ids);
+    fireHook('tab-snoozed', { urls: entries.map(function (e) { return e.url; }), wakeAt: at });
+  });
+}
+// Reopen every due snooze (all of them with `all`). The list is rewritten before any tab is
+// created, so a second concurrent wake finds nothing left to open.
+function wakeSnoozed(all) {
+  return tabflowSerial(async function () {
+    var T = tabflowCore(); if (!T) return;
+    var o = await chrome.storage.local.get('zb_snoozed');
+    var split = T.snoozeDue(o.zb_snoozed, Date.now(), all);
+    if (!split.due.length) return;
+    await chrome.storage.local.set({ zb_snoozed: split.rest });
+    for (var i = 0; i < split.due.length; i++) {
+      var e = split.due[i];
+      try { await chrome.tabs.create({ url: e.url, pinned: !!e.pinned, active: false }); } catch (err) { reportErr('wakeSnoozed', err); }
+    }
+    fireHook('tab-woke', { urls: split.due.map(function (e) { return e.url; }) });
+  });
+}
+
+// Wake ONE snoozed url now (the palette's snoozed rows), removing it from the schedule.
+function wakeSnoozedUrl(url) {
+  return tabflowSerial(async function () {
+    var T = tabflowCore(); if (!T) return;
+    var o = await chrome.storage.local.get('zb_snoozed');
+    var took = T.takeEntry(o.zb_snoozed, { url: url });
+    if (!took.entry) return;
+    await chrome.storage.local.set({ zb_snoozed: took.rest });
+    await chrome.tabs.create({ url: took.entry.url, pinned: !!took.entry.pinned, active: true });
+  });
+}
+
+// AUTO-ARCHIVE — close idle unpinned tabs into `zb_archive`. `thresholdMs` from the verb, else
+// from zb_autoarchive (hours; 0/absent = the periodic sweep is off).
+function archiveIdle(thresholdMs) {
+  return tabflowSerial(async function () {
+    var T = tabflowCore(); if (!T || !(thresholdMs > 0)) return;
+    var tabs = await chrome.tabs.query({});
+    var now = Date.now(), ids = T.archivableTabIds(tabs, tabLastActive, now, thresholdMs, captureByTab);
+    if (!ids.length) return;
+    var pick = {}; ids.forEach(function (id) { pick[id] = true; });
+    var closing = tabs.filter(function (t) { return pick[t.id]; });
+    var o = await chrome.storage.local.get('zb_archive');
+    await chrome.storage.local.set({ zb_archive: T.archivePush(o.zb_archive, closing, now) });
+    await chrome.tabs.remove(ids);
+    fireHook('tabs-archived', { count: ids.length, urls: closing.map(function (t) { return t.url; }) });
+  });
+}
+function restoreArchived(sel) {
+  return tabflowSerial(async function () {
+    var T = tabflowCore(); if (!T) return;
+    var o = await chrome.storage.local.get('zb_archive');
+    var took = T.takeEntry(o.zb_archive, sel);
+    if (!took.entry) return;
+    await chrome.storage.local.set({ zb_archive: took.rest });
+    await chrome.tabs.create({ url: took.entry.url, active: true });
+  });
+}
+function autoArchiveSweep() {
+  chrome.storage.local.get('zb_autoarchive', function (o) {
+    void chrome.runtime.lastError;
+    var hours = o && typeof o.zb_autoarchive === 'number' ? o.zb_autoarchive : 0;
+    if (hours > 0) archiveIdle(hours * 3600000);
+  });
+}
+
+// RECENT TAB — activation order, most recent first. Kept in memory and written through to
+// storage.session so it survives an MV3 worker teardown (tab ids do not outlive the browser).
+var tabMru = [];
+try {
+  chrome.storage.session.get('zb_mru', function (o) {
+    void chrome.runtime.lastError;
+    var T = tabflowCore(); if (T && o && o.zb_mru) tabMru = T.mruMerge(tabMru, o.zb_mru);
+  });
+} catch (e) {}
+function mruSave() { try { chrome.storage.session.set({ zb_mru: tabMru }); } catch (e) {} }
+try {
+  chrome.tabs.onActivated.addListener(function (info) { var T = tabflowCore(); if (T) { tabMru = T.mruTouch(tabMru, info.tabId); mruSave(); } });
+  chrome.tabs.onRemoved.addListener(function (tid) { var T = tabflowCore(); if (T) { tabMru = T.mruDrop(tabMru, tid); mruSave(); } });
+} catch (e) {}
+function recentTab(n) {
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (act) {
+    void chrome.runtime.lastError;
+    var cur = act && act[0], T = tabflowCore(); if (!cur || !T) return;
+    chrome.tabs.query({ windowId: cur.windowId }, function (all) {
+      void chrome.runtime.lastError;
+      var id = T.mruTarget(tabMru, cur.id, (all || []).map(function (t) { return t.id; }), n);
+      if (id != null) chrome.tabs.update(id, { active: true }, function () { void chrome.runtime.lastError; });
+    });
+  });
+}
+
+// AUDIO FOCUS — only the focused tab plays (zb_audiofocus). The ids this feature muted live in
+// storage.session (zb_automuted) so a worker restart can still give them back.
+// A tab can close between the plan and the update; that tab simply has nothing left to mute.
+function setMuted(id, muted) { return chrome.tabs.update(id, { muted: muted }).catch(function () {}); }
+function audioFocusApply() {
+  return tabflowSerial(async function () {
+    var T = tabflowCore(); if (!T) return;
+    var cfg = await chrome.storage.local.get('zb_audiofocus');
+    var st = await chrome.storage.session.get('zb_automuted');
+    var owned = st.zb_automuted || [];
+    if (!cfg.zb_audiofocus && !owned.length) return;   // off, and nothing of ours to give back
+    var tabs = await chrome.tabs.query({});
+    if (!cfg.zb_audiofocus) {
+      var give = T.audioFocusRelease(tabs, owned);
+      for (var i = 0; i < give.length; i++) await setMuted(give[i], false);
+      await chrome.storage.session.set({ zb_automuted: [] });
+      return;
+    }
+    var act = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!act[0]) return;
+    var plan = T.audioFocusPlan(tabs, act[0].id, owned);
+    // Record ownership before muting, so a mute that lands is never one we forgot we made.
+    await chrome.storage.session.set({ zb_automuted: plan.autoMuted });
+    for (var j = 0; j < plan.mute.length; j++) await setMuted(plan.mute[j], true);
+    for (var k = 0; k < plan.unmute.length; k++) await setMuted(plan.unmute[k], false);
+  });
+}
+try {
+  chrome.tabs.onActivated.addListener(function () { audioFocusApply(); });
+  chrome.tabs.onUpdated.addListener(function (id, info) { if (info.audible === true) audioFocusApply(); });
+  if (chrome.windows) chrome.windows.onFocusChanged.addListener(function (w) { if (w !== chrome.windows.WINDOW_ID_NONE) audioFocusApply(); });
+  chrome.storage.onChanged.addListener(function (ch, area) { if (area === 'local' && ch.zb_audiofocus) audioFocusApply(); });
+} catch (e) {}
+
+try {
+  chrome.alarms.create('zb-snooze', { periodInMinutes: 1 });
+  chrome.alarms.create('zb-archive', { periodInMinutes: 15 });
+  chrome.alarms.onAlarm.addListener(function (a) {
+    if (a.name === 'zb-snooze') wakeSnoozed(false);
+    else if (a.name === 'zb-archive') autoArchiveSweep();
+  });
+} catch (e) {}
+wakeSnoozed(false);   // a browser that was closed past a wake time reopens the tab on first boot
+
 function pollCi() {
   try {
     chrome.storage.local.get(['zb_ci', 'zb_ci_status'], function (o) {
@@ -1348,6 +1514,16 @@ function execZbAction(c) {
     } else if (c.a === 'bookmarkFolder') { try { chrome.bookmarks.create({ title: String(c.title || 'zwire') }, function () { void chrome.runtime.lastError; }); } catch (e) {}
     } else if (c.a === 'removeBookmark') {
       active(function (t) { if (!t || !t.url) return; try { chrome.bookmarks.search({ url: t.url }, function (res) { void chrome.runtime.lastError; (res || []).forEach(function (bm) { chrome.bookmarks.remove(bm.id, function () { void chrome.runtime.lastError; }); }); }); } catch (e) {} });
+    // --- tab flow (ztabflow-core.js): snooze · archive · recent tab · audio focus ---
+    } else if (c.a === 'snoozeTab') { snoozeTabs({ duration: c.duration, until: c.until, tabId: c.tabId });
+    } else if (c.a === 'wakeSnoozed') { if (c.url) wakeSnoozedUrl(c.url); else wakeSnoozed(true);
+    } else if (c.a === 'archiveIdle') {
+      var T = self.ZWIRE_TABFLOW, idle = T ? T.parseDuration(c.idle == null ? '12h' : c.idle) : null;
+      if (idle != null) archiveIdle(idle);
+    } else if (c.a === 'restoreArchived') { restoreArchived({ index: c.index, url: c.url });
+    } else if (c.a === 'recentTab') { recentTab(c.n);
+    } else if (c.a === 'audioFocus') {
+      chrome.storage.local.get('zb_audiofocus', function (o) { void chrome.runtime.lastError; chrome.storage.local.set({ zb_audiofocus: typeof c.on === 'boolean' ? c.on : !(o && o.zb_audiofocus) }); });
     } else if (c.a === 'tmux') { tmuxCmd(c.sub, c); }
   } catch (e) {}
 }
