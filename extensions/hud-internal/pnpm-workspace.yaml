@@ -12,4 +12,4 @@ allowBuilds:
 # Forcing the resolution is the only way up from here; 3.x is API-compatible and
 # monaco only uses DOMPurify.sanitize.
 overrides:
-  dompurify: '>=3.4.13'
+  dompurify: '>=3.4.16'
