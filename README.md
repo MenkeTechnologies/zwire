@@ -347,7 +347,10 @@ home / zoom), **downloads** (pause / resume / cancel / retry / clear / reveal),
 **history + bookmark + reading-list** edits, **extension** enable/disable/
 uninstall + **app launch**, **keep-awake** power control, **screenshot**,
 **notify**, **tab flow** (`snoozeTab` / `wakeSnoozed` / `archiveIdle` /
-`restoreArchived` / `recentTab` / `audioFocus`), and the **`tmux`** overlay toggle. The typed manifest is published
+`restoreArchived` / `recentTab` / `audioFocus`), **tab-group editing**
+(`nameGroup` / `colorGroup` / `closeGroup` / `groupToWindow`), **workspaces**
+(`saveWorkspace` / `openWorkspace` / `deleteWorkspace`), the **reading-list queue**
+(`readNext` / `markRead`), and the **`tmux`** overlay toggle. The typed manifest is published
 through `ZGui.automation` — the shared registry every embedded core contributes
 verbs to — so a stryke script sees one combined, introspectable `browser.*`
 surface via `App::here()->verbs()`.
@@ -483,7 +486,22 @@ own `lastAccessed` decides idleness so a worker restart cannot age a just-used t
 recently-used order within the window; `n` steps further back), **audio focus**
 (Vivaldi's "active tab only": every other audible tab is muted, and only the mutes this
 feature made are given back on focus or switch-off — a mute or unmute you set by hand
-is never overridden), and an **inline
+is never overridden), **workspaces** (`zworkspace-core.js`; Vivaldi saved sessions /
+Edge Workspaces / Chrome saved tab groups): `saveWorkspace` with a `name` snapshots the
+focused window — or every normal window with `all: true` — as each tab's url, title and
+pin plus every tab group's title, colour, collapsed state and member tabs; `openWorkspace`
+(exact name, or a unique prefix) rebuilds each saved window with its pins and groups, and
+is a template rather than a queue, so opening never consumes it. Names fold case and
+punctuation, so re-saving `deep work` over `Deep-Work` replaces it; new-tab pages are not
+saved. Every saved workspace is a ⌘K row. **Tab-group editing** (Chrome's group menu):
+`nameGroup` (`title`) and `colorGroup` (`color` — a Chrome group colour, `grey` … `orange` — or none to
+cycle) act on the active tab's group and group an ungrouped tab first; `closeGroup` closes
+exactly that group; `groupToWindow` moves it, title and colour intact, into a new window.
+The **reading-list queue**: `readNext` opens the oldest unread entry not already open (or
+focuses it when every unread entry is open) and marks it read; `markRead` sets — or with no
+`read` flag toggles — the read state of the active page's entry or of `url`. The new-tab
+page's ⌘K relays the tab-flow, tab-group, workspace and reading-list rows to the HUD
+worker, and an **inline
 compute layer** (ported from zgo-core): type a sum (`2^10`, `sqrt(2)+1`), a unit
 conversion (`10 km to miles`, `72 f in c`, `1 gb to mb`), a live currency
 conversion (`100 usd to eur`, rates fetched + cached by the host), a percentage

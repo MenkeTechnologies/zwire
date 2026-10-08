@@ -21,7 +21,7 @@ while IFS= read -r f; do
   if ! node --check "$f" 2>/tmp/zwire-hud-check.$$; then
     JS_BAD=$((JS_BAD + 1)); FAIL=1
     echo -e "  ${R}✗${N} $f"
-    command sed 's/^/      /' /tmp/zwire-hud-check.$$ | head -3
+    command perl -pe 's/^/      /' /tmp/zwire-hud-check.$$ | head -3
   fi
 done < <(command find . -name '*.js' \
            -not -path './node_modules/*' -not -path './lib/zgui-core/*' \
@@ -36,7 +36,7 @@ if node tests/spec-roundtrip.mjs 2>/tmp/zwire-hud-spec.$$; then
   cyber_ok "spec round-trip nominal"
 else
   FAIL=1; cyber_fail "spec round-trip compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-spec.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-spec.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-spec.$$
 echo
@@ -46,7 +46,7 @@ if node tests/compute.mjs 2>/tmp/zwire-hud-compute.$$; then
   cyber_ok "compute engine nominal"
 else
   FAIL=1; cyber_fail "compute engine compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-compute.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-compute.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-compute.$$
 echo
@@ -56,7 +56,7 @@ if node tests/tabquery.mjs 2>/tmp/zwire-hud-tabq.$$; then
   cyber_ok "tab query nominal"
 else
   FAIL=1; cyber_fail "tab query compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-tabq.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-tabq.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-tabq.$$
 echo
@@ -66,7 +66,7 @@ if node tests/pipes.mjs 2>/tmp/zwire-hud-pipes.$$; then
   cyber_ok "pane pipelines nominal"
 else
   FAIL=1; cyber_fail "pane pipelines compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-pipes.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-pipes.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-pipes.$$
 echo
@@ -76,7 +76,7 @@ if node tests/pagestate.mjs 2>/tmp/zwire-hud-page.$$; then
   cyber_ok "page projections nominal"
 else
   FAIL=1; cyber_fail "page projections compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-page.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-page.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-page.$$
 echo
@@ -86,7 +86,7 @@ if node tests/bracenav.mjs 2>/tmp/zwire-hud-brace.$$; then
   cyber_ok "brace nav nominal"
 else
   FAIL=1; cyber_fail "brace nav compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-brace.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-brace.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-brace.$$
 echo
@@ -96,7 +96,7 @@ if node tests/urlsurgery.mjs 2>/tmp/zwire-hud-urls.$$; then
   cyber_ok "url surgery nominal"
 else
   FAIL=1; cyber_fail "url surgery compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-urls.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-urls.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-urls.$$
 echo
@@ -106,7 +106,7 @@ if node tests/history.mjs 2>/tmp/zwire-hud-history.$$ && node tests/history-rend
   cyber_ok "history dashboard nominal"
 else
   FAIL=1; cyber_fail "history dashboard compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-history.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-history.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-history.$$
 echo
@@ -116,7 +116,7 @@ if node tests/expose.mjs 2>/tmp/zwire-hud-expose.$$; then
   cyber_ok "exposé nominal"
 else
   FAIL=1; cyber_fail "exposé compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-expose.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-expose.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-expose.$$
 echo
@@ -126,7 +126,7 @@ if node tests/notes.mjs 2>/tmp/zwire-hud-nt.$$ && node tests/translate.mjs 2>>/t
   cyber_ok "notes + translate nominal"
 else
   FAIL=1; cyber_fail "notes + translate compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-nt.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-nt.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-nt.$$
 echo
@@ -136,7 +136,7 @@ if node tests/pageactions.mjs 2>/tmp/zwire-hud-pa.$$; then
   cyber_ok "page actions nominal"
 else
   FAIL=1; cyber_fail "page actions compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-pa.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-pa.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-pa.$$
 echo
@@ -146,7 +146,7 @@ if node tests/browser-tools.mjs 2>/tmp/zwire-hud-vt.$$ && node tests/feeds.mjs 2
   cyber_ok "vivaldi tools nominal"
 else
   FAIL=1; cyber_fail "vivaldi tools compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-vt.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-vt.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-vt.$$
 echo
@@ -156,7 +156,7 @@ if node tests/settings-sections.mjs 2>/tmp/zwire-hud-set.$$ && node tests/cleard
   cyber_ok "settings + clear data nominal"
 else
   FAIL=1; cyber_fail "settings + clear data compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-set.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-set.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-set.$$
 echo
@@ -166,7 +166,7 @@ if node tests/undo.mjs 2>/tmp/zwire-hud-undo.$$; then
   cyber_ok "undo journal nominal"
 else
   FAIL=1; cyber_fail "undo journal compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-undo.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-undo.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-undo.$$
 echo
@@ -176,7 +176,7 @@ if node tests/exec-chain.mjs 2>/tmp/zwire-hud-chain.$$; then
   cyber_ok "step chain nominal"
 else
   FAIL=1; cyber_fail "step chain compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-chain.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-chain.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-chain.$$
 echo
@@ -186,7 +186,7 @@ if node tests/tmux.mjs 2>/tmp/zwire-hud-tmux.$$; then
   cyber_ok "real tmux nominal"
 else
   FAIL=1; cyber_fail "real tmux compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-tmux.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-tmux.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-tmux.$$
 echo
@@ -196,7 +196,7 @@ if node tests/palette-ids.mjs 2>/tmp/zwire-hud-pids.$$; then
   cyber_ok "palette id contract nominal"
 else
   FAIL=1; cyber_fail "palette id contract compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-pids.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-pids.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-pids.$$
 echo
@@ -206,7 +206,7 @@ if node tests/trigger-revert.mjs 2>/tmp/zwire-hud-trg.$$; then
   cyber_ok "self-reverting triggers nominal"
 else
   FAIL=1; cyber_fail "self-reverting triggers compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-trg.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-trg.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-trg.$$
 echo
@@ -216,7 +216,7 @@ if node tests/history-timeline.mjs 2>/tmp/zwire-hud-tl.$$; then
   cyber_ok "history timeline domain nominal"
 else
   FAIL=1; cyber_fail "history timeline domain compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-tl.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-tl.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-tl.$$
 echo
@@ -226,7 +226,7 @@ if node tests/hud-shell-css.mjs 2>/tmp/zwire-hud-shell.$$; then
   cyber_ok "shell header layout nominal"
 else
   FAIL=1; cyber_fail "shell header layout compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-shell.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-shell.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-shell.$$
 echo
@@ -236,7 +236,7 @@ if node tests/terminal-overlay.mjs 2>/tmp/zwire-hud-term.$$; then
   cyber_ok "terminal overlay nominal"
 else
   FAIL=1; cyber_fail "terminal overlay compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-term.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-term.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-term.$$
 echo
@@ -246,7 +246,7 @@ if node tests/hibernate.mjs 2>/tmp/zwire-hud-hib.$$; then
   cyber_ok "auto-hibernate nominal"
 else
   FAIL=1; cyber_fail "auto-hibernate compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-hib.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-hib.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-hib.$$
 echo
@@ -256,9 +256,19 @@ if node tests/tabflow.mjs 2>/tmp/zwire-hud-flow.$$; then
   cyber_ok "tab flow nominal"
 else
   FAIL=1; cyber_fail "tab flow compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-flow.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-flow.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-flow.$$
+echo
+
+cyber_section "WORKSPACES (save / restore plan + tab-group colour + reading-list queue + host verb parity)"
+if node tests/workspace.mjs 2>/tmp/zwire-hud-ws.$$; then
+  cyber_ok "workspaces nominal"
+else
+  FAIL=1; cyber_fail "workspaces compromised"
+  command perl -pe 's/^/    /' /tmp/zwire-hud-ws.$$ | head -30
+fi
+command rm -f /tmp/zwire-hud-ws.$$
 echo
 
 cyber_section "NEW-TAB LAYOUTS (store invariants + url gate + Vivaldi geometry)"
@@ -266,7 +276,7 @@ if node tests/ntp-layout.mjs 2>/tmp/zwire-hud-ntp.$$; then
   cyber_ok "new-tab layouts nominal"
 else
   FAIL=1; cyber_fail "new-tab layouts compromised"
-  command sed 's/^/    /' /tmp/zwire-hud-ntp.$$ | head -30
+  command perl -pe 's/^/    /' /tmp/zwire-hud-ntp.$$ | head -30
 fi
 command rm -f /tmp/zwire-hud-ntp.$$
 echo
@@ -277,7 +287,7 @@ if command -v cargo >/dev/null 2>&1; then
     cyber_ok "zwire-host builds"
   else
     FAIL=1; cyber_fail "zwire-host failed to build"
-    command sed 's/^/    /' /tmp/zwire-hud-rs.$$ | head -8
+    command perl -pe 's/^/    /' /tmp/zwire-hud-rs.$$ | head -8
   fi
   command rm -f /tmp/zwire-hud-rs.$$
 else

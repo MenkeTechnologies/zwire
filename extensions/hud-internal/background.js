@@ -24,6 +24,8 @@ try { importScripts('zhibernate-core.js'); } catch (e) { /* core unavailable: th
 // Tab-flow decision core (see ztabflow-core.js): snooze, auto-archive, recent-tab and audio focus.
 // Loaded after the hibernate core, whose live-capture check it shares.
 try { importScripts('ztabflow-core.js'); } catch (e) { /* core unavailable: the tab-flow verbs do nothing */ }
+// Workspaces, tab-group editing and the reading-list queue (see zworkspace-core.js).
+try { importScripts('zworkspace-core.js'); } catch (e) { /* core unavailable: those verbs do nothing */ }
 try { if (self.ZB_JOURNAL) self.ZB_JOURNAL.hydrate(); } catch (e) {}
 
 // Surface uncaught worker errors to the host log — the MV3 service worker has no visible DevTools
@@ -1090,6 +1092,149 @@ try {
 } catch (e) {}
 wakeSnoozed(false);   // a browser that was closed past a wake time reopens the tab on first boot
 
+// ---- Workspaces · tab-group editing · reading-list queue (zworkspace-core.js) ----
+// Same split as tab flow: the core decides (pinned by tests/workspace.mjs), this block reads
+// chrome state and applies the answer. `zb_workspaces` is read-modify-written inside one serial
+// queue so two saves cannot drop each other's write.
+var workspaceQ = Promise.resolve();
+function workspaceSerial(fn) {
+  workspaceQ = workspaceQ.then(fn).catch(function (e) { reportErr('workspace', e); });
+  return workspaceQ;
+}
+function workspaceCore() { return self.ZWIRE_WORKSPACE; }
+async function activeTabNow() {
+  var t = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  return t[0] || (await chrome.tabs.query({ active: true }))[0] || null;
+}
+
+// The active tab's group id; with `create`, an ungrouped active tab first becomes a group of one
+// (Chrome's "Add tab to new group"), so naming or colouring an ungrouped tab still does something.
+async function activeGroupId(create) {
+  var t = await activeTabNow();
+  if (!t) return null;
+  if (t.groupId != null && t.groupId >= 0) return t.groupId;
+  if (!create || t.pinned) return null;   // pinned tabs cannot join a group
+  return await chrome.tabs.group({ tabIds: [t.id] });
+}
+async function nameGroup(title) {
+  var gid = await activeGroupId(true); if (gid == null) return;
+  await chrome.tabGroups.update(gid, { title: String(title == null ? '' : title) });
+}
+async function colorGroup(color) {
+  var W = workspaceCore(); if (!W) return;
+  var gid = await activeGroupId(true); if (gid == null) return;
+  var cur = await chrome.tabGroups.get(gid);
+  var next = W.groupColor(color, cur && cur.color);
+  if (!next) { fireHook('group-color-rejected', { color: color, colors: W.GROUP_COLORS }); return; }
+  await chrome.tabGroups.update(gid, { color: next });
+}
+async function closeGroup() {
+  var W = workspaceCore(); if (!W) return;
+  var gid = await activeGroupId(false); if (gid == null) return;
+  var ids = W.groupMembers(await chrome.tabs.query({ groupId: gid }), gid);
+  if (ids.length) await chrome.tabs.remove(ids);
+}
+// windows.create always opens a tab of its own; the group moves in beside it and that
+// placeholder is then closed, leaving exactly the group's tabs with its title and colour.
+async function groupToWindow() {
+  var gid = await activeGroupId(false); if (gid == null) return;
+  var w = await chrome.windows.create({ focused: true });
+  var placeholder = w.tabs && w.tabs[0] ? w.tabs[0].id : null;
+  await chrome.tabGroups.move(gid, { windowId: w.id, index: -1 });
+  if (placeholder != null) await chrome.tabs.remove(placeholder).catch(function () {});
+}
+
+// A window's tabs + groups, the input snapshotWindow wants.
+async function windowState(windowId) {
+  return {
+    tabs: await chrome.tabs.query({ windowId: windowId }),
+    groups: await chrome.tabGroups.query({ windowId: windowId })
+  };
+}
+function saveWorkspace(name, all) {
+  return workspaceSerial(async function () {
+    var W = workspaceCore(); if (!W) return;
+    var ids;
+    if (all) ids = (await chrome.windows.getAll({ windowTypes: ['normal'] })).map(function (w) { return w.id; });
+    else { var t = await activeTabNow(); ids = t ? [t.windowId] : []; }
+    var wins = [];
+    for (var i = 0; i < ids.length; i++) wins.push(await windowState(ids[i]));
+    var ws = W.makeWorkspace(name, wins, Date.now());
+    if (!ws) { fireHook('workspace-rejected', { name: name }); return; }
+    var o = await chrome.storage.local.get('zb_workspaces');
+    await chrome.storage.local.set({ zb_workspaces: W.workspaceSave(o.zb_workspaces, ws) });
+    fireHook('workspace-saved', { name: ws.name, windows: ws.windows.length });
+  });
+}
+// Every saved window becomes a new window: tabs in saved order, pins re-applied, then each group
+// rebuilt over its tab positions with its title, colour and collapsed state. Opening never
+// consumes the workspace — it is a template, not a queue.
+function openWorkspace(name) {
+  return workspaceSerial(async function () {
+    var W = workspaceCore(); if (!W) return;
+    var o = await chrome.storage.local.get('zb_workspaces');
+    var ws = W.workspaceFind(o.zb_workspaces, name);
+    if (!ws) { fireHook('workspace-missing', { name: name }); return; }
+    for (var i = 0; i < ws.windows.length; i++) {
+      var plan = W.restorePlan(ws.windows[i]);
+      if (!plan.urls.length) continue;
+      var win = await chrome.windows.create({ url: plan.urls, focused: i === 0 });
+      var tabs = (win.tabs || []).slice().sort(function (a, b) { return a.index - b.index; });
+      for (var p = 0; p < plan.pinned.length; p++) {
+        var pt = tabs[plan.pinned[p]]; if (pt) await chrome.tabs.update(pt.id, { pinned: true });
+      }
+      for (var g = 0; g < plan.groups.length; g++) {
+        var G = plan.groups[g];
+        var tids = G.indices.map(function (ix) { return tabs[ix] && tabs[ix].id; }).filter(function (id) { return id != null; });
+        if (!tids.length) continue;
+        var gid = await chrome.tabs.group({ tabIds: tids, createProperties: { windowId: win.id } });
+        await chrome.tabGroups.update(gid, { title: G.title, color: G.color, collapsed: G.collapsed });
+      }
+    }
+    fireHook('workspace-opened', { name: ws.name, windows: ws.windows.length });
+  });
+}
+function deleteWorkspace(name) {
+  return workspaceSerial(async function () {
+    var W = workspaceCore(); if (!W) return;
+    var o = await chrome.storage.local.get('zb_workspaces');
+    var r = W.workspaceRemove(o.zb_workspaces, name);
+    if (!r.removed) { fireHook('workspace-missing', { name: name }); return; }
+    await chrome.storage.local.set({ zb_workspaces: r.rest });
+    fireHook('workspace-deleted', { name: r.removed.name });
+  });
+}
+
+// READING LIST — open the oldest unread entry (or focus it when it is already open) and mark it
+// read; mark / toggle the read state of the active tab's entry or of `url`.
+async function readNext() {
+  var W = workspaceCore(); if (!W || !chrome.readingList) return;
+  var entries = await chrome.readingList.query({});
+  var tabs = await chrome.tabs.query({});
+  var pick = W.nextUnread(entries, tabs.map(function (t) { return t.url; }));
+  if (!pick) { fireHook('reading-list-empty', {}); return; }
+  var want = pick.entry.url.split('#')[0];
+  var openTab = pick.open ? tabs.filter(function (t) { return String(t.url || '').split('#')[0] === want; })[0] : null;
+  if (openTab) {
+    await chrome.tabs.update(openTab.id, { active: true });
+    await chrome.windows.update(openTab.windowId, { focused: true });
+  } else {
+    await chrome.tabs.create({ url: pick.entry.url, active: true });
+  }
+  await chrome.readingList.updateEntry({ url: pick.entry.url, hasBeenRead: true });
+}
+async function markRead(url, read) {
+  var W = workspaceCore(); if (!W || !chrome.readingList) return;
+  if (!url) { var t = await activeTabNow(); url = t && t.url; }
+  if (!url) return;
+  var upd = W.readState(await chrome.readingList.query({}), url, read);
+  if (!upd) { fireHook('reading-list-missing', { url: url }); return; }
+  await chrome.readingList.updateEntry(upd);
+}
+// Fire-and-report wrapper for the async verbs above: a rejection lands in the host log instead
+// of an unhandled-rejection in a worker nobody is watching.
+function runAsync(where, p) { Promise.resolve(p).catch(function (e) { reportErr(where, e); }); }
+
 function pollCi() {
   try {
     chrome.storage.local.get(['zb_ci', 'zb_ci_status'], function (o) {
@@ -1524,6 +1669,16 @@ function execZbAction(c) {
     } else if (c.a === 'recentTab') { recentTab(c.n);
     } else if (c.a === 'audioFocus') {
       chrome.storage.local.get('zb_audiofocus', function (o) { void chrome.runtime.lastError; chrome.storage.local.set({ zb_audiofocus: typeof c.on === 'boolean' ? c.on : !(o && o.zb_audiofocus) }); });
+    // --- tab-group editing · workspaces · reading-list queue (zworkspace-core.js) ---
+    } else if (c.a === 'nameGroup') { runAsync('nameGroup', nameGroup(c.title));
+    } else if (c.a === 'colorGroup') { runAsync('colorGroup', colorGroup(c.color));
+    } else if (c.a === 'closeGroup') { runAsync('closeGroup', closeGroup());
+    } else if (c.a === 'groupToWindow') { runAsync('groupToWindow', groupToWindow());
+    } else if (c.a === 'saveWorkspace') { saveWorkspace(c.name, !!c.all);
+    } else if (c.a === 'openWorkspace') { openWorkspace(c.name);
+    } else if (c.a === 'deleteWorkspace') { deleteWorkspace(c.name);
+    } else if (c.a === 'readNext') { runAsync('readNext', readNext());
+    } else if (c.a === 'markRead') { runAsync('markRead', markRead(c.url, c.read));
     } else if (c.a === 'tmux') { tmuxCmd(c.sub, c); }
   } catch (e) {}
 }

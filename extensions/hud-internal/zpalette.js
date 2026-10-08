@@ -125,6 +125,26 @@
   // the value changes so onChanged always fires.
   var cmdN = 0;
   function cmd(obj) { try { obj.n = ++cmdN + '.' + (window.__zbTick = (window.__zbTick || 0) + 1); chrome.storage.local.set({ zb_cmd: obj }); } catch (e) {} }
+  // Ask for one line of text. ZGui.modal only rides along on http/https/file pages (it is
+  // injected with the tmux overlay's block, not this one), so a chrome:// page falls back to
+  // the platform prompt rather than losing the row. cb(null) = cancelled.
+  function promptText(opts, cb) {
+    try {
+      if (window.ZGui && ZGui.modal && ZGui.modal.prompt) {
+        ZGui.modal.prompt(opts).then(function (v) { cb(v == null ? null : v); }, function () { cb(null); });
+        return;
+      }
+    } catch (e) {}
+    try { cb(window.prompt((opts && opts.message) || (opts && opts.title) || '', '')); }
+    catch (e) { cb(null); }
+  }
+  // Prompt, then send the verb with the answer under `key` (blank or cancelled = nothing sent).
+  function cmdAsk(opts, a, key, extra) {
+    promptText(opts, function (v) {
+      if (v == null || !String(v).trim()) return;
+      var o = Object.assign({ a: a }, extra || {}); o[key] = String(v).trim(); cmd(o);
+    });
+  }
   // When the tmux overlay is open, navigate the ACTIVE PANE (ztmux shares this
   // top-frame world) instead of breaking out into a new browser tab.
   function open(url) {
@@ -244,6 +264,11 @@
   function snoozedItems(list) {
     return (list || []).map(function (e) { return { id: 'zw.snoozed.' + slug(e.url), icon: '⏾', label: 'Snoozed: ' + (e.title || e.url), detail: 'wakes ' + new Date(e.wakeAt).toLocaleString() + ' · ' + e.url, run: function () { cmd({ a: 'wakeSnoozed', url: e.url }); } }; });
   }
+  // Saved workspaces (worker: zworkspace-core.js). The worker folds names by the same rule as
+  // slug(), so two stored workspaces can never share an id.
+  function workspaceItems(list) {
+    return (list || []).map(function (w) { return { id: 'zw.workspace.' + slug(w.name), icon: '▦', label: 'Workspace: ' + w.name, detail: (w.windows || []).length + ' window(s) · saved ' + new Date(w.savedAt).toLocaleString(), run: function () { cmd({ a: 'openWorkspace', name: w.name }); } }; });
+  }
 
   /* ---- command runner (pulled from zgo): browser verbs + web-search --------- */
   function clip(text) { try { navigator.clipboard.writeText(text); } catch (e) {} }
@@ -305,6 +330,16 @@
       { id: 'zw.autoArchive', icon: '🗄', label: 'Toggle auto-archive (12h)', detail: 'close idle tabs into the archive', run: function () { try { chrome.storage.local.get('zb_autoarchive', function (o) { var on = (o && typeof o.zb_autoarchive === 'number') ? o.zb_autoarchive : 0; chrome.storage.local.set({ zb_autoarchive: on ? 0 : 12 }); }); } catch (e) {} } },
       { id: 'zw.recentTab', icon: '⇆', label: 'Switch to last used tab', detail: 'recent order', run: function () { cmd({ a: 'recentTab' }); } },
       { id: 'zw.audioFocus', icon: '🎧', label: 'Toggle audio focus', detail: 'only the active tab plays', run: function () { cmd({ a: 'audioFocus' }); } },
+      // Tab groups, workspaces, reading list (worker: zworkspace-core.js).
+      { id: 'zw.nameGroup', icon: '▤', label: 'Name tab group…', detail: 'groups this tab if it is not grouped', run: function () { promptText({ title: 'Tab group', message: 'Name for this tab group.', placeholder: 'research' }, function (v) { if (v != null) cmd({ a: 'nameGroup', title: String(v).trim() }); }); } },
+      { id: 'zw.colorGroup', icon: '◐', label: 'Cycle tab group color', detail: 'grey → blue → red → …', run: function () { cmd({ a: 'colorGroup' }); } },
+      { id: 'zw.closeGroup', icon: '✕', label: 'Close tab group', detail: 'every tab in this tab’s group', run: function () { cmd({ a: 'closeGroup' }); } },
+      { id: 'zw.groupToWindow', icon: '⧉', label: 'Move tab group to new window', run: function () { cmd({ a: 'groupToWindow' }); } },
+      { id: 'zw.saveWorkspace', icon: '💾', label: 'Save window as workspace…', detail: 'tabs · pins · groups', run: function () { cmdAsk({ title: 'Workspace', message: 'Name for this workspace (an existing name is replaced).', placeholder: 'deep work' }, 'saveWorkspace', 'name'); } },
+      { id: 'zw.saveWorkspace.all', icon: '💾', label: 'Save all windows as workspace…', detail: 'every normal window', run: function () { cmdAsk({ title: 'Workspace', message: 'Name for this workspace (an existing name is replaced).', placeholder: 'deep work' }, 'saveWorkspace', 'name', { all: true }); } },
+      { id: 'zw.deleteWorkspace', icon: '🗑', label: 'Delete workspace…', run: function () { cmdAsk({ title: 'Workspace', message: 'Workspace to delete.', placeholder: 'deep work' }, 'deleteWorkspace', 'name'); } },
+      { id: 'zw.readNext', icon: '📖', label: 'Read next from reading list', detail: 'oldest unread · marks it read', run: function () { cmd({ a: 'readNext' }); } },
+      { id: 'zw.markRead', icon: '✓', label: 'Toggle read on reading list', detail: 'this page’s entry', run: function () { cmd({ a: 'markRead' }); } },
       { id: 'zw.duplicateTab', icon: '⧉', label: 'Duplicate tab', run: function () { cmd({ a: 'duplicateTab' }); } },
       { id: 'zw.reopenTab', icon: '↺', label: 'Reopen closed tab', run: function () { cmd({ a: 'reopenTab' }); } },
       { id: 'zw.closeTab', icon: '✕', label: 'Close tab', run: function () { cmd({ a: 'closeTab' }); } },
@@ -859,23 +894,11 @@
   // terminal, as opposed to ztmux-config.js's web-pane tiling of the same name.
   // The provider owns the typed surface (`tmux` lists panes, `tmux <text>` sends
   // it); the action rows come from makeTmuxItems and are published with the rest.
-  // ZGui.modal only rides along on http/https/file pages (it is injected with the
-  // tmux overlay's block, not this one), so a chrome:// page falls back to the
-  // platform prompt rather than losing the row.
   var TMUXCTX = {
     host: hostReq,
     toast: hostToast,
     copy: clip,
-    prompt: function (opts, cb) {
-      try {
-        if (window.ZGui && ZGui.modal && ZGui.modal.prompt) {
-          ZGui.modal.prompt(opts).then(function (v) { cb(v == null ? null : v); }, function () { cb(null); });
-          return;
-        }
-      } catch (e) {}
-      try { cb(window.prompt((opts && opts.message) || (opts && opts.title) || '', '')); }
-      catch (e) { cb(null); }
-    },
+    prompt: promptText,
     pageUrl: function () { try { return location.href; } catch (e) { return ''; } },
     selection: function () { try { return String(window.getSelection() || ''); } catch (e) { return ''; } }
   };
@@ -967,7 +990,7 @@
     try { if (PC.primeRates) PC.primeRates(getRates, refreshPalette); } catch (e) {}   // load FX rates for inline currency
     try { if (PC.primeTmux) PC.primeTmux(hostReq, refreshPalette); } catch (e) {}      // live tmux panes + saved sessions for the `tmux` query
     try {
-      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds', 'zb_archive', 'zb_snoozed'], function (o) {
+      chrome.storage.local.get(['zb_tabs', 'zb_exts', 'zb_frecent', 'zb_shortcuts', 'zb_custom_cmds', 'zb_archive', 'zb_snoozed', 'zb_workspaces'], function (o) {
         void chrome.runtime.lastError;
         try {
           customCache = (o && o.zb_custom_cmds) || [];
@@ -985,7 +1008,7 @@
           publish(customItems(defCmds));
         } catch (e) {}
         try { publish(frecentItems(o && o.zb_frecent)); } catch (e) {}
-        try { publish(archivedItems(o && o.zb_archive)); publish(snoozedItems(o && o.zb_snoozed)); } catch (e) {}
+        try { publish(archivedItems(o && o.zb_archive)); publish(snoozedItems(o && o.zb_snoozed)); publish(workspaceItems(o && o.zb_workspaces)); } catch (e) {}
         try { shortcutsCache = (o && o.zb_shortcuts) || []; } catch (e) {}
         try { publish(extItems(o && o.zb_exts)); } catch (e) {}
         try { hudTabs = (o && o.zb_tabs) || []; } catch (e) {}

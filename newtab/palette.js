@@ -125,6 +125,35 @@
   var UI_TOGGLES = [['◐', 'Toggle light mode', 'light'], ['⌂', 'Toggle CRT scanlines', 'scanlines'],
     ['▣', 'Toggle bezel vignette', 'vignette'], ['✦', 'Toggle neon glow', 'glow'], ['⚡', 'Toggle animations', 'anim']];
 
+  /* HUD worker verbs, relayed through bridgeAction (the worker owns the tabs/windows/
+   * tabGroups/readingList permissions and the stored snooze/archive/workspace lists). Only verbs
+   * that make sense FROM the new tab are listed: snoozing or marking "this page" read would act
+   * on the new-tab page itself, which those verbs rightly refuse. A row with a prompt sends the
+   * answer under its key; blank or cancelled sends nothing. */
+  var WORKER_ROWS = [
+    ['☀', 'Wake all snoozed tabs', 'reopen now', { a: 'wakeSnoozed' }],
+    ['🗄', 'Archive idle tabs', 'close unpinned tabs idle 12h+', { a: 'archiveIdle', idle: '12h' }],
+    ['↩', 'Restore last archived tab', 'tab archive', { a: 'restoreArchived' }],
+    ['⇆', 'Switch to last used tab', 'recent order', { a: 'recentTab' }],
+    ['🎧', 'Toggle audio focus', 'only the active tab plays', { a: 'audioFocus' }],
+    ['📖', 'Read next from reading list', 'oldest unread · marks it read', { a: 'readNext' }],
+    ['◐', 'Cycle tab group color', 'grey → blue → red → …', { a: 'colorGroup' }],
+    ['⧉', 'Move tab group to new window', 'tab groups', { a: 'groupToWindow' }],
+    ['▤', 'Name tab group…', 'groups this tab if it is not grouped', { a: 'nameGroup' }, 'title', 'Name for this tab group.'],
+    ['💾', 'Save window as workspace…', 'tabs · pins · groups', { a: 'saveWorkspace' }, 'name', 'Name for this workspace (an existing name is replaced).'],
+    ['💾', 'Save all windows as workspace…', 'every normal window', { a: 'saveWorkspace', all: true }, 'name', 'Name for this workspace (an existing name is replaced).'],
+    ['▦', 'Open workspace…', 'name or unique prefix', { a: 'openWorkspace' }, 'name', 'Workspace to open.'],
+    ['🗑', 'Delete workspace…', 'saved workspaces', { a: 'deleteWorkspace' }, 'name', 'Workspace to delete.']
+  ];
+  function workerRun(r) {
+    var act = Object.assign({}, r[3]);
+    if (!r[4]) { bridgeAction(act); return; }
+    var v = null;
+    try { v = window.prompt(r[5], ''); } catch (e) {}
+    if (v == null || !String(v).trim()) return;
+    act[r[4]] = String(v).trim(); bridgeAction(act);
+  }
+
   function items() {
     var out = [];
     UI_TOGGLES.forEach(function (t) { out.push({ icon: t[0], label: t[1], detail: 'setting', run: function () { toggleUi(t[2]); } }); });
@@ -138,6 +167,7 @@
       out.push({ icon: '⌥', label: 'Toggle terminal', detail: 'Ctrl+`',
         run: function () { try { window.toggleTerminalPopup(); } catch (e) {} } });
     }
+    WORKER_ROWS.forEach(function (r) { out.push({ icon: r[0], label: r[1], detail: r[2], run: function () { workerRun(r); } }); });
     layoutItems(out);
     return out;
   }

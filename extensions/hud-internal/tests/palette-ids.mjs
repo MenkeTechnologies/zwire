@@ -76,6 +76,11 @@ const SNOOZED = [
   { url: 'https://a.example/later', title: 'Untitled', wakeAt: 1e12 },
   { url: 'https://b.example/later', title: 'Untitled', wakeAt: 2e12 },
 ];
+// Saved workspaces (zworkspace-core.js) — names unique by workspaceKey, so the slug ids are too.
+const WORKSPACES = [
+  { name: 'Deep Work', savedAt: 2, windows: [{ tabs: [], groups: [] }] },
+  { name: 'Reading', savedAt: 1, windows: [{ tabs: [], groups: [] }, { tabs: [], groups: [] }] },
+];
 
 function boot(dynamic) {
   const docEvents = {};
@@ -214,7 +219,7 @@ assert.deepEqual(second.map((i) => i.id), first.map((i) => i.id), 'row ids are i
 // rest) or into one ambiguous verb. Fresh boot: the dedupe set is per-open, and a
 // second sandbox proves the ids come from the data rather than from arrival order.
 {
-  const { sandbox: dyn, store: dynStore } = boot({ zb_tabs: TABS, zb_exts: EXTS, zb_shortcuts: SHORTCUTS, zb_archive: ARCHIVE, zb_snoozed: SNOOZED });
+  const { sandbox: dyn, store: dynStore } = boot({ zb_tabs: TABS, zb_exts: EXTS, zb_shortcuts: SHORTCUTS, zb_archive: ARCHIVE, zb_snoozed: SNOOZED, zb_workspaces: WORKSPACES });
   const rows = vocabulary(dyn);
   assert.equal(rows.filter((it) => !it.id).length, 0, 'dynamic rows carry ids too');
 
@@ -233,6 +238,16 @@ assert.deepEqual(second.map((i) => i.id), first.map((i) => i.id), 'row ids are i
     got[1].run();
     assert.equal(dynStore.zb_cmd.a, verb, `${prefix} row runs ${verb}`);
     assert.equal(dynStore.zb_cmd.url, list[1].url, `${prefix} row targets its own url`);
+  }
+
+  // Workspace rows open THEIR workspace by name — a row that opened "the newest" would restore
+  // the wrong set of windows whenever the user picked any other entry.
+  {
+    const ws = rows.filter((it) => String(it.id).startsWith('zw.workspace.'));
+    assert.equal(new Set(ws.map((it) => it.id)).size, WORKSPACES.length, 'one distinct row per saved workspace');
+    ws[1].run();
+    assert.equal(dynStore.zb_cmd.a, 'openWorkspace', 'workspace row runs openWorkspace');
+    assert.equal(dynStore.zb_cmd.name, WORKSPACES[1].name, 'workspace row targets its own name');
   }
 
   // Shortcut rows are search-only (a provider), so they never reach the published
