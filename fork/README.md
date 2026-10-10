@@ -60,7 +60,7 @@ against each target file read at that exact tag):
 
 | Patch | Restyles | State |
 |---|---|---|
-| 0001 tab shape | sharp 2px HUD tab corners | authored · apply-clean |
+| 0001 tab shape | hard trapezoid HUD tab shape | authored · apply-clean |
 | 0002 UI colors | HUD palette on frame / toolbar / tabs / omnibox + neon separator | authored · apply-clean |
 | 0003 UI font | Share Tech Mono / Monaco UI type (`resource_bundle.cc`) | authored · apply-clean |
 | 0004 toolbar border | 2px neon cyan line under the toolbar | authored · apply-clean |

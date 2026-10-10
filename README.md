@@ -64,8 +64,7 @@ workspace layered on top:
   it (a stryke `|>` op chain, JS, or passthrough), and deliver it to a sink pane
   (navigate / fill a field / replace or append a node / batch-open) — or past the
   browser entirely, into another running MenkeTechnologies app as a typed bus call —
-  with a graph cycle-check that refuses an A→B→A loop. No rival ships piping between
-  tiled views;
+  with a graph cycle-check that refuses an A→B→A loop;
 - an **automation verb bus** — one namespaced `browser.*` surface (tab / group /
   window ops, edge-snapping, downloads, browsing-data clearing, bookmarks,
   reading list, extensions, power, screenshot, notify, tmux toggle) that the ⌘K
@@ -76,9 +75,7 @@ workspace layered on top:
   duplicates" is a transaction: each step's pre-state is journaled in the service
   worker as it executes, and an abort replays the inverses in reverse order —
   reopening closed tabs at their prior index, window, pinned and muted state,
-  restoring prior positions, selection, url and zoom. Nothing else does this:
-  Chrome, Arc, Vivaldi, Edge and Safari stop at ⇧⌘T (reopen the last tab) and
-  cannot roll back a chain. A verb with no compensation is refused when the
+  restoring prior positions, selection, url and zoom. A verb with no compensation is refused when the
   transaction opens rather than stranding one half-done, and the whole N-step
   unwind arrives as a single `browser.undo` frame — one native-messaging round
   trip, not N;
@@ -141,8 +138,7 @@ workspace layered on top:
 - the **`zpwrchrome`** power-tool preloaded against a dedicated profile, so it
   never touches your system Chrome.
 
-The HUD layer (`extensions/hud-internal`) is ~18,300 lines of extension code
-across 11 subsystems and 26 pages, assembled on the **`zgui-core`** shared GUI
+The HUD layer (`extensions/hud-internal`) is extension code spanning 26 pages, assembled on the **`zgui-core`** shared GUI
 toolkit (260 `ZGui.*` components, a git submodule loaded straight from
 `lib/zgui-core/webui/`) and bridged to the **`zwire-host`** native agent (a
 single Rust binary, its own submodule). Under it, a **28-patch C++ fork**
@@ -175,7 +171,7 @@ Chrome can no longer be scripted this way; a Chromium build can.
 ## `[0x01] THE HUD WORKSPACE`
 
 `extensions/hud-internal` is where zwire stops being "a browser" and becomes a
-workspace. It is a content-script + page bundle (~18,300 LOC), not a theme.
+workspace. It is a content-script + page bundle, not a theme.
 
 **`ztmux` — the tiling overlay.** A tmux server, in the browser. The tiling
 window-manager itself is `ZGui.tmux` from the shared `zgui-core` toolkit; zwire
@@ -740,7 +736,7 @@ but is four.
   wins), so one command cannot render twice. A row published with no id, or with
   whitespace in its id, is recorded in `window.ZGui.diagnostics`, raised on a
   `zgui:diagnostic` document event and forwarded to the native host as a
-  `zdiagnostic` hook — never printed. `tests/palette-ids.mjs` pins all of this
+  `zdiagnostic` hook — never printed. `extensions/hud-internal/tests/palette-ids.mjs` pins all of this
   over the real shipped vocabulary.
 - **⌘K ownership:** hud-internal owns ⌘K browser-wide as a `chrome.commands`
   shortcut (a page keydown can't intercept it) and its service worker routes to
@@ -810,7 +806,7 @@ Every write re-reads the session tree first. The palette caches panes when it
 opens, but between opening ⌘K and pressing ⏎ you can switch panes — and a command
 typed into the pane you just left is the one failure this surface must not have.
 Pane row ids come from the tmux pane id, so renaming a session, a window or the
-running program never moves them. `tests/tmux.mjs` pins all of it.
+running program never moves them. `extensions/hud-internal/tests/tmux.mjs` pins all of it.
 
 ## `[0x03] INSTALL`
 
@@ -922,7 +918,7 @@ not-yet-registered extension so the new-tab override always loads
 (`extension_navigation_throttle.cc`). Two more bind the *native* Views surface to
 the HUD palette so app/context menus, dialogs, dropdowns, and textfields track
 the scheme + light/dark toggle instead of the OS default
-(`chrome_color_mixer.cc`, the menu family then every core primitive). Three keep
+(`chrome_color_mixer.cc`, the menu family then every core primitive). Two more keep the native chrome on the active scheme: one paints it from the resolved scheme palette so custom schemes work (`chrome_color_mixer.cc`), the other recolors the tab-strip control buttons (`chrome_color_mixer.cc`). Three keep
 the HUD's own extension pages and the Chrome Web Store working: allowlist
 `hud-internal` for `developerPrivate` + `settingsPrivate` so the Extensions /
 Settings pages have their APIs (`_permission_features.json`), a crash fix so a
@@ -941,7 +937,7 @@ an output-meters back-channel to the Audio page
 native toast: the **Open** button on "Page added to reading list" opens the HUD
 reading-list page (`pages/readinglist.html`, as a singleton tab) instead of
 Chromium's read-later side panel — the toast is registered in C++
-(`toast_service.cc`), so no extension API can redirect it. Apply-clean proves
+(`toast_service.cc`), so no extension API can redirect it. One makes an extension-initiated tab discard respect an active capture (`tab_list_bridge.cc`). Apply-clean proves
 the diff context matches; `fork/build.sh` is the compile gate. See
 [`fork/README.md`](fork/README.md) and [`fork/patches/README.md`](fork/patches/README.md).
 
