@@ -632,9 +632,7 @@ Every block is unity/bypass by default and per-stream (own buffers), so the engi
 stays bit-identical passthrough until a control is engaged. The page renders the
 **real post-DSP output** — Goertzel spectrum bars, peak/RMS meters, phase
 correlation, and a stereo scope — pumped back over the native host (no
-`tabCapture`, so watching the meters never touches the audio). DSP correctness is
-pinned by `fork/tests/run_dsp_tests.sh`, which extracts the engine straight from
-patch 0022 and asserts per-effect invariants.
+`tabCapture`, so watching the meters never touches the audio).
 
 **`zgui-core` — the shared GUI toolkit (`lib/zgui-core`, submodule).** The HUD is
 not hand-rolled per page; it is assembled from **`ZGui`**, a cyberpunk web-component
@@ -649,8 +647,7 @@ They are copies of the submodule's files at the same revision and are re-copied
 when the submodule moves. The same constraint applies to zwire's own shared
 sources — `schemes.js`, `palette-cmds.js`, `cmd-defaults.js` and `zntp-core.js`
 exist as byte-identical copies in `newtab/` and `extensions/hud-internal/`; edit
-the `hud-internal` copy and re-copy, and `scripts/test.sh` fails the run if the
-two ever drift. The tiling WM (`ZGui.tmux`), the ⌘K
+the `hud-internal` copy and re-copy. The tiling WM (`ZGui.tmux`), the ⌘K
 palette (`ZGui.palette`), fuzzy find
 (`ZGui.fzf`), the scheme engine (`ZGui.colorscheme`), the powerline
 (`ZGui.powerline`), the store's product cards (`ZGui.productCard`), and the whole
@@ -736,8 +733,7 @@ but is four.
   wins), so one command cannot render twice. A row published with no id, or with
   whitespace in its id, is recorded in `window.ZGui.diagnostics`, raised on a
   `zgui:diagnostic` document event and forwarded to the native host as a
-  `zdiagnostic` hook — never printed. `extensions/hud-internal/tests/palette-ids.mjs` pins all of this
-  over the real shipped vocabulary.
+  `zdiagnostic` hook — never printed.
 - **⌘K ownership:** hud-internal owns ⌘K browser-wide as a `chrome.commands`
   shortcut (a page keydown can't intercept it) and its service worker routes to
   the palette matching the active tab (web page → 1, HUD page → 2, new tab → 3,
@@ -806,7 +802,7 @@ Every write re-reads the session tree first. The palette caches panes when it
 opens, but between opening ⌘K and pressing ⏎ you can switch panes — and a command
 typed into the pane you just left is the one failure this surface must not have.
 Pane row ids come from the tmux pane id, so renaming a session, a window or the
-running program never moves them. `extensions/hud-internal/tests/tmux.mjs` pins all of it.
+running program never moves them.
 
 ## `[0x03] INSTALL`
 
