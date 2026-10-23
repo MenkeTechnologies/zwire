@@ -21,9 +21,7 @@ STATE=${ZWIRE_STATE:-$(zwire_default_state)}
 PREFIX=${ZWIRE_PREFIX:-$HOME/.local}
 DEST=$PREFIX/opt/zwire
 BINLINK=$PREFIX/bin/zwire
-DESKTOP=$PREFIX/share/applications/zwire.desktop
 ICON_SRC=$ROOT/branding/icon-1024.png
-ICON_DEST=$PREFIX/share/icons/hicolor/512x512/apps/zwire.png
 
 # Stable extension IDs (pinned via each manifest "key").
 HUD_ID=omcgnnjfmbmpdlofklbpddkhnfibfhgg
@@ -192,31 +190,15 @@ perl -i -pe "s/__HUD_ID__/$HUD_ID/; s/__ZPWR_ID__/$ZPWR_ID/; s/__NEWTAB_ID__/$NE
 chmod +x "$DEST/zwire"
 cyber_ok "launcher // install-relative"
 
-# 5) PATH symlink
-mkdir -p "$(dirname "$BINLINK")"
-ln -sf "$DEST/zwire" "$BINLINK"
-cyber_ok "bin // $BINLINK -> zwire"
-
-# 6) icon + .desktop (app menu integration)
-mkdir -p "$(dirname "$ICON_DEST")" "$(dirname "$DESKTOP")"
-[[ -f "$ICON_SRC" ]] && cp "$ICON_SRC" "$ICON_DEST" && cyber_ok "icon // $ICON_DEST"
-cat > "$DESKTOP" <<EOF
-[Desktop Entry]
-Type=Application
-Name=zwire
-GenericName=Web Browser
-Comment=Chromium superset with the zwire cyberpunk HUD
-Exec=$DEST/zwire %U
-Icon=$ICON_DEST
-Terminal=false
-StartupNotify=true
-StartupWMClass=chrome
-Categories=Network;WebBrowser;
-MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
-EOF
-update-desktop-database "$(dirname "$DESKTOP")" >/dev/null 2>&1 || true
-gtk-update-icon-cache "$PREFIX/share/icons/hicolor" >/dev/null 2>&1 || true
-cyber_ok "desktop // $DESKTOP"
+# 5) PATH symlink + icon + .desktop — via the integrate script shipped INSIDE the
+#    install (the release tarball carries the same file), so both paths share it.
+[[ -f "$ICON_SRC" ]] && cp "$ICON_SRC" "$DEST/zwire.png"
+cp "$ROOT/scripts/linux-integrate.sh" "$DEST/linux-integrate.sh"; chmod +x "$DEST/linux-integrate.sh"
+if [[ "${ZWIRE_NO_INTEGRATE:-0}" == "1" ]]; then
+  cyber_ok "integrate // skipped (ZWIRE_NO_INTEGRATE=1 — staged release build)"
+else
+  "$DEST/linux-integrate.sh" "$PREFIX" | while read -r l; do cyber_ok "$l"; done
+fi
 echo
 
 cyber_line

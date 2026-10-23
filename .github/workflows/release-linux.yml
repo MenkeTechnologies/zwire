@@ -1,0 +1,62 @@
+name: Release (Linux)
+
+# Cut the Linux x86_64 tarball for a tag via scripts/release-linux.sh. Manual
+# dispatch only: a tag-push trigger would race release-macos.sh, which pushes
+# the tag before its (much longer) local .app build finishes.
+#
+# GitHub-hosted runners cannot build the zwire Chromium fork (~100GB checkout,
+# hours of compile), so this job ships the STOCK Chromium snapshot base and the
+# asset is named/noted `-stock` by the script. A fork-base Linux asset comes from
+# running the same script on a Linux host after fork/package.sh.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.6.74)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Fetch stryke (Hooks sidecar)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/stryke"
+          gh release download -R MenkeTechnologies/strykelang \
+            -p 'stryke-*-x86_64-unknown-linux-gnu.tar.gz' -D "$RUNNER_TEMP/stryke"
+          tar -C "$RUNNER_TEMP/stryke" -xzf "$RUNNER_TEMP"/stryke/stryke-*.tar.gz
+          bin="$(find "$RUNNER_TEMP/stryke" -type f -name stryke -perm -u+x | head -1)"
+          [ -n "$bin" ] || { echo "::error::no stryke binary in the release tarball"; exit 1; }
+          echo "ZWIRE_STRYKE=$bin" >> "$GITHUB_ENV"
+
+      - name: Build + publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          scripts/release-linux.sh

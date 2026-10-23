@@ -833,6 +833,22 @@ needs the Rust toolchain (`cargo`) at build time:
 Only the per-user profile lives outside the install, so the install dir stays
 disposable.
 
+Releases package those same installs and publish them to the `v<version>` GitHub
+release (the tag must exist; neither script overwrites an asset already on it):
+
+| Platform | Script | Asset |
+|---|---|---|
+| macOS | `scripts/release-macos.sh` (local, needs the fork base) | `zwire-<ver>.pkg` + `zwire-<ver>-macos.zip` |
+| Linux x86_64 | `scripts/release-linux.sh`, or the **Release (Linux)** workflow (`gh workflow run release-linux.yml -f tag=v<ver>`) | `zwire-<ver>-linux-x86_64[-stock].tar.gz` + `.sha256` |
+
+The Linux asset is named from the base it was built on: a `fork/package.sh` base ships as
+`linux-x86_64`, a stock Chromium snapshot as `linux-x86_64-stock` (no fork patches — the
+HUD, zpwrchrome and native hosts are present, the patched browser chrome is not). GitHub
+runners can't build the fork, so the workflow always cuts `-stock`. Whichever script runs
+first creates the release; the other uploads onto it. Install the tarball with
+`tar xzf zwire-<ver>-linux-x86_64-stock.tar.gz && zwire/linux-integrate.sh` (PATH link,
+icon and `.desktop` under `~/.local`).
+
 The editor bundle (`extensions/hud-internal/lib/hooks-editor/`) is a build artifact, not
 checked in: `scripts/build-hooks-editor.sh` esbuilds it from
 `extensions/hud-internal/vendor/zpwr-hooks-editor/src` and needs node ≥ 20 + pnpm (which

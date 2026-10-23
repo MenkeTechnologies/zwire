@@ -75,10 +75,15 @@ fi
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
   || { cyber_fail "tag $TAG does not exist — bump package.json, commit, then: git tag $TAG && git push origin $TAG"; exit 1; }
 
-# Never clobber an existing published release (guards against a concurrent
-# session having already cut this version).
+# Never clobber an existing macOS cut (guards against a concurrent session having
+# already released this version). A release that exists WITHOUT the macOS assets
+# was created by release-linux.sh — the macOS artifacts are uploaded onto it.
+EXISTING=0
 if gh release view "$TAG" -R MenkeTechnologies/zwire >/dev/null 2>&1; then
-  cyber_fail "release $TAG already exists — refusing to overwrite"; exit 1
+  gh release view "$TAG" -R MenkeTechnologies/zwire --json assets -q '.assets[].name' | grep -qx "zwire-$VERSION-macos.zip" \
+    && { cyber_fail "release $TAG already carries the macOS assets — refusing to overwrite"; exit 1; }
+  EXISTING=1
+  cyber_warn "release $TAG exists without macOS assets (Linux cut) — will upload onto it"
 fi
 
 # Make sure the tag is on origin so the release attaches to a real ref.
@@ -150,8 +155,14 @@ if [[ "$DRY_RUN" == "1" ]]; then
 fi
 
 cyber_section "PUBLISH"
-gh release create "$TAG" -R MenkeTechnologies/zwire \
-  --title "zwire $VERSION (macOS)" \
-  --notes-file "$NOTES" \
-  "$PKG" "$ZIP"
+if [[ "$EXISTING" == "1" ]]; then
+  gh release upload "$TAG" -R MenkeTechnologies/zwire "$PKG" "$ZIP"
+  # An upload fires no `release: published`, so kick the cask sync explicitly.
+  gh workflow run homebrew-cask.yml -R MenkeTechnologies/zwire -f tag="$TAG"
+else
+  gh release create "$TAG" -R MenkeTechnologies/zwire \
+    --title "zwire $VERSION (macOS)" \
+    --notes-file "$NOTES" \
+    "$PKG" "$ZIP"
+fi
 cyber_ok "released // https://github.com/MenkeTechnologies/zwire/releases/tag/$TAG"

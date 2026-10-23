@@ -40,6 +40,13 @@ jobs:
           set -euo pipefail
           V="${TAG#v}"
           ZIP="zwire-${V}-macos.zip"
+          # A release cut by release-linux.sh first carries no macOS .zip yet;
+          # release-macos.sh dispatches this workflow again once it uploads one.
+          if ! gh release view "$TAG" -R MenkeTechnologies/zwire --json assets -q ".assets[].name" | grep -qx "$ZIP"; then
+            echo "::notice::$TAG has no $ZIP yet — cask left unchanged"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           gh release download "$TAG" -R MenkeTechnologies/zwire -p "$ZIP" -D .
           SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
           {
@@ -48,6 +55,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Check out the tap
+        if: steps.asset.outputs.skip != '1'
         uses: actions/checkout@v6
         with:
           repository: MenkeTechnologies/homebrew-menketech
@@ -55,6 +63,7 @@ jobs:
           path: tap
 
       - name: Bump version + sha256 in Casks/zwire.rb
+        if: steps.asset.outputs.skip != '1'
         env:
           V: ${{ steps.asset.outputs.version }}
           SHA: ${{ steps.asset.outputs.sha }}
@@ -70,6 +79,7 @@ jobs:
           grep -q "sha256 \"$SHA\"" "$cask"
 
       - name: Commit + push
+        if: steps.asset.outputs.skip != '1'
         run: |
           set -euo pipefail
           cd tap
