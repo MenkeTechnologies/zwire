@@ -28,6 +28,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+          # zgui-core / zpwr-file-browser / zpwr-clip-engine are private: the default
+          # GITHUB_TOKEN cannot clone them (same secret the sibling app repos use).
+          token: ${{ secrets.SUBMODULES_PAT }}
           submodules: recursive
           fetch-depth: 0
 
