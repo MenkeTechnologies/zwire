@@ -112,8 +112,11 @@ PLIST="$OUT/component.plist"
 # pkgbuild defaults an app bundle to relocatable=true, which lets an upgrade
 # retarget a stray copy of the app elsewhere. Force the top bundle to
 # non-relocatable so it always installs to /Applications (matches prior releases).
+# Newer pkgbuild omits the key from --analyze output, so `Set` alone fails on a
+# missing entry: drop whatever is there, then add it explicitly.
 pkgbuild --analyze --root "$OUT/stage" "$PLIST" >/dev/null
-/usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$PLIST"
+/usr/libexec/PlistBuddy -c "Delete :0:BundleIsRelocatable" "$PLIST" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :0:BundleIsRelocatable bool false" "$PLIST"
 pkgbuild --root "$OUT/stage" --component-plist "$PLIST" \
   --identifier "$IDENTIFIER" --version "$VERSION" \
   --install-location /Applications "$PKG" >/dev/null
