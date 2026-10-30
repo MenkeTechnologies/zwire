@@ -18,11 +18,13 @@
   if (window.__zbCookiesLoaded) return;
   window.__zbCookiesLoaded = true;
 
-  // Known consent-SDK containers — hidden outright.
+  // Known consent-SDK containers — hidden outright. No `.cmp-*` classes: Adobe AEM
+  // Core Components prefix every component with `cmp-` (`.cmp-container` is the
+  // page's own layout root), so they blank whole AEM sites.
   var SELECTORS = [
     '#onetrust-banner-sdk', '#onetrust-consent-sdk', '.ot-sdk-container',
     '#cookie-banner', '#cookie-consent', '#cookieConsent', '.cookie-banner', '.cookie-consent',
-    '.cc-window', '.cc-banner', '#CybotCookiebotDialog', '#cmpbox', '.cmp-container',
+    '.cc-window', '.cc-banner', '#CybotCookiebotDialog', '#cmpbox',
     '#gdpr-consent-tool-wrapper', '.qc-cmp2-container', '#usercentrics-root', '#sp_message_container_1',
     '.osano-cm-window', '#hs-eu-cookie-confirmation', '.cookienotice', '.cookie-notice',
     '[aria-label*="cookie" i]', '[class*="cookie" i][class*="consent" i]', '[id*="cookie" i][class*="banner" i]'
@@ -39,11 +41,21 @@
       [h, b].forEach(function (el) { if (el && getComputedStyle(el).overflow === 'hidden') { el.style.setProperty('overflow', 'auto', 'important'); } });
     } catch (e) {}
   }
-  function hide(el) { try { el.style.setProperty('display', 'none', 'important'); } catch (e) {} }
+  // A selector that collides with a site's own class names must not take the page
+  // down with it: never hide anything that wraps the page's main content.
+  function wrapsPage(el) {
+    var main = document.querySelector('main, [role="main"], h1');
+    return el === document.body || el === document.documentElement || !!(main && el.contains(main));
+  }
+  function hide(el) {
+    if (wrapsPage(el)) return false;
+    try { el.style.setProperty('display', 'none', 'important'); } catch (e) {}
+    return true;
+  }
   function sweep() {
     if (!enabled) return;
     var hit = false;
-    SELECTORS.forEach(function (s) { try { document.querySelectorAll(s).forEach(function (el) { hide(el); hit = true; }); } catch (e) {} });
+    SELECTORS.forEach(function (s) { try { document.querySelectorAll(s).forEach(function (el) { if (hide(el)) hit = true; }); } catch (e) {} });
     // Heuristic: a fixed/sticky overlay whose text looks like consent + isn't the whole page.
     try {
       var nodes = document.querySelectorAll('div,section,aside,dialog');
@@ -52,7 +64,7 @@
         try { pos = getComputedStyle(el).position; } catch (e) { continue; }
         if (pos !== 'fixed' && pos !== 'sticky') continue;
         var txt = (el.textContent || '').slice(0, 400);
-        if (txt.length > 12 && txt.length < 1500 && isConsent(txt) && el.querySelector('button,a')) { hide(el); hit = true; }
+        if (txt.length > 12 && txt.length < 1500 && isConsent(txt) && el.querySelector('button,a')) { if (hide(el)) hit = true; }
       }
     } catch (e) {}
     if (hit) unlockScroll();
